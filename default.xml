@@ -28,6 +28,7 @@
   <project path="device/asus/flo-kernel" name="device/asus/flo-kernel" groups="device,flo" clone-depth="1" />
   <project path="device/asus/fugu" name="device/asus/fugu" groups="device,fugu,broadcom_pdk" />
   <project path="device/asus/fugu-kernel" name="device/asus/fugu-kernel" groups="device,fugu,broadcom_pdk" clone-depth="1" />
+  <project path="device/asus/grouper" name="android_device_asus_grouper" remote="Grouper-AOSP" revision="aosp-6.0" groups="device,grouper" />
   <project path="device/common" name="device/common" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/generic/arm64" name="device/generic/arm64" groups="pdk" />
   <project path="device/generic/armv7-a-neon" name="device/generic/armv7-a-neon" groups="pdk" />
@@ -340,6 +341,7 @@
   <project path="hardware/ti/omap3" name="platform/hardware/ti/omap3" groups="omap3" />
   <project path="hardware/ti/omap4-aah" name="platform/hardware/ti/omap4-aah" groups="omap4-aah" />
   <project path="hardware/ti/omap4xxx" name="platform/hardware/ti/omap4xxx" groups="omap4" />
+  <project path="kernel/asus/grouper" name="android_kernel_asus_grouper" remote="Grouper-AOSP" revision="aosp-6.0" />
   <project path="libcore" name="platform/libcore" groups="pdk" />
   <project path="libnativehelper" name="platform/libnativehelper" groups="pdk" />
   <project path="ndk" name="platform/ndk" groups="generic_fs" />
@@ -476,5 +478,12 @@
   <project path="tools/studio/translation" name="platform/tools/studio/translation" groups="notdefault,tools" />
   <project path="tools/swt" name="platform/tools/swt" groups="notdefault,tools" />
   <project path="tools/tradefederation" name="platform/tools/tradefederation" groups="notdefault,tradefed" />
+  <project path="vendor/asus" name="proprietary_vendor_asus" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/broadcom" name="proprietary_vendor_broadcom" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/elan" name="proprietary_vendor_elan" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/nvidia" name="proprietary_vendor_nvidia" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/nxp" name="proprietary_vendor_nxp" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/widevine" name="proprietary_vendor_widevine" remote="Grouper-AOSP" revision="aosp-6.0" />
 
 </manifest>
