@@ -5,11 +5,13 @@
            fetch="https://android.googlesource.com/" />
   <remote  name="Grouper-AOSP"
            fetch="https://github.com/Grouper-AOSP/" />
+  <remote  name="ads"
+           fetch="https://github.com/AndDiSa/" />
   <default revision="refs/tags/android-6.0.0_r5"
            remote="aosp"
            sync-j="4" />
 
-  <project path="build" name="android_build" remote="Grouper-AOSP" revision="aosp-6.0" groups="pdk" >
+  <project path="build" name="android_build-Grouper-AOSP" remote="ads" revision="ads-6.0" groups="pdk" >
     <copyfile src="core/root.mk" dest="Makefile" />
   </project>
   <project path="abi/cpp" name="platform/abi/cpp" groups="pdk" />
@@ -28,7 +30,7 @@
   <project path="device/asus/flo-kernel" name="device/asus/flo-kernel" groups="device,flo" clone-depth="1" />
   <project path="device/asus/fugu" name="device/asus/fugu" groups="device,fugu,broadcom_pdk" />
   <project path="device/asus/fugu-kernel" name="device/asus/fugu-kernel" groups="device,fugu,broadcom_pdk" clone-depth="1" />
-  <project path="device/asus/grouper" name="android_device_asus_grouper" remote="Grouper-AOSP" revision="aosp-6.0" groups="device,grouper" />
+  <project path="device/asus/grouper" name="android_device_asus_grouper" remote="ads" revision="ads-6.0" groups="device,grouper" />
   <project path="device/common" name="device/common" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/generic/arm64" name="device/generic/arm64" groups="pdk" />
   <project path="device/generic/armv7-a-neon" name="device/generic/armv7-a-neon" groups="pdk" />
@@ -263,7 +265,7 @@
   <project path="external/zopfli" name="platform/external/zopfli" groups="pdk-cw-fs,pdk-fs" />
   <project path="external/zxing" name="platform/external/zxing" groups="pdk-cw-fs,pdk-fs" />
   <project path="frameworks/av" name="platform/frameworks/av" groups="pdk" />
-  <project path="frameworks/base" name="platform/frameworks/base" groups="pdk-cw-fs,pdk-fs" />
+  <project path="frameworks/base" name="platform_frameworks_base" remote="ads" revision="ads-6.0" groups="pdk-cw-fs,pdk-fs" />
   <project path="frameworks/compile/libbcc" name="platform/frameworks/compile/libbcc" groups="pdk" />
   <project path="frameworks/compile/mclinker" name="platform/frameworks/compile/mclinker" groups="pdk" />
   <project path="frameworks/compile/slang" name="platform/frameworks/compile/slang" groups="pdk" />
@@ -341,7 +343,7 @@
   <project path="hardware/ti/omap3" name="platform/hardware/ti/omap3" groups="omap3" />
   <project path="hardware/ti/omap4-aah" name="platform/hardware/ti/omap4-aah" groups="omap4-aah" />
   <project path="hardware/ti/omap4xxx" name="platform/hardware/ti/omap4xxx" groups="omap4" />
-  <project path="kernel/asus/grouper" name="android_kernel_asus_grouper" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="kernel/asus/grouper" name="android_kernel_asus_grouper" remote="ads" revision="ads-6.0" />
   <project path="libcore" name="platform/libcore" groups="pdk" />
   <project path="libnativehelper" name="platform/libnativehelper" groups="pdk" />
   <project path="ndk" name="platform/ndk" groups="generic_fs" />
