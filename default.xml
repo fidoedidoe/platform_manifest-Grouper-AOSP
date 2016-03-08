@@ -7,7 +7,7 @@
            fetch="https://github.com/Grouper-AOSP/" />
   <remote  name="ads"
            fetch="https://github.com/AndDiSa/" />
-  <default revision="refs/tags/android-6.0.1_r13"
+  <default revision="refs/tags/android-6.0.1_r17"
            remote="aosp"
            sync-j="4" />
 
@@ -481,10 +481,10 @@
   <project path="tools/swt" name="platform/tools/swt" groups="notdefault,tools" />
   <project path="tools/tradefederation" name="platform/tools/tradefederation" groups="notdefault,tradefed" />
   <project path="vendor/asus" name="proprietary_vendor_asus" remote="ads" revision="ads-6.0" />
-  <project path="vendor/broadcom" name="proprietary_vendor_broadcom" remote="Grouper-AOSP" revision="aosp-6.0" />
-  <project path="vendor/elan" name="proprietary_vendor_elan" remote="Grouper-AOSP" revision="aosp-6.0" />
-  <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/broadcom" name="proprietary_vendor_broadcom" remote="ads" revision="aosp-6.0" />
+  <project path="vendor/elan" name="proprietary_vendor_elan" remote="ads" revision="oct-mm" />
+  <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="ads" revision="aosp-6.0" />
   <project path="vendor/nvidia" name="proprietary_vendor_nvidia" remote="ads" revision="ads-6.0" />
-  <project path="vendor/nxp" name="proprietary_vendor_nxp" remote="Grouper-AOSP" revision="aosp-6.0" />
+  <project path="vendor/nxp" name="proprietary_vendor_nxp" remote="ads" revision="aosp-6.0" />
 
 </manifest>
