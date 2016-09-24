@@ -27,13 +27,13 @@
   <project path="art" name="platform/art" groups="pdk" />
   <project path="bionic" name="platform/bionic" groups="pdk" />
   <project path="bootable/recovery" name="platform/bootable/recovery" groups="pdk" />
-  <project path="cts" name="platform/cts" groups="cts,pdk-cw-fs,pdk-fs" />
+<!--  <project path="cts" name="platform/cts" groups="cts,pdk-cw-fs,pdk-fs" /> -->
   <project path="dalvik" name="platform/dalvik" groups="pdk-cw-fs,pdk-fs" />
   <project path="developers/build" name="platform/developers/build" />
   <project path="developers/demos" name="platform/developers/demos" />
   <project path="developers/samples/android" name="platform/developers/samples/android" />
   <project path="development" name="platform/development" groups="pdk-cw-fs,pdk-fs" />
-  <project path="device/asus/grouper" name="android_device_asus_grouper" remote="ads" revision="ads-6.0" groups="device,grouper" />
+  <project path="device/asus/grouper" name="android_device_asus_grouper" remote="ads" revision="ads-7.0.1" groups="device,grouper" />
   <project path="device/common" name="device/common" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/generic/arm64" name="device/generic/arm64" groups="pdk" />
   <project path="device/generic/armv7-a-neon" name="device/generic/armv7-a-neon" groups="pdk" />
@@ -129,7 +129,7 @@
   <project path="external/google-fonts/dancing-script" name="platform/external/google-fonts/dancing-script" groups="pdk-cw-fs,pdk-fs" />
   <project path="external/google-tv-pairing-protocol" name="platform/external/google-tv-pairing-protocol" groups="pdk-fs" />
   <project path="external/gptfdisk" name="platform/external/gptfdisk" groups="pdk-fs" />
-  <project path="external/gtest" name="platform/external/gtest" groups="pdk" />
+  <project path="external/gtest" name="platform/external/gtest" groups="pdk" /> 
   <project path="external/guava" name="platform/external/guava" groups="pdk-cw-fs,pdk-fs" />
   <project path="external/guice" name="platform/external/guice" groups="pdk" />
   <project path="external/hamcrest" name="platform/external/hamcrest" groups="pdk-cw-fs,pdk-fs" />
@@ -279,12 +279,13 @@
   <project path="external/toybox" name="platform/external/toybox" groups="pdk" />
   <project path="external/tpm2" name="platform/external/tpm2" />
   <project path="external/tremolo" name="platform/external/tremolo" groups="pdk" />
+  <project path="external/unicode" name="platform/external/unicode" groups="pdk" />
   <project path="external/v8" name="platform/external/v8" groups="pdk" />
   <project path="external/valgrind" name="platform/external/valgrind" groups="pdk" />
   <project path="external/vboot_reference" name="platform/external/vboot_reference" groups="vboot" />
   <project path="external/vixl" name="platform/external/vixl" groups="pdk" />
   <project path="external/vogar" name="platform/external/vogar" groups="pdk" />
-  <!-- <project path="external/vulkan-validation-layers" name="platform/external/vulkan-validation-layers" /> -->
+  <project path="external/vulkan-validation-layers" name="platform/external/vulkan-validation-layers" />
   <project path="external/webp" name="platform/external/webp" groups="pdk,qcom_msm8x26" />
   <project path="external/webrtc" name="platform/external/webrtc" groups="pdk" />
   <project path="external/wpa_supplicant_8" name="platform/external/wpa_supplicant_8" groups="pdk" />
@@ -295,7 +296,7 @@
   <project path="external/zopfli" name="platform/external/zopfli" groups="pdk-cw-fs,pdk-fs" />
   <project path="external/zxing" name="platform/external/zxing" groups="pdk-cw-fs,pdk-fs" />
   <project path="frameworks/av" name="platform/frameworks/av" groups="pdk" />
-  <project path="frameworks/base" name="platform/frameworks/base" branch="ads-N-bringup" groups="pdk-cw-fs,pdk-fs" />
+  <project path="frameworks/base" name="platform/frameworks/base" groups="pdk-cw-fs,pdk-fs" />
   <project path="frameworks/compile/libbcc" name="platform/frameworks/compile/libbcc" groups="pdk" />
   <project path="frameworks/compile/mclinker" name="platform/frameworks/compile/mclinker" groups="pdk" />
   <project path="frameworks/compile/slang" name="platform/frameworks/compile/slang" groups="pdk" />
@@ -331,6 +332,7 @@
   <project path="hardware/akm" name="platform/hardware/akm" />
   <project path="hardware/broadcom/libbt" name="platform/hardware/broadcom/libbt" groups="pdk" />
   <project path="hardware/broadcom/wlan" name="platform/hardware/broadcom/wlan" groups="pdk,broadcom_wlan" />
+  <project path="hardware/google/apf" name="platform/hardware/google/apf" groups="pdk" />
   <project path="hardware/intel/audio_media" name="platform/hardware/intel/audio_media" groups="intel" />
   <project path="hardware/intel/bootstub" name="platform/hardware/intel/bootstub" groups="intel" />
   <project path="hardware/intel/common/bd_prov" name="platform/hardware/intel/common/bd_prov" groups="intel" />
@@ -369,7 +371,7 @@
   <project path="hardware/ti/omap4-aah" name="platform/hardware/ti/omap4-aah" groups="omap4-aah" />
   <project path="hardware/ti/omap4xxx" name="platform/hardware/ti/omap4xxx" groups="omap4" />
   <!-- <project path="kernel/tests" name="kernel/tests" /> -->
-  <project path="kernel/asus/grouper" name="android_kernel_asus_grouper" remote="ads" revision="ads-6.0" />
+  <project path="kernel/asus/grouper" name="android_kernel_asus_grouper" remote="ads" revision="ads-7.0.1" />
   <project path="libcore" name="platform/libcore" groups="pdk" />
   <project path="libnativehelper" name="platform/libnativehelper" groups="pdk" />
   <project path="ndk" name="platform/ndk" groups="generic_fs" />
@@ -443,7 +445,7 @@
   <project path="packages/services/Telephony" name="platform/packages/services/Telephony" groups="pdk-cw-fs,pdk-fs" />
   <project path="packages/wallpapers/LivePicker" name="platform/packages/wallpapers/LivePicker" groups="pdk-fs" />
   <project path="pdk" name="platform/pdk" groups="pdk" />
-  <project path="platform_testing" name="platform/platform_testing" />
+<!--  <project path="platform_testing" name="platform/platform_testing" /> -->
 <!--  <project path="prebuilts/android-emulator" name="platform/prebuilts/android-emulator" groups="pdk-fs" /> -->
   <project path="prebuilts/clang/linux-x86/host/3.6" name="platform/prebuilts/clang/linux-x86/host/3.6" groups="pdk,linux" />
   <project path="prebuilts/clang/host/linux-x86" name="platform/prebuilts/clang/host/linux-x86" groups="pdk" />
@@ -504,13 +506,14 @@
   <project path="tools/motodev" name="platform/tools/motodev" groups="notdefault,motodev" />
   <project path="tools/studio/cloud" name="platform/tools/studio/cloud" groups="notdefault,tools" />
   <project path="tools/swt" name="platform/tools/swt" groups="notdefault,tools" />
-  <project path="tools/test/connectivity" name="platform/tools/test/connectivity" />
+<!--  <project path="tools/test/connectivity" name="platform/tools/test/connectivity" /> -->
   <project path="tools/tradefederation" name="platform/tools/tradefederation" groups="notdefault,tradefed" />
-  <project path="vendor/asus" name="proprietary_vendor_asus" remote="ads" revision="ads-6.0" />
-  <project path="vendor/broadcom" name="proprietary_vendor_broadcom" remote="ads" revision="aosp-6.0" />
+  <project path="vendor/asus" name="proprietary_vendor_asus" remote="ads" revision="ads-7.0.1" />
+  <project path="vendor/broadcom" name="proprietary_vendor_broadcom" remote="ads" revision="ads-7.0.1" />
   <project path="vendor/elan" name="proprietary_vendor_elan" remote="ads" revision="oct-mm" />
-  <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="ads" revision="aosp-6.0" />
-  <project path="vendor/nvidia" name="proprietary_vendor_nvidia" remote="ads" revision="ads-6.0" />
+  <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="ads" revision="ads-7.0.1" />
+  <project path="vendor/nvidia" name="proprietary_vendor_nvidia" remote="ads" revision="ads-7.0.1" />
   <project path="vendor/nxp" name="proprietary_vendor_nxp" remote="ads" revision="aosp-6.0" />
+  <project path="vendor/widevine" name="proprietary_vendor_widevine" remote="ads" revision="ads-7.0.1" />
 
 </manifest>
