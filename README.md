@@ -9,31 +9,45 @@ repo sync
 ...
 
 cd build
+
 patch -p 1 < ../.repo/manifests/build.patch
+
 cd ..
 
 cd frameworks/av
+
 patch -p 1 < ../../.repo/manifests/frameworks_av.patch
+
 cd ../..
 
 cd frameworks/base
+
 patch -p 1 < ../../.repo/manifests/frameworks_base.patch
+
 cd ../..
 
 cd frameworks/native
+
 patch -p 1 < ../../.repo/manifests/frameworks_native.patch
+
 cd ../..
 
 cd packages/aps/Music
+
 patch -p 1 < ../../../.repo/manifests/packages_apps_music.patch
+
 cd ../../..
 
 cd system/core
+
 patch -p 1 < ../../.repo/manifests/system_core.patch
+
 cd ../..
 
 cd system/core
+
 patch -p 1 < ../../.repo/manifests/system_sepolicy.patch
+
 cd ../..
 
 . build/envsetup.sh
