@@ -5,6 +5,8 @@
            fetch="https://android.googlesource.com/" />
   <remote  name="ads"
            fetch="https://github.com/AndDiSa/" />
+  <remote  name="millosr"
+           fetch="https://github.com/millosr/" />
   <default revision="refs/tags/android-7.1.0_r5"
            remote="aosp"
            sync-j="4" />
@@ -27,6 +29,7 @@
   <project path="developers/samples/android" name="platform/developers/samples/android" />
   <project path="development" name="platform/development" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/asus/grouper" name="android_device_asus_grouper" remote="ads" revision="ads-7.0.1" groups="device,grouper" />
+  <project path="device/asus/tilapia" name="device_asus_tilapia" remote="millosr" revision="ads-7.0.1" groups="device,grouper" />
   <project path="device/common" name="device/common" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/generic/arm64" name="device/generic/arm64" groups="pdk" />
   <project path="device/generic/armv7-a-neon" name="device/generic/armv7-a-neon" groups="pdk" />
