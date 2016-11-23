@@ -1,0 +1,431 @@
+diff --git a/camera/cameraserver/Android.mk b/camera/cameraserver/Android.mk
+index 7e36c5e..aca7a19 100644
+--- a/camera/cameraserver/Android.mk
++++ b/camera/cameraserver/Android.mk
+@@ -14,6 +14,9 @@
+ 
+ LOCAL_PATH:= $(call my-dir)
+ 
++ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
++$(warning Target has integrated cameraserver into mediaserver. This is weakening security measures introduced in 7.0)
++else
+ include $(CLEAR_VARS)
+ 
+ LOCAL_SRC_FILES:= \
+@@ -34,3 +37,4 @@ LOCAL_CFLAGS += -Wall -Wextra -Werror -Wno-unused-parameter
+ LOCAL_INIT_RC := cameraserver.rc
+ 
+ include $(BUILD_EXECUTABLE)
++endif
+diff --git a/include/media/stagefright/MediaBufferGroup.h b/include/media/stagefright/MediaBufferGroup.h
+index dfa31b2..2dc77ac 100644
+--- a/include/media/stagefright/MediaBufferGroup.h
++++ b/include/media/stagefright/MediaBufferGroup.h
+@@ -49,7 +49,10 @@ public:
+     // If requestedSize is > 0, the returned MediaBuffer should have buffer
+     // size of at least requstedSize.
+     status_t acquire_buffer(
+-            MediaBuffer **buffer, bool nonBlocking = false, size_t requestedSize = 0);
++            MediaBuffer **buffer, bool nonBlocking, size_t requestedSize);
++
++    status_t acquire_buffer(MediaBuffer **buffer);
++    status_t acquire_buffer(MediaBuffer **buffer, bool nonBlocking);
+ 
+     size_t buffers() const { return mBuffers.size(); }
+ 
+diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
+index 37fd5a5..706ba4e 100644
+--- a/media/libstagefright/ACodec.cpp
++++ b/media/libstagefright/ACodec.cpp
+@@ -804,13 +804,22 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
+             } else if (type == kMetadataBufferTypeNativeHandleSource) {
+                 bufSize = sizeof(VideoNativeHandleMetadata);
+             }
++#ifdef CAMCORDER_GRALLOC_SOURCE
++            else if (type == kMetadataBufferTypeGrallocSource) {
++                bufSize = sizeof(VideoGrallocMetadata);
++            }
++#endif
+ 
+             // If using gralloc or native source input metadata buffers, allocate largest
+             // metadata size as we prefer to generate native source metadata, but component
+             // may require gralloc source. For camera source, allocate at least enough
+             // size for native metadata buffers.
+             size_t allottedSize = bufSize;
++#ifdef CAMCORDER_GRALLOC_SOURCE
++            if (portIndex == kPortIndexInput && type >= kMetadataBufferTypeGrallocSource) {
++#else
+             if (portIndex == kPortIndexInput && type == kMetadataBufferTypeANWBuffer) {
++#endif
+                 bufSize = max(sizeof(VideoGrallocMetadata), sizeof(VideoNativeMetadata));
+             } else if (portIndex == kPortIndexInput && type == kMetadataBufferTypeCameraSource) {
+                 bufSize = max(bufSize, sizeof(VideoNativeMetadata));
+@@ -1766,6 +1775,14 @@ status_t ACodec::configureCodec(
+             mInputMetadataType = (MetadataBufferType)storeMeta;
+         }
+ 
++#ifdef CAMCORDER_GRALLOC_SOURCE
++        // For this specific case we could be using camera source even if storeMetaDataInBuffers
++        // returns Gralloc source. Pretend that we are; this will force us to use nBufferSize.
++        if (mInputMetadataType == kMetadataBufferTypeGrallocSource) {
++            mInputMetadataType = kMetadataBufferTypeCameraSource;
++        }
++#endif
++
+         uint32_t usageBits;
+         if (mOMX->getParameter(
+                 mNode, (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits,
+@@ -6036,6 +6053,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
+                 status_t err2 = OK;
+                 switch (metaType) {
+                 case kMetadataBufferTypeInvalid:
++#ifdef CAMCORDER_GRALLOC_SOURCE
++                case kMetadataBufferTypeCameraSource:
++#endif
+                     break;
+ #ifndef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
+                 case kMetadataBufferTypeNativeHandleSource:
+@@ -6267,6 +6287,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+                 native_handle_t *handle = NULL;
+                 VideoNativeHandleMetadata &nativeMeta =
+                     *(VideoNativeHandleMetadata *)info->mData->data();
++#ifdef CAMCORDER_GRALLOC_SOURCE
++                VideoGrallocMetadata &grallocMeta =
++                    *(VideoGrallocMetadata *)info->mData->data();
++#endif
+                 if (info->mData->size() >= sizeof(nativeMeta)
+                         && nativeMeta.eType == kMetadataBufferTypeNativeHandleSource) {
+ #ifdef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
+@@ -6276,6 +6300,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+                     handle = (native_handle_t *)nativeMeta.pHandle;
+ #endif
+                 }
++#ifdef CAMCORDER_GRALLOC_SOURCE
++                else if (info->mData->size() >= sizeof(grallocMeta)
++                        && grallocMeta.eType == kMetadataBufferTypeGrallocSource) {
++                    handle = (native_handle_t *)(uintptr_t)grallocMeta.pHandle;
++                }
++#endif
+                 info->mData->meta()->setPointer("handle", handle);
+                 info->mData->meta()->setInt32("rangeOffset", rangeOffset);
+                 info->mData->meta()->setInt32("rangeLength", rangeLength);
+@@ -6968,10 +6998,12 @@ void ACodec::LoadedState::onCreateInputSurface(
+         err = mCodec->mOMX->createInputSurface(
+                 mCodec->mNode, kPortIndexInput, dataSpace, &bufferProducer,
+                 &mCodec->mInputMetadataType);
++#ifndef CAMCORDER_GRALLOC_SOURCE
+         // framework uses ANW buffers internally instead of gralloc handles
+         if (mCodec->mInputMetadataType == kMetadataBufferTypeGrallocSource) {
+             mCodec->mInputMetadataType = kMetadataBufferTypeANWBuffer;
+         }
++#endif
+     }
+ 
+     if (err == OK) {
+@@ -7014,10 +7046,12 @@ void ACodec::LoadedState::onSetInputSurface(
+         err = mCodec->mOMX->setInputSurface(
+                 mCodec->mNode, kPortIndexInput, surface->getBufferConsumer(),
+                 &mCodec->mInputMetadataType);
++#ifndef CAMCORDER_GRALLOC_SOURCE
+         // framework uses ANW buffers internally instead of gralloc handles
+         if (mCodec->mInputMetadataType == kMetadataBufferTypeGrallocSource) {
+             mCodec->mInputMetadataType = kMetadataBufferTypeANWBuffer;
+         }
++#endif
+     }
+ 
+     if (err == OK) {
+diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
+index 3848502..c06f6a4 100644
+--- a/media/libstagefright/Android.mk
++++ b/media/libstagefright/Android.mk
+@@ -124,6 +124,10 @@ LOCAL_SHARED_LIBRARIES += \
+         libdl \
+         libRScpp \
+ 
++ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
++LOCAL_CFLAGS += -DCAMCORDER_GRALLOC_SOURCE
++endif
++
+ LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
+ 
+ # enable experiments only in userdebug and eng builds
+diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
+index e087249..c9f60ec 100644
+--- a/media/libstagefright/CameraSource.cpp
++++ b/media/libstagefright/CameraSource.cpp
+@@ -1117,6 +1117,9 @@ void CameraSource::releaseRecordingFrameHandle(native_handle_t* handle) {
+         int64_t token = IPCThreadState::self()->clearCallingIdentity();
+         mCamera->releaseRecordingFrameHandle(handle);
+         IPCThreadState::self()->restoreCallingIdentity(token);
++    } else {
++        native_handle_close(handle);
++        native_handle_delete(handle);
+     }
+ }
+ 
+@@ -1247,6 +1250,10 @@ void CameraSource::processBufferQueueFrame(BufferItem& buffer) {
+ MetadataBufferType CameraSource::metaDataStoredInVideoBuffers() const {
+     ALOGV("metaDataStoredInVideoBuffers");
+ 
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    return kMetadataBufferTypeGrallocSource;
++#endif
++
+     // Output buffers will contain metadata if camera sends us buffer in metadata mode or via
+     // buffer queue.
+     switch (mVideoBufferMode) {
+diff --git a/media/libstagefright/SurfaceMediaSource.cpp b/media/libstagefright/SurfaceMediaSource.cpp
+index 15ff569..0e9b4e6 100644
+--- a/media/libstagefright/SurfaceMediaSource.cpp
++++ b/media/libstagefright/SurfaceMediaSource.cpp
+@@ -129,7 +129,11 @@ status_t SurfaceMediaSource::setFrameRate(int32_t fps)
+ 
+ MetadataBufferType SurfaceMediaSource::metaDataStoredInVideoBuffers() const {
+     ALOGV("isMetaDataStoredInVideoBuffers");
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    return kMetadataBufferTypeGrallocSource;
++#else
+     return kMetadataBufferTypeANWBuffer;
++#endif
+ }
+ 
+ int32_t SurfaceMediaSource::getFrameRate( ) const {
+@@ -250,6 +254,35 @@ sp<MetaData> SurfaceMediaSource::getFormat()
+     return meta;
+ }
+ 
++#ifdef CAMCORDER_GRALLOC_SOURCE
++// Pass the data to the MediaBuffer. Pass in only the metadata
++// The metadata passed consists of two parts:
++// 1. First, there is an integer indicating that it is a GRAlloc
++// source (kMetadataBufferTypeGrallocSource)
++// 2. This is followed by the buffer_handle_t that is a handle to the
++// GRalloc buffer. The encoder needs to interpret this GRalloc handle
++// and encode the frames.
++// --------------------------------------------------------------
++// |  kMetadataBufferTypeGrallocSource | sizeof(buffer_handle_t) |
++// --------------------------------------------------------------
++// Note: Call only when you have the lock
++static void passMetadataBuffer(MediaBuffer **buffer,
++        buffer_handle_t bufferHandle) {
++    *buffer = new MediaBuffer(4 + sizeof(buffer_handle_t));
++    char *data = (char *)(*buffer)->data();
++    if (data == NULL) {
++        ALOGE("Cannot allocate memory for metadata buffer!");
++        return;
++    }
++    OMX_U32 type = kMetadataBufferTypeGrallocSource;
++    memcpy(data, &type, 4);
++    memcpy(data + 4, &bufferHandle, sizeof(buffer_handle_t));
++
++    ALOGV("handle = %p, , offset = %zu, length = %zu",
++            bufferHandle, (*buffer)->range_length(), (*buffer)->range_offset());
++}
++#endif
++
+ // Pass the data to the MediaBuffer. Pass in only the metadata
+ // Note: Call only when you have the lock
+ void SurfaceMediaSource::passMetadataBuffer_l(MediaBuffer **buffer,
+@@ -352,7 +385,11 @@ status_t SurfaceMediaSource::read(
+     mNumFramesEncoded++;
+     // Pass the data to the MediaBuffer. Pass in only the metadata
+ 
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    passMetadataBuffer(buffer, mSlots[mCurrentSlot].mGraphicBuffer->handle);
++#else
+     passMetadataBuffer_l(buffer, mSlots[mCurrentSlot].mGraphicBuffer->getNativeBuffer());
++#endif
+ 
+     (*buffer)->setObserver(this);
+     (*buffer)->add_ref();
+diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
+index cb78879..055ac4b 100644
+--- a/media/libstagefright/foundation/MediaBufferGroup.cpp
++++ b/media/libstagefright/foundation/MediaBufferGroup.cpp
+@@ -188,6 +188,16 @@ status_t MediaBufferGroup::acquire_buffer(
+     // Never gets here.
+ }
+ 
++status_t MediaBufferGroup::acquire_buffer(
++       MediaBuffer **out) {
++   return acquire_buffer(out, false, 0);
++}
++
++status_t MediaBufferGroup::acquire_buffer(
++        MediaBuffer **out, bool nonBlocking) {
++    return acquire_buffer(out, nonBlocking, 0);
++}
++
+ void MediaBufferGroup::signalBufferReturned(MediaBuffer *) {
+     mCondition.signal();
+ }
+diff --git a/media/libstagefright/omx/Android.mk b/media/libstagefright/omx/Android.mk
+index e4fbd81..8fc788f 100644
+--- a/media/libstagefright/omx/Android.mk
++++ b/media/libstagefright/omx/Android.mk
+@@ -31,6 +31,12 @@ LOCAL_SHARED_LIBRARIES :=               \
+         libstagefright_foundation       \
+         libdl
+ 
++ifneq ($(TARGET_USES_MEDIA_EXTENSIONS),true)
++ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
++LOCAL_CFLAGS += -DCAMCORDER_GRALLOC_SOURCE
++endif
++endif
++
+ LOCAL_MODULE:= libstagefright_omx
+ LOCAL_CFLAGS += -Werror -Wall
+ LOCAL_CLANG := true
+diff --git a/media/libstagefright/omx/OMXMaster.cpp b/media/libstagefright/omx/OMXMaster.cpp
+index 6132a2c..7f0d270 100644
+--- a/media/libstagefright/omx/OMXMaster.cpp
++++ b/media/libstagefright/omx/OMXMaster.cpp
+@@ -69,6 +69,7 @@ OMXMaster::~OMXMaster() {
+ 
+ void OMXMaster::addVendorPlugin() {
+     addPlugin("libstagefrighthw.so");
++    addPlugin("libsomxcore.so");
+ }
+ 
+ void OMXMaster::addPlugin(const char *libname) {
+diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
+index 395dad8..c570603 100644
+--- a/media/libstagefright/omx/OMXNodeInstance.cpp
++++ b/media/libstagefright/omx/OMXNodeInstance.cpp
+@@ -1286,7 +1286,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
+     }
+ 
+     // metadata buffers are not connected cross process; only copy if not meta
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    bool copy = true;
++#else
+     bool copy = mMetadataType[portIndex] == kMetadataBufferTypeInvalid;
++#endif
+ 
+     BufferMeta *buffer_meta = new BufferMeta(
+             params, portIndex,
+@@ -1404,10 +1408,30 @@ status_t OMXNodeInstance::emptyBuffer(
+     BufferMeta *buffer_meta =
+         static_cast<BufferMeta *>(header->pAppPrivate);
+ 
++#ifndef CAMCORDER_GRALLOC_SOURCE
+     // set up proper filled length if component is configured for gralloc metadata mode
+     // ignore rangeOffset in this case (as client may be assuming ANW meta buffers).
+     if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource) {
+         header->nFilledLen = rangeLength ? sizeof(VideoGrallocMetadata) : 0;
++#else
++    sp<ABuffer> backup = buffer_meta->getBuffer(header, true /* backup */, false /* limit */);
++    sp<ABuffer> codec = buffer_meta->getBuffer(header, false /* backup */, false /* limit */);
++
++    // convert incoming ANW meta buffers if component is configured for gralloc metadata mode
++    // ignore rangeOffset in this case
++    if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource
++            && backup->capacity() >= sizeof(VideoNativeMetadata)
++            && codec->capacity() >= sizeof(VideoGrallocMetadata)
++            && ((VideoNativeMetadata *)backup->base())->eType
++                    == kMetadataBufferTypeANWBuffer) {
++        VideoNativeMetadata &backupMeta = *(VideoNativeMetadata *)backup->base();
++        VideoGrallocMetadata &codecMeta = *(VideoGrallocMetadata *)codec->base();
++        CLOG_BUFFER(emptyBuffer, "converting ANWB %p to handle %p",
++                backupMeta.pBuffer, backupMeta.pBuffer->handle);
++        codecMeta.pHandle = backupMeta.pBuffer != NULL ? backupMeta.pBuffer->handle : NULL;
++        codecMeta.eType = kMetadataBufferTypeGrallocSource;
++        header->nFilledLen = rangeLength ? sizeof(codecMeta) : 0;
++#endif
+         header->nOffset = 0;
+     } else {
+         // rangeLength and rangeOffset must be a subset of the allocated data in the buffer.
+diff --git a/media/mediaserver/Android.mk b/media/mediaserver/Android.mk
+index 1738df8..c2b9c1f 100644
+--- a/media/mediaserver/Android.mk
++++ b/media/mediaserver/Android.mk
+@@ -42,4 +42,8 @@ LOCAL_INIT_RC := mediaserver.rc
+ 
+ LOCAL_CFLAGS := -Werror -Wall
+ 
++ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
++    LOCAL_CFLAGS += -DNO_CAMERA_SERVER
++endif
++
+ include $(BUILD_EXECUTABLE)
+diff --git a/media/mediaserver/main_mediaserver.cpp b/media/mediaserver/main_mediaserver.cpp
+index ecddc48..0abe6ac 100644
+--- a/media/mediaserver/main_mediaserver.cpp
++++ b/media/mediaserver/main_mediaserver.cpp
+@@ -25,6 +25,9 @@
+ #include "RegisterExtensions.h"
+ 
+ // from LOCAL_C_INCLUDES
++#ifdef NO_CAMERA_SERVER
++#include "CameraService.h"
++#endif
+ #include "IcuUtils.h"
+ #include "MediaPlayerService.h"
+ #include "ResourceManagerService.h"
+@@ -41,6 +44,9 @@ int main(int argc __unused, char **argv __unused)
+     InitializeIcuOrDie();
+     MediaPlayerService::instantiate();
+     ResourceManagerService::instantiate();
++#ifdef NO_CAMERA_SERVER
++    CameraService::instantiate();
++#endif
+     registerExtensions();
+     ProcessState::self()->startThreadPool();
+     IPCThreadState::self()->joinThreadPool();
+diff --git a/services/camera/libcameraservice/Android.mk b/services/camera/libcameraservice/Android.mk
+index 8d7f71c..d98ad47 100644
+--- a/services/camera/libcameraservice/Android.mk
++++ b/services/camera/libcameraservice/Android.mk
+@@ -80,6 +80,10 @@ LOCAL_EXPORT_C_INCLUDE_DIRS := \
+ 
+ LOCAL_CFLAGS += -Wall -Wextra -Werror
+ 
++ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
++    LOCAL_CFLAGS += -DNO_CAMERA_SERVER
++endif
++
+ LOCAL_MODULE:= libcameraservice
+ 
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index d0df6d1..a0c74d8 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -831,7 +831,11 @@ String8 CameraService::toString(std::set<userid_t> intSet) {
+ Status CameraService::initializeShimMetadata(int cameraId) {
+     int uid = getCallingUid();
+ 
++#ifdef NO_CAMERA_SERVER
++    String16 internalPackageName("media");
++#else
+     String16 internalPackageName("cameraserver");
++#endif
+     String8 id = String8::format("%d", cameraId);
+     Status ret = Status::ok();
+     sp<Client> tmp = nullptr;
+@@ -912,7 +916,9 @@ Status CameraService::getLegacyParametersLazy(int cameraId,
+ static bool isTrustedCallingUid(uid_t uid) {
+     switch (uid) {
+         case AID_MEDIA:        // mediaserver
+-        case AID_CAMERASERVER: // cameraserver
++#ifndef NO_CAMERA_SERVER
++         case AID_CAMERASERVER: // cameraserver
++#endif
+         case AID_RADIO:        // telephony
+             return true;
+         default:
+diff --git a/services/camera/libcameraservice/api1/CameraClient.cpp b/services/camera/libcameraservice/api1/CameraClient.cpp
+index 266fb03..3c2b98a 100644
+--- a/services/camera/libcameraservice/api1/CameraClient.cpp
++++ b/services/camera/libcameraservice/api1/CameraClient.cpp
+@@ -520,6 +520,9 @@ void CameraClient::releaseRecordingFrameHandle(native_handle_t *handle) {
+     metadata->pHandle = handle;
+ 
+     mHardware->releaseRecordingFrame(dataPtr);
++
++    native_handle_close(handle);
++    native_handle_delete(handle);
+ }
+ 
+ status_t CameraClient::setVideoBufferMode(int32_t videoBufferMode) {
