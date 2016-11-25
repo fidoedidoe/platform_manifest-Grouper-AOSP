@@ -32,6 +32,12 @@ patch -p 1 < ../../.repo/manifests/frameworks_native.patch
 
 cd ../..
 
+cd hardware/ril
+
+patch -p 1 < ../../.repo/manifests/hardware_ril.patch
+
+cd ../..
+
 cd packages/aps/Music
 
 patch -p 1 < ../../../.repo/manifests/packages_apps_music.patch
