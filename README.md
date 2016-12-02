@@ -50,7 +50,7 @@ patch -p 1 < ../../.repo/manifests/system_core.patch
 
 cd ../..
 
-cd system/core
+cd system/sepolicy
 
 patch -p 1 < ../../.repo/manifests/system_sepolicy.patch
 
