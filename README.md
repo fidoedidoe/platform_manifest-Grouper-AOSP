@@ -38,7 +38,7 @@ patch -p 1 < ../../.repo/manifests/hardware_ril.patch
 
 cd ../..
 
-cd packages/aps/Music
+cd packages/apps/Music
 
 patch -p 1 < ../../../.repo/manifests/packages_apps_music.patch
 
