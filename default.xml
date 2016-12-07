@@ -7,7 +7,7 @@
            fetch="https://github.com/AndDiSa/" />
   <remote  name="millosr"
            fetch="https://github.com/millosr/" />
-  <default revision="refs/tags/android-7.1.1_r1"
+  <default revision="refs/tags/android-7.1.1_r4"
            remote="aosp"
            sync-j="4" />
 
