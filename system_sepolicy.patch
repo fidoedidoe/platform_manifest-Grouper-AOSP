@@ -11,6 +11,18 @@ index e9dd7b3..ef2bd9d 100644
  neverallow { appdomain -bluetooth } self:capability2 *;
  
  # Block device access.
+diff --git a/bootanim.te b/bootanim.te
+index e18654c..c3091ab 100644
+--- a/bootanim.te
++++ b/bootanim.te
+@@ -19,6 +19,7 @@ allow bootanim audio_device:chr_file rw_file_perms;
+ 
+ allow bootanim audioserver_service:service_manager find;
+ allow bootanim surfaceflinger_service:service_manager find;
++allow bootanim audioserver_service:service_manager find;
+ 
+ # Allow access to ion memory allocation device
+ allow bootanim ion_device:chr_file rw_file_perms;
 diff --git a/domain.te b/domain.te
 index 45569de..21c9df2 100644
 --- a/domain.te
@@ -98,6 +110,28 @@ index 45569de..21c9df2 100644
  
  neverallow {
    domain
+diff --git a/dumpstate.te b/dumpstate.te
+index dda8a58..115bb09 100644
+--- a/dumpstate.te
++++ b/dumpstate.te
+@@ -5,6 +5,7 @@ type dumpstate_exec, exec_type, file_type;
+ init_daemon_domain(dumpstate)
+ net_domain(dumpstate)
+ binder_use(dumpstate)
++wakelock_use(dumpstate)
+ 
+ # Allow setting process priority, protect from OOM killer, and dropping
+ # privileges by switching UID / GID
+@@ -136,6 +137,9 @@ control_logd(dumpstate)
+ allow dumpstate net_data_file:dir search;
+ allow dumpstate net_data_file:file r_file_perms;
+ 
++# List sockets via ss.
++allow dumpstate self:netlink_tcpdiag_socket { create_socket_perms nlmsg_read };
++
+ # Access /data/tombstones.
+ allow dumpstate tombstone_data_file:dir r_dir_perms;
+ allow dumpstate tombstone_data_file:file r_file_perms;
 diff --git a/file.te b/file.te
 index 84af4a7..55910d2 100644
 --- a/file.te
@@ -111,6 +145,31 @@ index 84af4a7..55910d2 100644
  type fuse, sdcard_type, fs_type, mlstrustedobject;
  type sdcardfs, sdcard_type, fs_type, mlstrustedobject;
  type vfat, sdcard_type, fs_type, mlstrustedobject;
+diff --git a/otapreopt_chroot.te b/otapreopt_chroot.te
+index fcba7b1..1c5f2ee 100644
+--- a/otapreopt_chroot.te
++++ b/otapreopt_chroot.te
+@@ -10,6 +10,8 @@ allow otapreopt_chroot self:capability { sys_admin sys_chroot };
+ # This is required to mount /vendor.
+ allow otapreopt_chroot block_device:dir search;
+ allow otapreopt_chroot labeledfs:filesystem mount;
++# Mounting /vendor can have this side-effect. Ignore denial.
++dontaudit otapreopt_chroot kernel:process setsched;
+ 
+ # Allow to transition to postinstall_ota, to run otapreopt in its own sandbox.
+ domain_auto_trans(otapreopt_chroot, postinstall_file, postinstall_dexopt)
+diff --git a/platform_app.te b/platform_app.te
+index 0d3bdba..d4a27ad 100644
+--- a/platform_app.te
++++ b/platform_app.te
+@@ -45,6 +45,7 @@ allow platform_app drmserver_service:service_manager find;
+ allow platform_app mediaserver_service:service_manager find;
+ allow platform_app mediaextractor_service:service_manager find;
+ allow platform_app mediacodec_service:service_manager find;
++allow platform_app mediadrmserver_service:service_manager find;
+ allow platform_app persistent_data_block_service:service_manager find;
+ allow platform_app radio_service:service_manager find;
+ allow platform_app surfaceflinger_service:service_manager find;
 diff --git a/priv_app.te b/priv_app.te
 index 85516a6..e1f96d5 100644
 --- a/priv_app.te
@@ -124,6 +183,35 @@ index 85516a6..e1f96d5 100644
  
  # Do not allow privileged apps to register services.
  # Only trusted components of Android should be registering
+diff --git a/service.te b/service.te
+index 6b5838c..e7a30f9 100644
+--- a/service.te
++++ b/service.te
+@@ -39,6 +39,7 @@ type contexthub_service, app_api_service, system_server_service, service_manager
+ type IProxyService_service, app_api_service, system_server_service, service_manager_type;
+ type commontime_management_service, system_server_service, service_manager_type;
+ type connectivity_service, app_api_service, system_server_service, service_manager_type;
++type connmetrics_service, app_api_service, system_server_service, service_manager_type;
+ type consumer_ir_service, app_api_service, system_server_service, service_manager_type;
+ type content_service, app_api_service, system_server_service, service_manager_type;
+ type country_detector_service, app_api_service, system_server_service, service_manager_type;
+diff --git a/service_contexts b/service_contexts
+index 0ddbdc1..dd7e49f 100644
+--- a/service_contexts
++++ b/service_contexts
+@@ -19,9 +19,10 @@ carrier_config                            u:object_r:radio_service:s0
+ clipboard                                 u:object_r:clipboard_service:s0
+ com.android.net.IProxyService             u:object_r:IProxyService_service:s0
+ commontime_management                     u:object_r:commontime_management_service:s0
+-common_time.clock                        u:object_r:mediaserver_service:s0
+-common_time.config                       u:object_r:mediaserver_service:s0
++common_time.clock                         u:object_r:mediaserver_service:s0
++common_time.config                        u:object_r:mediaserver_service:s0
+ connectivity                              u:object_r:connectivity_service:s0
++connmetrics                               u:object_r:connmetrics_service:s0
+ consumer_ir                               u:object_r:consumer_ir_service:s0
+ content                                   u:object_r:content_service:s0
+ contexthub_service                        u:object_r:contexthub_service:s0
 diff --git a/untrusted_app.te b/untrusted_app.te
 index 35c811c..19cfc64 100644
 --- a/untrusted_app.te

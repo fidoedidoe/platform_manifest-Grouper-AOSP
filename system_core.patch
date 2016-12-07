@@ -1,3 +1,580 @@
+diff --git a/adb/adb.h b/adb/adb.h
+index 971b8da..b1d9896 100644
+--- a/adb/adb.h
++++ b/adb/adb.h
+@@ -160,8 +160,10 @@ int get_available_local_transport_index();
+ int  init_socket_transport(atransport *t, int s, int port, int local);
+ void init_usb_transport(atransport *t, usb_handle *usb, ConnectionState state);
+ 
++std::string getEmulatorSerialString(int console_port);
+ #if ADB_HOST
+ atransport* find_emulator_transport_by_adb_port(int adb_port);
++atransport* find_emulator_transport_by_console_port(int console_port);
+ #endif
+ 
+ int service_to_fd(const char* name, const atransport* transport);
+diff --git a/adb/bugreport.cpp b/adb/bugreport.cpp
+index 9ed44a7..c348dd5 100644
+--- a/adb/bugreport.cpp
++++ b/adb/bugreport.cpp
+@@ -47,7 +47,7 @@ class BugreportStandardStreamsCallback : public StandardStreamsCallbackInterface
+           show_progress_(show_progress),
+           status_(0),
+           line_() {
+-        SetLineMessage();
++        SetLineMessage("generating");
+     }
+ 
+     void OnStdout(const char* buffer, int length) {
+@@ -97,6 +97,7 @@ class BugreportStandardStreamsCallback : public StandardStreamsCallbackInterface
+                                                           OS_PATH_SEPARATOR, dest_file_.c_str());
+             }
+             std::vector<const char*> srcs{src_file_.c_str()};
++            SetLineMessage("pulling");
+             status_ =
+                 br_->DoSyncPull(srcs, destination.c_str(), true, line_message_.c_str()) ? 0 : 1;
+             if (status_ != 0) {
+@@ -111,9 +112,8 @@ class BugreportStandardStreamsCallback : public StandardStreamsCallbackInterface
+     }
+ 
+   private:
+-    void SetLineMessage() {
+-        line_message_ =
+-            android::base::StringPrintf("generating %s", adb_basename(dest_file_).c_str());
++    void SetLineMessage(const std::string& action) {
++        line_message_ = action + " " + adb_basename(dest_file_);
+     }
+ 
+     void SetSrcFile(const std::string path) {
+@@ -121,7 +121,7 @@ class BugreportStandardStreamsCallback : public StandardStreamsCallbackInterface
+         if (!dest_dir_.empty()) {
+             // Only uses device-provided name when user passed a directory.
+             dest_file_ = adb_basename(path);
+-            SetLineMessage();
++            SetLineMessage("generating");
+         }
+     }
+ 
+diff --git a/adb/bugreport_test.cpp b/adb/bugreport_test.cpp
+index 3cd2b6d..1129285 100644
+--- a/adb/bugreport_test.cpp
++++ b/adb/bugreport_test.cpp
+@@ -189,7 +189,7 @@ TEST_F(BugreportTest, NoArgumentsNDevice) {
+         .WillOnce(DoAll(WithArg<4>(WriteOnStdout("OK:/device/da_bugreport.zip")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/da_bugreport.zip")), StrEq(dest_file),
+-                                true, StrEq("generating da_bugreport.zip")))
++                                true, StrEq("pulling da_bugreport.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport"};
+@@ -209,7 +209,7 @@ TEST_F(BugreportTest, NoArgumentsPostNDevice) {
+                         WithArg<4>(WriteOnStdout("OK:/device/da_bugreport.zip\n")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/da_bugreport.zip")), StrEq(dest_file),
+-                                true, StrEq("generating da_bugreport.zip")))
++                                true, StrEq("pulling da_bugreport.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport"};
+@@ -223,7 +223,7 @@ TEST_F(BugreportTest, OkNDevice) {
+         .WillOnce(DoAll(WithArg<4>(WriteOnStdout("OK:/device/bugreport.zip")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/bugreport.zip")), StrEq("file.zip"),
+-                                true, StrEq("generating file.zip")))
++                                true, StrEq("pulling file.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", "file.zip"};
+@@ -239,7 +239,7 @@ TEST_F(BugreportTest, OkNDeviceSplitBuffer) {
+                         WithArg<4>(WriteOnStdout("/bugreport.zip")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/bugreport.zip")), StrEq("file.zip"),
+-                                true, StrEq("generating file.zip")))
++                                true, StrEq("pulling file.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", "file.zip"};
+@@ -275,7 +275,7 @@ TEST_F(BugreportTest, OkProgress) {
+             WithArg<4>(ReturnCallbackDone())));
+     // clang-format on
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/bugreport.zip")), StrEq("file.zip"),
+-                                true, StrEq("generating file.zip")))
++                                true, StrEq("pulling file.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", "file.zip"};
+@@ -294,7 +294,7 @@ TEST_F(BugreportTest, OkDirectory) {
+                         WithArg<4>(WriteOnStdout("OK:/device/da_bugreport.zip")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/da_bugreport.zip")), StrEq(dest_file),
+-                                true, StrEq("generating da_bugreport.zip")))
++                                true, StrEq("pulling da_bugreport.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", td.path};
+@@ -308,7 +308,7 @@ TEST_F(BugreportTest, OkNoExtension) {
+         .WillOnce(DoAll(WithArg<4>(WriteOnStdout("OK:/device/bugreport.zip\n")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/bugreport.zip")), StrEq("file.zip"),
+-                                true, StrEq("generating file.zip")))
++                                true, StrEq("pulling file.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", "file"};
+@@ -327,7 +327,7 @@ TEST_F(BugreportTest, OkNDeviceDirectory) {
+                         WithArg<4>(WriteOnStdout("OK:/device/da_bugreport.zip")),
+                         WithArg<4>(ReturnCallbackDone())));
+     EXPECT_CALL(br_, DoSyncPull(ElementsAre(StrEq("/device/da_bugreport.zip")), StrEq(dest_file),
+-                                true, StrEq("generating da_bugreport.zip")))
++                                true, StrEq("pulling da_bugreport.zip")))
+         .WillOnce(Return(true));
+ 
+     const char* args[] = {"bugreport", td.path};
+diff --git a/adb/commandline.cpp b/adb/commandline.cpp
+index 23827de..51d828a 100644
+--- a/adb/commandline.cpp
++++ b/adb/commandline.cpp
+@@ -1430,6 +1430,16 @@ static bool _is_valid_ack_reply_fd(const int ack_reply_fd) {
+ #endif
+ }
+ 
++static bool _use_legacy_install() {
++    FeatureSet features;
++    std::string error;
++    if (!adb_get_feature_set(&features, &error)) {
++        fprintf(stderr, "error: %s\n", error.c_str());
++        return true;
++    }
++    return !CanUseFeature(features, kFeatureCmd);
++}
++
+ int adb_commandline(int argc, const char **argv) {
+     int no_daemon = 0;
+     int is_daemon = 0;
+@@ -1797,17 +1807,10 @@ int adb_commandline(int argc, const char **argv) {
+     }
+     else if (!strcmp(argv[0], "install")) {
+         if (argc < 2) return usage();
+-        FeatureSet features;
+-        std::string error;
+-        if (!adb_get_feature_set(&features, &error)) {
+-            fprintf(stderr, "error: %s\n", error.c_str());
+-            return 1;
++        if (_use_legacy_install()) {
++            return install_app_legacy(transport_type, serial, argc, argv);
+         }
+-
+-        if (CanUseFeature(features, kFeatureCmd)) {
+-            return install_app(transport_type, serial, argc, argv);
+-        }
+-        return install_app_legacy(transport_type, serial, argc, argv);
++        return install_app(transport_type, serial, argc, argv);
+     }
+     else if (!strcmp(argv[0], "install-multiple")) {
+         if (argc < 2) return usage();
+@@ -1815,17 +1818,10 @@ int adb_commandline(int argc, const char **argv) {
+     }
+     else if (!strcmp(argv[0], "uninstall")) {
+         if (argc < 2) return usage();
+-        FeatureSet features;
+-        std::string error;
+-        if (!adb_get_feature_set(&features, &error)) {
+-            fprintf(stderr, "error: %s\n", error.c_str());
+-            return 1;
++        if (_use_legacy_install()) {
++            return uninstall_app_legacy(transport_type, serial, argc, argv);
+         }
+-
+-        if (CanUseFeature(features, kFeatureCmd)) {
+-            return uninstall_app(transport_type, serial, argc, argv);
+-        }
+-        return uninstall_app_legacy(transport_type, serial, argc, argv);
++        return uninstall_app(transport_type, serial, argc, argv);
+     }
+     else if (!strcmp(argv[0], "sync")) {
+         std::string src;
+@@ -2031,7 +2027,6 @@ static int install_multiple_app(TransportType transport, const char* serial, int
+     int i;
+     struct stat sb;
+     uint64_t total_size = 0;
+-
+     // Find all APK arguments starting at end.
+     // All other arguments passed through verbatim.
+     int first_apk = -1;
+@@ -2056,7 +2051,14 @@ static int install_multiple_app(TransportType transport, const char* serial, int
+         return 1;
+     }
+ 
+-    std::string cmd = android::base::StringPrintf("exec:pm install-create -S %" PRIu64, total_size);
++    std::string install_cmd;
++    if (_use_legacy_install()) {
++        install_cmd = "exec:pm";
++    } else {
++        install_cmd = "exec:cmd package";
++    }
++
++    std::string cmd = android::base::StringPrintf("%s install-create -S %" PRIu64, install_cmd.c_str(), total_size);
+     for (i = 1; i < first_apk; i++) {
+         cmd += " " + escape_arg(argv[i]);
+     }
+@@ -2098,8 +2100,8 @@ static int install_multiple_app(TransportType transport, const char* serial, int
+         }
+ 
+         std::string cmd = android::base::StringPrintf(
+-                "exec:pm install-write -S %" PRIu64 " %d %d_%s -",
+-                static_cast<uint64_t>(sb.st_size), session_id, i, adb_basename(file).c_str());
++                "%s install-write -S %" PRIu64 " %d %d_%s -",
++                install_cmd.c_str(), static_cast<uint64_t>(sb.st_size), session_id, i, adb_basename(file).c_str());
+ 
+         int localFd = adb_open(file, O_RDONLY);
+         if (localFd < 0) {
+@@ -2134,8 +2136,8 @@ static int install_multiple_app(TransportType transport, const char* serial, int
+ finalize_session:
+     // Commit session if we streamed everything okay; otherwise abandon
+     std::string service =
+-            android::base::StringPrintf("exec:pm install-%s %d",
+-                                        success ? "commit" : "abandon", session_id);
++            android::base::StringPrintf("%s install-%s %d",
++                                        install_cmd.c_str(), success ? "commit" : "abandon", session_id);
+     fd = adb_connect(service, &error);
+     if (fd < 0) {
+         fprintf(stderr, "Connect error for finalize: %s\n", error.c_str());
+diff --git a/adb/transport_local.cpp b/adb/transport_local.cpp
+index 4f3e1f5..1f5a258 100644
+--- a/adb/transport_local.cpp
++++ b/adb/transport_local.cpp
+@@ -99,7 +99,8 @@ int local_connect_arbitrary_ports(int console_port, int adb_port, std::string* e
+     int fd = -1;
+ 
+ #if ADB_HOST
+-    if (find_emulator_transport_by_adb_port(adb_port) != nullptr) {
++    if (find_emulator_transport_by_adb_port(adb_port) != nullptr ||
++        find_emulator_transport_by_console_port(console_port) != nullptr) {
+         return -1;
+     }
+ 
+@@ -116,7 +117,7 @@ int local_connect_arbitrary_ports(int console_port, int adb_port, std::string* e
+         D("client: connected on remote on fd %d", fd);
+         close_on_exec(fd);
+         disable_tcp_nagle(fd);
+-        std::string serial = android::base::StringPrintf("emulator-%d", console_port);
++        std::string serial = getEmulatorSerialString(console_port);
+         if (register_socket_transport(fd, serial.c_str(), adb_port, 1) == 0) {
+             return 0;
+         }
+@@ -360,6 +361,11 @@ atransport* find_emulator_transport_by_adb_port_locked(int adb_port)
+     return NULL;
+ }
+ 
++std::string getEmulatorSerialString(int console_port)
++{
++    return android::base::StringPrintf("emulator-%d", console_port);
++}
++
+ atransport* find_emulator_transport_by_adb_port(int adb_port)
+ {
+     adb_mutex_lock( &local_transports_lock );
+@@ -368,6 +374,12 @@ atransport* find_emulator_transport_by_adb_port(int adb_port)
+     return result;
+ }
+ 
++atransport* find_emulator_transport_by_console_port(int console_port)
++{
++    return find_transport(getEmulatorSerialString(console_port).c_str());
++}
++
++
+ /* Only call this function if you already hold local_transports_lock. */
+ int get_available_local_transport_index_locked()
+ {
+diff --git a/debuggerd/tombstone.cpp b/debuggerd/tombstone.cpp
+index fa983fa..dfdf29c 100644
+--- a/debuggerd/tombstone.cpp
++++ b/debuggerd/tombstone.cpp
+@@ -368,6 +368,7 @@ static void dump_all_maps(Backtrace* backtrace, BacktraceMap* map, log_t* log, p
+     ALOGE("Cannot get siginfo for %d: %s\n", tid, strerror(errno));
+   }
+ 
++  ScopedBacktraceMapIteratorLock lock(map);
+   _LOG(log, logtype::MAPS, "\n");
+   if (!print_fault_address_marker) {
+     _LOG(log, logtype::MAPS, "memory map:\n");
+diff --git a/fastboot/fastboot.cpp b/fastboot/fastboot.cpp
+index c1c3174..2b6cad1 100644
+--- a/fastboot/fastboot.cpp
++++ b/fastboot/fastboot.cpp
+@@ -116,16 +116,18 @@ static struct {
+ };
+ 
+ static std::string find_item_given_name(const char* img_name, const char* product) {
+-    char *dir;
+-    char path[PATH_MAX + 128];
++    char path_c_str[PATH_MAX + 128];
+ 
+     if(product) {
+-        get_my_path(path);
+-        return android::base::StringPrintf("../../../target/product/%s/%s", product, img_name);
++        get_my_path(path_c_str);
++        std::string path = path_c_str;
++        path.erase(path.find_last_of('/'));
++        return android::base::StringPrintf("%s/../../../target/product/%s/%s",
++                                           path.c_str(), product, img_name);
+     }
+ 
+-    dir = getenv("ANDROID_PRODUCT_OUT");
+-    if((dir == 0) || (dir[0] == 0)) {
++    char *dir = getenv("ANDROID_PRODUCT_OUT");
++    if (dir == nullptr || dir[0] == '\0') {
+         die("neither -p product specified nor ANDROID_PRODUCT_OUT set");
+     }
+ 
+diff --git a/fs_mgr/fs_mgr.c b/fs_mgr/fs_mgr.c
+index 6de8817..387f708 100644
+--- a/fs_mgr/fs_mgr.c
++++ b/fs_mgr/fs_mgr.c
+@@ -489,7 +489,7 @@ static int handle_encryptable(const struct fstab_rec* rec)
+  * first successful mount.
+  * Returns -1 on error, and  FS_MGR_MNTALL_* otherwise.
+  */
+-int fs_mgr_mount_all(struct fstab *fstab)
++int fs_mgr_mount_all(struct fstab *fstab, int mount_mode)
+ {
+     int i = 0;
+     int encryptable = FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE;
+@@ -503,8 +503,10 @@ int fs_mgr_mount_all(struct fstab *fstab)
+     }
+ 
+     for (i = 0; i < fstab->num_entries; i++) {
+-        /* Don't mount entries that are managed by vold */
+-        if (fstab->recs[i].fs_mgr_flags & (MF_VOLDMANAGED | MF_RECOVERYONLY)) {
++        /* Don't mount entries that are managed by vold or not for the mount mode*/
++        if ((fstab->recs[i].fs_mgr_flags & (MF_VOLDMANAGED | MF_RECOVERYONLY)) ||
++             ((mount_mode == MOUNT_MODE_LATE) && !fs_mgr_is_latemount(&fstab->recs[i])) ||
++             ((mount_mode == MOUNT_MODE_EARLY) && fs_mgr_is_latemount(&fstab->recs[i]))) {
+             continue;
+         }
+ 
+diff --git a/fs_mgr/fs_mgr_fstab.c b/fs_mgr/fs_mgr_fstab.c
+index 45adb34..21b4c74 100644
+--- a/fs_mgr/fs_mgr_fstab.c
++++ b/fs_mgr/fs_mgr_fstab.c
+@@ -78,6 +78,7 @@ static struct flag_list fs_mgr_flags[] = {
+     { "formattable", MF_FORMATTABLE },
+     { "slotselect",  MF_SLOTSELECT },
+     { "nofail",      MF_NOFAIL },
++    { "latemount",   MF_LATEMOUNT },
+     { "defaults",    0 },
+     { 0,             0 },
+ };
+@@ -545,3 +546,8 @@ int fs_mgr_is_nofail(struct fstab_rec *fstab)
+ {
+     return fstab->fs_mgr_flags & MF_NOFAIL;
+ }
++
++int fs_mgr_is_latemount(struct fstab_rec *fstab)
++{
++    return fstab->fs_mgr_flags & MF_LATEMOUNT;
++}
+diff --git a/fs_mgr/fs_mgr_main.c b/fs_mgr/fs_mgr_main.c
+index e5a00d5..776c13e 100644
+--- a/fs_mgr/fs_mgr_main.c
++++ b/fs_mgr/fs_mgr_main.c
+@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
+     fstab = fs_mgr_read_fstab(fstab_file);
+ 
+     if (a_flag) {
+-        return fs_mgr_mount_all(fstab);
++        return fs_mgr_mount_all(fstab, MOUNT_MODE_DEFAULT);
+     } else if (n_flag) {
+         return fs_mgr_do_mount(fstab, n_name, n_blk_dev, 0);
+     } else if (u_flag) {
+diff --git a/fs_mgr/fs_mgr_priv.h b/fs_mgr/fs_mgr_priv.h
+index 46975f1..6d9492b 100644
+--- a/fs_mgr/fs_mgr_priv.h
++++ b/fs_mgr/fs_mgr_priv.h
+@@ -48,7 +48,7 @@ __BEGIN_DECLS
+  *
+  *   <fs_mgr_options> is a comma separated list of flags that control the operation of
+  *                     the fs_mgr program.  The list includes "wait", which will wait till
+- *                     the <source> file exists, and "check", which requests that the fs_mgr 
++ *                     the <source> file exists, and "check", which requests that the fs_mgr
+  *                     run an fscheck program on the <source> before mounting the filesystem.
+  *                     If check is specifed on a read-only filesystem, it is ignored.
+  *                     Also, "encryptable" means that filesystem can be encrypted.
+@@ -83,6 +83,7 @@ __BEGIN_DECLS
+ #define MF_FORMATTABLE  0x4000
+ #define MF_SLOTSELECT   0x8000
+ #define MF_FORCEFDEORFBE 0x10000
++#define MF_LATEMOUNT    0x20000
+ #define MF_NOFAIL       0x40000
+ 
+ #define DM_BUF_SIZE 4096
+diff --git a/fs_mgr/include/fs_mgr.h b/fs_mgr/include/fs_mgr.h
+index 46d8f97..7565965 100644
+--- a/fs_mgr/include/fs_mgr.h
++++ b/fs_mgr/include/fs_mgr.h
+@@ -40,6 +40,13 @@ enum verity_mode {
+     VERITY_MODE_DEFAULT = VERITY_MODE_RESTART
+ };
+ 
++// Mount modes
++enum mount_mode {
++    MOUNT_MODE_DEFAULT = 0,
++    MOUNT_MODE_EARLY = 1,
++    MOUNT_MODE_LATE = 2
++};
++
+ /*
+  * The entries must be kept in the same order as they were seen in the fstab.
+  * Unless explicitly requested, a lookup on mount point should always
+@@ -82,7 +89,7 @@ void fs_mgr_free_fstab(struct fstab *fstab);
+ #define FS_MGR_MNTALL_DEV_NOT_ENCRYPTED 1
+ #define FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE 0
+ #define FS_MGR_MNTALL_FAIL -1
+-int fs_mgr_mount_all(struct fstab *fstab);
++int fs_mgr_mount_all(struct fstab *fstab, int mount_mode);
+ 
+ #define FS_MGR_DOMNT_FAILED -1
+ #define FS_MGR_DOMNT_BUSY -2
+@@ -110,6 +117,7 @@ int fs_mgr_is_noemulatedsd(const struct fstab_rec *fstab);
+ int fs_mgr_is_notrim(struct fstab_rec *fstab);
+ int fs_mgr_is_formattable(struct fstab_rec *fstab);
+ int fs_mgr_is_nofail(struct fstab_rec *fstab);
++int fs_mgr_is_latemount(struct fstab_rec *fstab);
+ int fs_mgr_swapon_all(struct fstab *fstab);
+ 
+ int fs_mgr_do_format(struct fstab_rec *fstab);
+diff --git a/healthd/healthd.cpp b/healthd/healthd.cpp
+index d9ac356..2caae78 100644
+--- a/healthd/healthd.cpp
++++ b/healthd/healthd.cpp
+@@ -136,10 +136,14 @@ static void healthd_mode_nop_battery_update(
+     struct android::BatteryProperties* /*props*/) {
+ }
+ 
+-int healthd_register_event(int fd, void (*handler)(uint32_t)) {
++int healthd_register_event(int fd, void (*handler)(uint32_t), EventWakeup wakeup) {
+     struct epoll_event ev;
+ 
+-    ev.events = EPOLLIN | EPOLLWAKEUP;
++    ev.events = EPOLLIN;
++
++    if (wakeup == EVENT_WAKEUP_FD)
++        ev.events |= EPOLLWAKEUP;
++
+     ev.data.ptr = (void *)handler;
+     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+         KLOG_ERROR(LOG_TAG,
+@@ -245,7 +249,7 @@ static void uevent_init(void) {
+     }
+ 
+     fcntl(uevent_fd, F_SETFL, O_NONBLOCK);
+-    if (healthd_register_event(uevent_fd, uevent_event))
++    if (healthd_register_event(uevent_fd, uevent_event, EVENT_WAKEUP_FD))
+         KLOG_ERROR(LOG_TAG,
+                    "register for uevent events failed\n");
+ }
+@@ -268,7 +272,7 @@ static void wakealarm_init(void) {
+         return;
+     }
+ 
+-    if (healthd_register_event(wakealarm_fd, wakealarm_event))
++    if (healthd_register_event(wakealarm_fd, wakealarm_event, EVENT_WAKEUP_FD))
+         KLOG_ERROR(LOG_TAG,
+                    "Registration of wakealarm event failed\n");
+ 
+@@ -286,7 +290,6 @@ static void healthd_mainloop(void) {
+         if (timeout < 0 || (mode_timeout > 0 && mode_timeout < timeout))
+             timeout = mode_timeout;
+         nevents = epoll_wait(epollfd, events, eventct, timeout);
+-
+         if (nevents == -1) {
+             if (errno == EINTR)
+                 continue;
+diff --git a/healthd/healthd_mode_charger.cpp b/healthd/healthd_mode_charger.cpp
+index 5846626..a6da704 100644
+--- a/healthd/healthd_mode_charger.cpp
++++ b/healthd/healthd_mode_charger.cpp
+@@ -686,7 +686,7 @@ void healthd_mode_charger_init(struct healthd_config* config)
+     ret = ev_init(input_callback, charger);
+     if (!ret) {
+         epollfd = ev_get_epollfd();
+-        healthd_register_event(epollfd, charger_event_handler);
++        healthd_register_event(epollfd, charger_event_handler, EVENT_WAKEUP_FD);
+     }
+ 
+     ret = res_create_display_surface("charger/battery_fail", &charger->surf_unknown);
+diff --git a/healthd/include/healthd/healthd.h b/healthd/include/healthd/healthd.h
+index 34ea55f..17efbd6 100644
+--- a/healthd/include/healthd/healthd.h
++++ b/healthd/include/healthd/healthd.h
+@@ -73,9 +73,14 @@ struct healthd_config {
+     bool (*screen_on)(android::BatteryProperties *props);
+ };
+ 
++enum EventWakeup {
++    EVENT_NO_WAKEUP_FD,
++    EVENT_WAKEUP_FD,
++};
++
+ // Global helper functions
+ 
+-int healthd_register_event(int fd, void (*handler)(uint32_t));
++int healthd_register_event(int fd, void (*handler)(uint32_t), EventWakeup wakeup = EVENT_NO_WAKEUP_FD);
+ void healthd_battery_update();
+ android::status_t healthd_get_property(int id,
+     struct android::BatteryProperty *val);
+diff --git a/include/backtrace/BacktraceMap.h b/include/backtrace/BacktraceMap.h
+index 2373c45..b80045f 100644
+--- a/include/backtrace/BacktraceMap.h
++++ b/include/backtrace/BacktraceMap.h
+@@ -71,6 +71,12 @@ public:
+   bool IsWritable(uintptr_t pc) { return GetFlags(pc) & PROT_WRITE; }
+   bool IsExecutable(uintptr_t pc) { return GetFlags(pc) & PROT_EXEC; }
+ 
++  // In order to use the iterators on this object, a caller must
++  // call the LockIterator and UnlockIterator function to guarantee
++  // that the data does not change while it's being used.
++  virtual void LockIterator() {}
++  virtual void UnlockIterator() {}
++
+   typedef std::deque<backtrace_map_t>::iterator iterator;
+   iterator begin() { return maps_.begin(); }
+   iterator end() { return maps_.end(); }
+@@ -102,4 +108,18 @@ protected:
+   pid_t pid_;
+ };
+ 
++class ScopedBacktraceMapIteratorLock {
++public:
++  explicit ScopedBacktraceMapIteratorLock(BacktraceMap* map) : map_(map) {
++    map->LockIterator();
++  }
++
++  ~ScopedBacktraceMapIteratorLock() {
++    map_->UnlockIterator();
++  }
++
++private:
++  BacktraceMap* map_;
++};
++
+ #endif // _BACKTRACE_BACKTRACE_MAP_H
+diff --git a/include/cutils/trace.h b/include/cutils/trace.h
+index c9790ad..19313af 100644
+--- a/include/cutils/trace.h
++++ b/include/cutils/trace.h
+@@ -70,7 +70,8 @@ __BEGIN_DECLS
+ #define ATRACE_TAG_PACKAGE_MANAGER  (1<<18)
+ #define ATRACE_TAG_SYSTEM_SERVER    (1<<19)
+ #define ATRACE_TAG_DATABASE         (1<<20)
+-#define ATRACE_TAG_LAST             ATRACE_TAG_DATABASE
++#define ATRACE_TAG_NETWORK          (1<<21)
++#define ATRACE_TAG_LAST             ATRACE_TAG_NETWORK
+ 
+ // Reserved for initialization.
+ #define ATRACE_TAG_NOT_READY        (1ULL<<63)
 diff --git a/include/system/camera.h b/include/system/camera.h
 index 5d0873a..e4c0a47 100644
 --- a/include/system/camera.h
@@ -112,6 +689,167 @@ index 67541b8..ff343e9 100644
  
  init_cflags += \
      $(init_options) \
+diff --git a/init/builtins.cpp b/init/builtins.cpp
+index 70f9194..44217f0 100644
+--- a/init/builtins.cpp
++++ b/init/builtins.cpp
+@@ -479,9 +479,9 @@ exit_success:
+  *
+  * start_index: index of the first path in the args list
+  */
+-static void import_late(const std::vector<std::string>& args, size_t start_index) {
++static void import_late(const std::vector<std::string>& args, size_t start_index, size_t end_index) {
+     Parser& parser = Parser::GetInstance();
+-    if (args.size() <= start_index) {
++    if (end_index <= start_index) {
+         // Use the default set if no path is given
+         static const std::vector<std::string> init_directories = {
+             "/system/etc/init",
+@@ -493,25 +493,23 @@ static void import_late(const std::vector<std::string>& args, size_t start_index
+             parser.ParseConfig(dir);
+         }
+     } else {
+-        for (size_t i = start_index; i < args.size(); ++i) {
++        for (size_t i = start_index; i < end_index; ++i) {
+             parser.ParseConfig(args[i]);
+         }
+     }
+ }
+ 
+-/* mount_all <fstab> [ <path> ]*
++/* mount_fstab
+  *
+- * This function might request a reboot, in which case it will
+- * not return.
++ *  Call fs_mgr_mount_all() to mount the given fstab
+  */
+-static int do_mount_all(const std::vector<std::string>& args) {
++static int mount_fstab(const char* fstabfile, int mount_mode) {
+     pid_t pid;
+     int ret = -1;
+     int child_ret = -1;
+     int status;
+     struct fstab *fstab;
+ 
+-    const char* fstabfile = args[1].c_str();
+     /*
+      * Call fs_mgr_mount_all() to mount all filesystems.  We fork(2) and
+      * do the call in the child to provide protection to the main init
+@@ -536,7 +534,7 @@ static int do_mount_all(const std::vector<std::string>& args) {
+         /* child, call fs_mgr_mount_all() */
+         klog_set_level(6);  /* So we can see what fs_mgr_mount_all() does */
+         fstab = fs_mgr_read_fstab(fstabfile);
+-        child_ret = fs_mgr_mount_all(fstab);
++        child_ret = fs_mgr_mount_all(fstab, mount_mode);
+         fs_mgr_free_fstab(fstab);
+         if (child_ret == -1) {
+             ERROR("fs_mgr_mount_all returned an error\n");
+@@ -546,28 +544,38 @@ static int do_mount_all(const std::vector<std::string>& args) {
+         /* fork failed, return an error */
+         return -1;
+     }
++    return ret;
++}
+ 
+-    /* Paths of .rc files are specified at the 2nd argument and beyond */
+-    import_late(args, 2);
+-
+-    if (ret == FS_MGR_MNTALL_DEV_NEEDS_ENCRYPTION) {
++/* Queue event based on fs_mgr return code.
++ *
++ * code: return code of fs_mgr_mount_all
++ *
++ * This function might request a reboot, in which case it will
++ * not return.
++ *
++ * return code is processed based on input code
++ */
++static int queue_fs_event(int code) {
++    int ret = code;
++    if (code == FS_MGR_MNTALL_DEV_NEEDS_ENCRYPTION) {
+         ActionManager::GetInstance().QueueEventTrigger("encrypt");
+-    } else if (ret == FS_MGR_MNTALL_DEV_MIGHT_BE_ENCRYPTED) {
++    } else if (code == FS_MGR_MNTALL_DEV_MIGHT_BE_ENCRYPTED) {
+         property_set("ro.crypto.state", "encrypted");
+         property_set("ro.crypto.type", "block");
+         ActionManager::GetInstance().QueueEventTrigger("defaultcrypto");
+-    } else if (ret == FS_MGR_MNTALL_DEV_NOT_ENCRYPTED) {
++    } else if (code == FS_MGR_MNTALL_DEV_NOT_ENCRYPTED) {
+         property_set("ro.crypto.state", "unencrypted");
+         ActionManager::GetInstance().QueueEventTrigger("nonencrypted");
+-    } else if (ret == FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE) {
++    } else if (code == FS_MGR_MNTALL_DEV_NOT_ENCRYPTABLE) {
+         property_set("ro.crypto.state", "unsupported");
+         ActionManager::GetInstance().QueueEventTrigger("nonencrypted");
+-    } else if (ret == FS_MGR_MNTALL_DEV_NEEDS_RECOVERY) {
++    } else if (code == FS_MGR_MNTALL_DEV_NEEDS_RECOVERY) {
+         /* Setup a wipe via recovery, and reboot into recovery */
+         ERROR("fs_mgr_mount_all suggested recovery, so wiping data via recovery.\n");
+         ret = wipe_data_via_recovery("wipe_data_via_recovery");
+         /* If reboot worked, there is no return. */
+-    } else if (ret == FS_MGR_MNTALL_DEV_FILE_ENCRYPTED) {
++    } else if (code == FS_MGR_MNTALL_DEV_FILE_ENCRYPTED) {
+         if (e4crypt_install_keyring()) {
+             return -1;
+         }
+@@ -577,14 +585,55 @@ static int do_mount_all(const std::vector<std::string>& args) {
+         // Although encrypted, we have device key, so we do not need to
+         // do anything different from the nonencrypted case.
+         ActionManager::GetInstance().QueueEventTrigger("nonencrypted");
+-    } else if (ret > 0) {
+-        ERROR("fs_mgr_mount_all returned unexpected error %d\n", ret);
++    } else if (code > 0) {
++        ERROR("fs_mgr_mount_all returned unexpected error %d\n", code);
+     }
+     /* else ... < 0: error */
+ 
+     return ret;
+ }
+ 
++/* mount_all <fstab> [ <path> ]* [--<options>]*
++ *
++ * This function might request a reboot, in which case it will
++ * not return.
++ */
++static int do_mount_all(const std::vector<std::string>& args) {
++    std::size_t na = 0;
++    bool import_rc = true;
++    bool queue_event = true;
++    int mount_mode = MOUNT_MODE_DEFAULT;
++    const char* fstabfile = args[1].c_str();
++    std::size_t path_arg_end = args.size();
++
++    for (na = args.size() - 1; na > 1; --na) {
++        if (args[na] == "--early") {
++             path_arg_end = na;
++             queue_event = false;
++             mount_mode = MOUNT_MODE_EARLY;
++        } else if (args[na] == "--late") {
++            path_arg_end = na;
++            import_rc = false;
++            mount_mode = MOUNT_MODE_LATE;
++        }
++    }
++
++    int ret =  mount_fstab(fstabfile, mount_mode);
++
++    if (import_rc) {
++        /* Paths of .rc files are specified at the 2nd argument and beyond */
++        import_late(args, 2, path_arg_end);
++    }
++
++    if (queue_event) {
++        /* queue_fs_event will queue event based on mount_fstab return code
++         * and return processed return code*/
++        ret = queue_fs_event(ret);
++    }
++
++    return ret;
++}
++
+ static int do_swapon_all(const std::vector<std::string>& args) {
+     struct fstab *fstab;
+     int ret;
 diff --git a/init/init.cpp b/init/init.cpp
 index 84da2b9..dc3be38 100644
 --- a/init/init.cpp
@@ -181,11 +919,433 @@ index 84da2b9..dc3be38 100644
      am.QueueBuiltinAction(keychord_init_action, "keychord_init");
      am.QueueBuiltinAction(console_init_action, "console_init");
  
+diff --git a/init/init_parser.cpp b/init/init_parser.cpp
+index b44ca59..f2e5d6d 100644
+--- a/init/init_parser.cpp
++++ b/init/init_parser.cpp
+@@ -122,14 +122,20 @@ bool Parser::ParseConfigDir(const std::string& path) {
+         return false;
+     }
+     dirent* current_file;
++    std::vector<std::string> files;
+     while ((current_file = readdir(config_dir.get()))) {
+-        std::string current_path =
+-            android::base::StringPrintf("%s/%s", path.c_str(), current_file->d_name);
+         // Ignore directories and only process regular files.
+         if (current_file->d_type == DT_REG) {
+-            if (!ParseConfigFile(current_path)) {
+-                ERROR("could not import file '%s'\n", current_path.c_str());
+-            }
++            std::string current_path =
++                android::base::StringPrintf("%s/%s", path.c_str(), current_file->d_name);
++            files.emplace_back(current_path);
++        }
++    }
++    // Sort first so we load files in a consistent order (bug 31996208)
++    std::sort(files.begin(), files.end());
++    for (const auto& file : files) {
++        if (!ParseConfigFile(file)) {
++            ERROR("Could not import file '%s'\n", file.c_str());
+         }
+     }
+     return true;
+diff --git a/init/readme.txt b/init/readme.txt
+index 4481e24..dad7e06 100644
+--- a/init/readme.txt
++++ b/init/readme.txt
+@@ -1,4 +1,3 @@
+-
+ Android Init Language
+ ---------------------
+ 
+@@ -78,6 +77,14 @@ monolithic init .rc files.  This additionally will aid in merge
+ conflict resolution when multiple services are added to the system, as
+ each one will go into a separate file.
+ 
++There are two options "early" and "late" in mount_all command
++which can be set after optional paths. With "--early" set, the
++init executable will skip mounting entries with "latemount" flag
++and triggering fs encryption state event. With "--late" set,
++init executable will only mount entries with "latemount" flag but skip
++importing rc files. By default, no option is set, and mount_all will
++mount_all will process all entries in the given fstab.
++
+ Actions
+ -------
+ Actions are named sequences of commands.  Actions have a trigger which
+@@ -291,10 +298,11 @@ mkdir <path> [mode] [owner] [group]
+    owned by the root user and root group. If provided, the mode, owner and group
+    will be updated if the directory exists already.
+ 
+-mount_all <fstab> [ <path> ]*
++mount_all <fstab> [ <path> ]* [--<option>]
+    Calls fs_mgr_mount_all on the given fs_mgr-format fstab and imports .rc files
+-   at the specified paths (e.g., on the partitions just mounted). Refer to the
+-   section of "Init .rc Files" for detail.
++   at the specified paths (e.g., on the partitions just mounted) with optional
++   options "early" and "late".
++   Refer to the section of "Init .rc Files" for detail.
+ 
+ mount <type> <device> <dir> [ <flag> ]* [<options>]
+    Attempt to mount the named device at the directory <dir>
+diff --git a/libbacktrace/BacktraceMap.cpp b/libbacktrace/BacktraceMap.cpp
+index ba86632..85f2436 100644
+--- a/libbacktrace/BacktraceMap.cpp
++++ b/libbacktrace/BacktraceMap.cpp
+@@ -35,8 +35,8 @@ BacktraceMap::~BacktraceMap() {
+ }
+ 
+ void BacktraceMap::FillIn(uintptr_t addr, backtrace_map_t* map) {
+-  for (BacktraceMap::const_iterator it = begin();
+-       it != end(); ++it) {
++  ScopedBacktraceMapIteratorLock lock(this);
++  for (BacktraceMap::const_iterator it = begin(); it != end(); ++it) {
+     if (addr >= it->start && addr < it->end) {
+       *map = *it;
+       return;
+diff --git a/libbacktrace/UnwindMap.cpp b/libbacktrace/UnwindMap.cpp
+index 34d79f9..af79562 100644
+--- a/libbacktrace/UnwindMap.cpp
++++ b/libbacktrace/UnwindMap.cpp
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ 
++#include <pthread.h>
+ #include <stdint.h>
+ #include <stdlib.h>
+ #include <sys/types.h>
+@@ -72,6 +73,7 @@ bool UnwindMapRemote::Build() {
+ }
+ 
+ UnwindMapLocal::UnwindMapLocal() : UnwindMap(getpid()), map_created_(false) {
++  pthread_rwlock_init(&map_lock_, nullptr);
+ }
+ 
+ UnwindMapLocal::~UnwindMapLocal() {
+@@ -82,9 +84,14 @@ UnwindMapLocal::~UnwindMapLocal() {
+ }
+ 
+ bool UnwindMapLocal::GenerateMap() {
++  // Lock so that multiple threads cannot modify the maps data at the
++  // same time.
++  pthread_rwlock_wrlock(&map_lock_);
++
+   // It's possible for the map to be regenerated while this loop is occurring.
+   // If that happens, get the map again, but only try at most three times
+   // before giving up.
++  bool generated = false;
+   for (int i = 0; i < 3; i++) {
+     maps_.clear();
+ 
+@@ -110,12 +117,17 @@ bool UnwindMapLocal::GenerateMap() {
+     }
+     // Check to see if the map changed while getting the data.
+     if (ret != -UNW_EINVAL) {
+-      return true;
++      generated = true;
++      break;
+     }
+   }
+ 
+-  BACK_LOGW("Unable to generate the map.");
+-  return false;
++  pthread_rwlock_unlock(&map_lock_);
++
++  if (!generated) {
++    BACK_LOGW("Unable to generate the map.");
++  }
++  return generated;
+ }
+ 
+ bool UnwindMapLocal::Build() {
+diff --git a/libbacktrace/UnwindMap.h b/libbacktrace/UnwindMap.h
+index 111401f..f85b54a 100644
+--- a/libbacktrace/UnwindMap.h
++++ b/libbacktrace/UnwindMap.h
+@@ -17,6 +17,7 @@
+ #ifndef _LIBBACKTRACE_UNWIND_MAP_H
+ #define _LIBBACKTRACE_UNWIND_MAP_H
+ 
++#include <pthread.h>
+ #include <stdint.h>
+ #include <sys/types.h>
+ 
+@@ -56,10 +57,15 @@ public:
+ 
+   void FillIn(uintptr_t addr, backtrace_map_t* map) override;
+ 
++  void LockIterator() override { pthread_rwlock_rdlock(&map_lock_); }
++  void UnlockIterator() override { pthread_rwlock_unlock(&map_lock_); }
++
+ private:
+   bool GenerateMap();
+ 
+   bool map_created_;
++
++  pthread_rwlock_t map_lock_;
+ };
+ 
+ #endif // _LIBBACKTRACE_UNWIND_MAP_H
+diff --git a/libbacktrace/backtrace_test.cpp b/libbacktrace/backtrace_test.cpp
+index f6b2591..913e12d 100644
+--- a/libbacktrace/backtrace_test.cpp
++++ b/libbacktrace/backtrace_test.cpp
+@@ -896,6 +896,7 @@ void VerifyMap(pid_t pid) {
+   std::unique_ptr<BacktraceMap> map(BacktraceMap::Create(pid));
+ 
+   // Basic test that verifies that the map is in the expected order.
++  ScopedBacktraceMapIteratorLock lock(map.get());
+   std::vector<map_test_t>::const_iterator test_it = test_maps.begin();
+   for (BacktraceMap::const_iterator it = map->begin(); it != map->end(); ++it) {
+     ASSERT_TRUE(test_it != test_maps.end());
+diff --git a/liblog/event_tag_map.c b/liblog/event_tag_map.c
+index 3cb04cf..345f0d3 100644
+--- a/liblog/event_tag_map.c
++++ b/liblog/event_tag_map.c
+@@ -99,6 +99,9 @@ LIBLOG_ABI_PUBLIC EventTagMap* android_openEventTagMap(const char* fileName)
+     if (processFile(newTagMap) != 0)
+         goto fail;
+ 
++    if (fd >= 0)
++      close(fd);
++
+     return newTagMap;
+ 
+ fail:
+diff --git a/liblog/pmsg_writer.c b/liblog/pmsg_writer.c
+index b338dca..944feba 100644
+--- a/liblog/pmsg_writer.c
++++ b/liblog/pmsg_writer.c
+@@ -31,8 +31,6 @@
+ #include <private/android_filesystem_config.h>
+ #include <private/android_logger.h>
+ 
+-#include <sys/system_properties.h>
+-
+ #include "config_write.h"
+ #include "log_portability.h"
+ #include "logger.h"
+@@ -53,25 +51,8 @@ LIBLOG_HIDDEN struct android_log_transport_write pmsgLoggerWrite = {
+     .write = pmsgWrite,
+ };
+ 
+-static bool pmsgShouldUse = false;
+-
+-// Only use pmsg on eng builds
+-static bool pmsgIsEng() {
+-    char buf[PROP_VALUE_MAX];
+-
+-    if (__system_property_get("ro.build.type", buf) == 0) {
+-        return false;
+-    }
+-
+-    if (!strncmp(buf, "eng", sizeof("eng"))) {
+-        return true;
+-    }
+-    return false;
+-}
+-
+ static int pmsgOpen()
+ {
+-    pmsgShouldUse = pmsgIsEng();
+     if (pmsgLoggerWrite.context.fd < 0) {
+         pmsgLoggerWrite.context.fd = TEMP_FAILURE_RETRY(open("/dev/pmsg0", O_WRONLY | O_CLOEXEC));
+     }
+@@ -94,7 +75,7 @@ static int pmsgAvailable(log_id_t logId)
+     }
+     if ((logId != LOG_ID_SECURITY) &&
+             (logId != LOG_ID_EVENTS) &&
+-            (!pmsgShouldUse || !__android_log_is_debuggable())) {
++            !__android_log_is_debuggable()) {
+         return -EINVAL;
+     }
+     if (pmsgLoggerWrite.context.fd < 0) {
+@@ -124,7 +105,7 @@ static int pmsgWrite(log_id_t logId, struct timespec *ts,
+     size_t i, payloadSize;
+     ssize_t ret;
+ 
+-    if ((logId == LOG_ID_EVENTS) && (!pmsgShouldUse || !__android_log_is_debuggable())) {
++    if ((logId == LOG_ID_EVENTS) && !__android_log_is_debuggable()) {
+         if (vec[0].iov_len < 4) {
+             return -EINVAL;
+         }
+diff --git a/libutils/RefBase.cpp b/libutils/RefBase.cpp
+index f90e28b..4ead19c 100644
+--- a/libutils/RefBase.cpp
++++ b/libutils/RefBase.cpp
+@@ -575,15 +575,14 @@ bool RefBase::weakref_type::attemptIncStrong(const void* id)
+             // grab a strong-reference, which is always safe due to the
+             // extended life-time.
+             curCount = impl->mStrong.fetch_add(1, std::memory_order_relaxed);
+-        }
+-
+-        // If the strong reference count has already been incremented by
+-        // someone else, the implementor of onIncStrongAttempted() is holding
+-        // an unneeded reference.  So call onLastStrongRef() here to remove it.
+-        // (No, this is not pretty.)  Note that we MUST NOT do this if we
+-        // are in fact acquiring the first reference.
+-        if (curCount > 0 && curCount < INITIAL_STRONG_VALUE) {
+-            impl->mBase->onLastStrongRef(id);
++            // If the strong reference count has already been incremented by
++            // someone else, the implementor of onIncStrongAttempted() is holding
++            // an unneeded reference.  So call onLastStrongRef() here to remove it.
++            // (No, this is not pretty.)  Note that we MUST NOT do this if we
++            // are in fact acquiring the first reference.
++            if (curCount != 0 && curCount != INITIAL_STRONG_VALUE) {
++                impl->mBase->onLastStrongRef(id);
++            }
+         }
+     }
+     
+@@ -593,7 +592,7 @@ bool RefBase::weakref_type::attemptIncStrong(const void* id)
+     ALOGD("attemptIncStrong of %p from %p: cnt=%d\n", this, id, curCount);
+ #endif
+ 
+-    // curCount is the value of mStrong before we increment ed it.
++    // curCount is the value of mStrong before we incremented it.
+     // Now we need to fix-up the count if it was INITIAL_STRONG_VALUE.
+     // This must be done safely, i.e.: handle the case where several threads
+     // were here in attemptIncStrong().
+diff --git a/libziparchive/zip_archive.cc b/libziparchive/zip_archive.cc
+index 1f27500..986ee72 100644
+--- a/libziparchive/zip_archive.cc
++++ b/libziparchive/zip_archive.cc
+@@ -269,9 +269,14 @@ static int32_t MapCentralDirectory0(int fd, const char* debug_file_name,
+    * Grab the CD offset and size, and the number of entries in the
+    * archive and verify that they look reasonable.
+    */
+-  if (eocd->cd_start_offset + eocd->cd_size > eocd_offset) {
++  if (static_cast<off64_t>(eocd->cd_start_offset) + eocd->cd_size > eocd_offset) {
+     ALOGW("Zip: bad offsets (dir %" PRIu32 ", size %" PRIu32 ", eocd %" PRId64 ")",
+         eocd->cd_start_offset, eocd->cd_size, static_cast<int64_t>(eocd_offset));
++#if defined(__ANDROID__)
++    if (eocd->cd_start_offset + eocd->cd_size <= eocd_offset) {
++      android_errorWriteLog(0x534e4554, "31251826");
++    }
++#endif
+     return kInvalidOffset;
+   }
+   if (eocd->num_records == 0) {
+diff --git a/logd/LogBuffer.cpp b/logd/LogBuffer.cpp
+index 8c30f79..0497a89 100644
+--- a/logd/LogBuffer.cpp
++++ b/logd/LogBuffer.cpp
+@@ -313,6 +313,9 @@ LogBufferElementCollection::iterator LogBuffer::erase(
+     LogBufferElement *element = *it;
+     log_id_t id = element->getLogId();
+ 
++    // Remove iterator references in the various lists that will become stale
++    // after the element is erased from the main logging list.
++
+     {   // start of scope for uid found iterator
+         LogBufferIteratorMap::iterator found =
+             mLastWorstUid[id].find(element->getUid());
+@@ -322,8 +325,8 @@ LogBufferElementCollection::iterator LogBuffer::erase(
+         }
+     }
+ 
+-    if (element->getUid() == AID_SYSTEM) {
+-        // start of scope for pid found iterator
++    {   // start of scope for pid found iterator
++        // element->getUid() may not be AID_SYSTEM for next-best-watermark.
+         LogBufferPidIteratorMap::iterator found =
+             mLastWorstPidOfSystem[id].find(element->getPid());
+         if ((found != mLastWorstPidOfSystem[id].end())
+@@ -639,6 +642,7 @@ bool LogBuffer::prune(log_id_t id, unsigned long pruneRows, uid_t caller_uid) {
+                 ++it;
+                 continue;
+             }
++            // below this point element->getLogId() == id
+ 
+             if (leading && (!mLastSet[id] || ((*mLast[id])->getLogId() != id))) {
+                 mLast[id] = it;
+@@ -691,7 +695,9 @@ bool LogBuffer::prune(log_id_t id, unsigned long pruneRows, uid_t caller_uid) {
+                         && ((!gc && (element->getPid() == worstPid))
+                             || (mLastWorstPidOfSystem[id].find(element->getPid())
+                                 == mLastWorstPidOfSystem[id].end()))) {
+-                    mLastWorstPidOfSystem[id][element->getUid()] = it;
++                    // element->getUid() may not be AID_SYSTEM, next best
++                    // watermark if current one empty.
++                    mLastWorstPidOfSystem[id][element->getPid()] = it;
+                 }
+                 if ((!gc && !worstPid && (element->getUid() == worst))
+                         || (mLastWorstUid[id].find(element->getUid())
+@@ -709,6 +715,8 @@ bool LogBuffer::prune(log_id_t id, unsigned long pruneRows, uid_t caller_uid) {
+                 ++it;
+                 continue;
+             }
++            // key == worst below here
++            // If worstPid set, then element->getPid() == worstPid below here
+ 
+             pruneRows--;
+             if (pruneRows == 0) {
+@@ -732,6 +740,8 @@ bool LogBuffer::prune(log_id_t id, unsigned long pruneRows, uid_t caller_uid) {
+                     if (worstPid && (!gc
+                                 || (mLastWorstPidOfSystem[id].find(worstPid)
+                                     == mLastWorstPidOfSystem[id].end()))) {
++                        // element->getUid() may not be AID_SYSTEM, next best
++                        // watermark if current one empty.
+                         mLastWorstPidOfSystem[id][worstPid] = it;
+                     }
+                     if ((!gc && !worstPid) || (mLastWorstUid[id].find(worst)
 diff --git a/rootdir/init.rc b/rootdir/init.rc
-index 56379db..3b0fd4d 100644
+index 56379db..7a5c9b3 100644
 --- a/rootdir/init.rc
 +++ b/rootdir/init.rc
-@@ -654,6 +654,6 @@ on property:ro.debuggable=1
+@@ -236,6 +236,9 @@ on init
+ 
+     export DOWNLOAD_CACHE /data/cache
+ 
++    # set RLIMIT_NICE to allow priorities from 19 to -20
++    setrlimit 13 40 40
++
+ # Healthd can trigger a full boot from charger mode by signaling this
+ # property when the power button is held.
+ on property:sys.boot_from_charger_mode=1
+@@ -258,6 +261,11 @@ on firmware_mounts_complete
+ # Mount filesystems and start core system services.
+ on late-init
+     trigger early-fs
++
++    # Mount fstab in init.{$device}.rc by mount_all command. Optional parameter
++    # '--early' can be specified to skip entries with 'latemount'.
++    # /system and /vendor must be mounted by the end of the fs stage,
++    # while /data is optional.
+     trigger fs
+     trigger post-fs
+ 
+@@ -266,9 +274,18 @@ on late-init
+     # issued fs triggers have completed.
+     trigger load_system_props_action
+ 
++    # Mount fstab in init.{$device}.rc by mount_all with '--late' parameter
++    # to only mount entries with 'latemount'. This is needed if '--early' is
++    # specified in the previous mount_all command on the fs stage.
++    # With /system mounted and properties form /system + /factory available,
++    # some services can be started.
++    trigger late-fs
++
+     # Now we can mount /data. File encryption requires keymaster to decrypt
+-    # /data, which in turn can only be loaded when system properties are present
++    # /data, which in turn can only be loaded when system properties are present.
+     trigger post-fs-data
++
++    # Load persist properties and override properties (if enabled) from /data.
+     trigger load_persist_props_action
+ 
+     # Remove a file to wake up anything waiting for firmware.
+@@ -484,9 +501,6 @@ on boot
+     hostname localhost
+     domainname localdomain
+ 
+-    # set RLIMIT_NICE to allow priorities from 19 to -20
+-    setrlimit 13 40 40
+-
+     # Memory management.  Basic kernel parameters, and allow the high
+     # level system server to be able to adjust the kernel OOM driver
+     # parameters to match how it is managing things.
+@@ -654,6 +668,6 @@ on property:ro.debuggable=1
      chmod 0773 /data/misc/trace
      start console
  
@@ -195,3 +1355,47 @@ index 56379db..3b0fd4d 100644
 +#service flash_recovery /system/bin/install-recovery.sh
 +#    class main
 +#    oneshot
+diff --git a/sdcard/sdcard.c b/sdcard/sdcard.c
+index 9480e4a..13ebaf1 100644
+--- a/sdcard/sdcard.c
++++ b/sdcard/sdcard.c
+@@ -1221,7 +1221,13 @@ static int handle_open(struct fuse* fuse, struct fuse_handler* handler,
+     }
+     out.fh = ptr_to_id(h);
+     out.open_flags = 0;
++
++#ifdef FUSE_SHORTCIRCUIT
++    out.lower_fd = h->fd;
++#else
+     out.padding = 0;
++#endif
++
+     fuse_reply(fuse, hdr->unique, &out, sizeof(out));
+     return NO_STATUS;
+ }
+@@ -1385,7 +1391,13 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
+     }
+     out.fh = ptr_to_id(h);
+     out.open_flags = 0;
++
++#ifdef FUSE_SHORTCIRCUIT
++    out.lower_fd = -1;
++#else
+     out.padding = 0;
++#endif
++
+     fuse_reply(fuse, hdr->unique, &out, sizeof(out));
+     return NO_STATUS;
+ }
+@@ -1467,6 +1479,11 @@ static int handle_init(struct fuse* fuse, struct fuse_handler* handler,
+     out.major = FUSE_KERNEL_VERSION;
+     out.max_readahead = req->max_readahead;
+     out.flags = FUSE_ATOMIC_O_TRUNC | FUSE_BIG_WRITES;
++
++#ifdef FUSE_SHORTCIRCUIT
++    out.flags |= FUSE_SHORTCIRCUIT;
++#endif
++
+     out.max_background = 32;
+     out.congestion_threshold = 32;
+     out.max_write = MAX_WRITE;
