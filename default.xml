@@ -7,6 +7,8 @@
            fetch="https://github.com/AndDiSa/" />
   <remote  name="millosr"
            fetch="https://github.com/millosr/" />
+  <remote  name="unlegacy"
+           fetch="https://github.com/Unlegacy-Android/" />
   <default revision="refs/tags/android-7.1.1_r4"
            remote="aosp"
            sync-j="4" />
@@ -510,5 +512,5 @@
   <project path="vendor/elan" name="proprietary_vendor_elan" remote="ads" revision="oct-mm" />
   <project path="vendor/invensense" name="proprietary_vendor_invensense" remote="ads" revision="ads-7.0.1" />
   <project path="vendor/nvidia" name="proprietary_vendor_nvidia" remote="ads" revision="ads-7.0.1" />
-  <project path="vendor/widevine" name="proprietary_vendor_widevine" remote="ads" revision="ads-7.0.1" />
+  <project path="vendor/widevine" name="proprietary_vendor_widevine" remote="unlegacy" revision="aosp-7.1" />
 </manifest>
