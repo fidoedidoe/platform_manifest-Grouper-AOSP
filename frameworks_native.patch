@@ -1,16 +1,8 @@
 diff --git a/cmds/atrace/atrace.cpp b/cmds/atrace/atrace.cpp
-index facf300..86c315c 100644
+index 5885738..86c315c 100644
 --- a/cmds/atrace/atrace.cpp
 +++ b/cmds/atrace/atrace.cpp
-@@ -102,6 +102,7 @@ static const TracingCategory k_categories[] = {
-     { "pm",         "Package Manager",  ATRACE_TAG_PACKAGE_MANAGER, { } },
-     { "ss",         "System Server",    ATRACE_TAG_SYSTEM_SERVER, { } },
-     { "database",   "Database",         ATRACE_TAG_DATABASE, { } },
-+    { "network",    "Network",          ATRACE_TAG_NETWORK, { } },
-     { k_coreServiceCategory, "Core services", 0, { } },
-     { "sched",      "CPU Scheduling",   0, {
-         { REQ,      "/sys/kernel/debug/tracing/events/sched/sched_switch/enable" },
-@@ -593,16 +594,30 @@ static bool verifyKernelTraceFuncs(const char* funcs)
+@@ -594,16 +594,30 @@ static bool verifyKernelTraceFuncs(const char* funcs)
          return false;
      }
  
@@ -49,7 +41,7 @@ index facf300..86c315c 100644
      String8 funcList = String8::format("\n%s", buf);
  
      // Make sure that every function listed in funcs is in the list we just
-@@ -622,8 +637,8 @@ static bool verifyKernelTraceFuncs(const char* funcs)
+@@ -623,8 +637,8 @@ static bool verifyKernelTraceFuncs(const char* funcs)
          }
          func = strtok(NULL, ",");
      }
@@ -59,429 +51,6 @@ index facf300..86c315c 100644
      return ok;
  }
  
-diff --git a/cmds/atrace/atrace.rc b/cmds/atrace/atrace.rc
-index c2f8891..e3cc9da 100644
---- a/cmds/atrace/atrace.rc
-+++ b/cmds/atrace/atrace.rc
-@@ -1,6 +1,6 @@
- ## Permissions to allow system-wide tracing to the kernel trace buffer.
- ##
--on boot
-+on fs
- 
- # Allow writing to the kernel trace log.
-     chmod 0222 /sys/kernel/debug/tracing/trace_marker
-diff --git a/cmds/dumpstate/dumpstate.cpp b/cmds/dumpstate/dumpstate.cpp
-index e9f9e57..9321a00 100644
---- a/cmds/dumpstate/dumpstate.cpp
-+++ b/cmds/dumpstate/dumpstate.cpp
-@@ -149,7 +149,7 @@ void do_mountinfo(int pid, const char *name) {
- }
- 
- void add_mountinfo() {
--    if (!zip_writer) return;
-+    if (!is_zipping()) return;
-     const char *title = "MOUNT INFO";
-     mount_points.clear();
-     DurationReporter duration_reporter(title, NULL);
-@@ -180,8 +180,8 @@ static void dump_dev_files(const char *title, const char *driverpath, const char
- }
- 
- static void dump_systrace() {
--    if (!zip_writer) {
--        MYLOGD("Not dumping systrace because zip_writer is not set\n");
-+    if (!is_zipping()) {
-+        MYLOGD("Not dumping systrace because dumpstate is not zipping\n");
-         return;
-     }
-     std::string systrace_path = bugreport_dir + "/systrace-" + suffix + ".txt";
-@@ -237,7 +237,7 @@ static void dump_raft() {
-         return;
-     }
- 
--    if (!zip_writer) {
-+    if (!is_zipping()) {
-         // Write compressed and encoded raft logs to stdout if not zip_writer.
-         run_command("RAFT LOGS", 600, "logcompressor", "-r", RAFT_DIR, NULL);
-         return;
-@@ -575,8 +575,8 @@ static const std::set<std::string> PROBLEMATIC_FILE_EXTENSIONS = {
- };
- 
- bool add_zip_entry_from_fd(const std::string& entry_name, int fd) {
--    if (!zip_writer) {
--        MYLOGD("Not adding zip entry %s from fd because zip_writer is not set\n",
-+    if (!is_zipping()) {
-+        MYLOGD("Not adding entry %s from fd because dumpstate is not zipping\n",
-                 entry_name.c_str());
-         return false;
-     }
-@@ -645,8 +645,8 @@ static int _add_file_from_fd(const char *title, const char *path, int fd) {
- 
- // TODO: move to util.cpp
- void add_dir(const char *dir, bool recursive) {
--    if (!zip_writer) {
--        MYLOGD("Not adding dir %s because zip_writer is not set\n", dir);
-+    if (!is_zipping()) {
-+        MYLOGD("Not adding dir %s because dumpstate is not zipping\n", dir);
-         return;
-     }
-     MYLOGD("Adding dir %s (recursive: %d)\n", dir, recursive);
-@@ -654,10 +654,14 @@ void add_dir(const char *dir, bool recursive) {
-     dump_files(NULL, dir, recursive ? skip_none : is_dir, _add_file_from_fd);
- }
- 
-+bool is_zipping() {
-+    return zip_writer != nullptr;
-+}
-+
- /* adds a text entry entry to the existing zip file. */
- static bool add_text_zip_entry(const std::string& entry_name, const std::string& content) {
--    if (!zip_writer) {
--        MYLOGD("Not adding text zip entry %s because zip_writer is not set\n", entry_name.c_str());
-+    if (!is_zipping()) {
-+        MYLOGD("Not adding text entry %s because dumpstate is not zipping\n", entry_name.c_str());
-         return false;
-     }
-     MYLOGD("Adding zip text entry %s\n", entry_name.c_str());
-@@ -687,10 +691,12 @@ static bool add_text_zip_entry(const std::string& entry_name, const std::string&
- static void dump_iptables() {
-     run_command("IPTABLES", 10, "iptables", "-L", "-nvx", NULL);
-     run_command("IP6TABLES", 10, "ip6tables", "-L", "-nvx", NULL);
--    run_command("IPTABLE NAT", 10, "iptables", "-t", "nat", "-L", "-nvx", NULL);
-+    run_command("IPTABLES NAT", 10, "iptables", "-t", "nat", "-L", "-nvx", NULL);
-     /* no ip6 nat */
--    run_command("IPTABLE RAW", 10, "iptables", "-t", "raw", "-L", "-nvx", NULL);
--    run_command("IP6TABLE RAW", 10, "ip6tables", "-t", "raw", "-L", "-nvx", NULL);
-+    run_command("IPTABLES MANGLE", 10, "iptables", "-t", "mangle", "-L", "-nvx", NULL);
-+    run_command("IP6TABLES MANGLE", 10, "ip6tables", "-t", "mangle", "-L", "-nvx", NULL);
-+    run_command("IPTABLES RAW", 10, "iptables", "-t", "raw", "-L", "-nvx", NULL);
-+    run_command("IP6TABLES RAW", 10, "ip6tables", "-t", "raw", "-L", "-nvx", NULL);
- }
- 
- static void dumpstate(const std::string& screenshot_path, const std::string& version) {
-@@ -1371,6 +1377,12 @@ int main(int argc, char *argv[]) {
-     add_mountinfo();
-     dump_iptables();
- 
-+    // Capture any IPSec policies in play.  No keys are exposed here.
-+    run_command("IP XFRM POLICY", 10, "ip", "xfrm", "policy", nullptr);
-+
-+    // Run ss as root so we can see socket marks.
-+    run_command("DETAILED SOCKET STATE", 10, "ss", "-eionptu", NULL);
-+
-     if (!drop_root_user()) {
-         return -1;
-     }
-diff --git a/cmds/dumpstate/dumpstate.h b/cmds/dumpstate/dumpstate.h
-index 5e083cc..514af59 100644
---- a/cmds/dumpstate/dumpstate.h
-+++ b/cmds/dumpstate/dumpstate.h
-@@ -87,6 +87,9 @@ extern std::string bugreport_dir;
- /* root dir for all files copied as-is into the bugreport. */
- extern const std::string ZIP_ROOT_DIR;
- 
-+/* Checkes whether dumpstate is generating a zipped bugreport. */
-+bool is_zipping();
-+
- /* adds a new entry to the existing zip file. */
- bool add_zip_entry(const std::string& entry_name, const std::string& entry_path);
- 
-diff --git a/cmds/installd/commands.cpp b/cmds/installd/commands.cpp
-index 2014e99..271c75b 100644
---- a/cmds/installd/commands.cpp
-+++ b/cmds/installd/commands.cpp
-@@ -99,23 +99,69 @@ static std::string create_primary_profile(const std::string& profile_dir) {
-     return StringPrintf("%s/%s", profile_dir.c_str(), PRIMARY_PROFILE_NAME);
- }
- 
--static int prepare_app_dir(const std::string& path, mode_t target_mode, uid_t uid,
--        const char* pkgname, const char* seinfo) {
-+/**
-+ * Perform restorecon of the given path, but only perform recursive restorecon
-+ * if the label of that top-level file actually changed.  This can save us
-+ * significant time by avoiding no-op traversals of large filesystem trees.
-+ */
-+static int restorecon_app_data_lazy(const std::string& path, const char* seinfo, uid_t uid) {
-+    int res = 0;
-+    char* before = nullptr;
-+    char* after = nullptr;
-+
-+    // Note that SELINUX_ANDROID_RESTORECON_DATADATA flag is set by
-+    // libselinux. Not needed here.
-+
-+    if (lgetfilecon(path.c_str(), &before) < 0) {
-+        PLOG(ERROR) << "Failed before getfilecon for " << path;
-+        goto fail;
-+    }
-+    if (selinux_android_restorecon_pkgdir(path.c_str(), seinfo, uid, 0) < 0) {
-+        PLOG(ERROR) << "Failed top-level restorecon for " << path;
-+        goto fail;
-+    }
-+    if (lgetfilecon(path.c_str(), &after) < 0) {
-+        PLOG(ERROR) << "Failed after getfilecon for " << path;
-+        goto fail;
-+    }
-+
-+    // If the initial top-level restorecon above changed the label, then go
-+    // back and restorecon everything recursively
-+    if (strcmp(before, after)) {
-+        LOG(DEBUG) << "Detected label change from " << before << " to " << after << " at " << path
-+                << "; running recursive restorecon";
-+        if (selinux_android_restorecon_pkgdir(path.c_str(), seinfo, uid,
-+                SELINUX_ANDROID_RESTORECON_RECURSE) < 0) {
-+            PLOG(ERROR) << "Failed recursive restorecon for " << path;
-+            goto fail;
-+        }
-+    }
-+
-+    goto done;
-+fail:
-+    res = -1;
-+done:
-+    free(before);
-+    free(after);
-+    return res;
-+}
-+
-+static int restorecon_app_data_lazy(const std::string& parent, const char* name, const char* seinfo,
-+        uid_t uid) {
-+    return restorecon_app_data_lazy(StringPrintf("%s/%s", parent.c_str(), name), seinfo, uid);
-+}
-+
-+static int prepare_app_dir(const std::string& path, mode_t target_mode, uid_t uid) {
-     if (fs_prepare_dir_strict(path.c_str(), target_mode, uid, uid) != 0) {
-         PLOG(ERROR) << "Failed to prepare " << path;
-         return -1;
-     }
--    if (selinux_android_setfilecon(path.c_str(), pkgname, seinfo, uid) < 0) {
--        PLOG(ERROR) << "Failed to setfilecon " << path;
--        return -1;
--    }
-     return 0;
- }
- 
- static int prepare_app_dir(const std::string& parent, const char* name, mode_t target_mode,
--        uid_t uid, const char* pkgname, const char* seinfo) {
--    return prepare_app_dir(StringPrintf("%s/%s", parent.c_str(), name), target_mode, uid, pkgname,
--            seinfo);
-+        uid_t uid) {
-+    return prepare_app_dir(StringPrintf("%s/%s", parent.c_str(), name), target_mode, uid);
- }
- 
- int create_app_data(const char *uuid, const char *pkgname, userid_t userid, int flags,
-@@ -124,9 +170,16 @@ int create_app_data(const char *uuid, const char *pkgname, userid_t userid, int
-     mode_t target_mode = target_sdk_version >= MIN_RESTRICTED_HOME_SDK_VERSION ? 0700 : 0751;
-     if (flags & FLAG_STORAGE_CE) {
-         auto path = create_data_user_ce_package_path(uuid, userid, pkgname);
--        if (prepare_app_dir(path, target_mode, uid, pkgname, seinfo) ||
--                prepare_app_dir(path, "cache", 0771, uid, pkgname, seinfo) ||
--                prepare_app_dir(path, "code_cache", 0771, uid, pkgname, seinfo)) {
-+        if (prepare_app_dir(path, target_mode, uid) ||
-+                prepare_app_dir(path, "cache", 0771, uid) ||
-+                prepare_app_dir(path, "code_cache", 0771, uid)) {
-+            return -1;
-+        }
-+
-+        // Consider restorecon over contents if label changed
-+        if (restorecon_app_data_lazy(path, seinfo, uid) ||
-+                restorecon_app_data_lazy(path, "cache", seinfo, uid) ||
-+                restorecon_app_data_lazy(path, "code_cache", seinfo, uid)) {
-             return -1;
-         }
- 
-@@ -139,11 +192,16 @@ int create_app_data(const char *uuid, const char *pkgname, userid_t userid, int
-     }
-     if (flags & FLAG_STORAGE_DE) {
-         auto path = create_data_user_de_package_path(uuid, userid, pkgname);
--        if (prepare_app_dir(path, target_mode, uid, pkgname, seinfo)) {
-+        if (prepare_app_dir(path, target_mode, uid)) {
-             // TODO: include result once 25796509 is fixed
-             return 0;
-         }
- 
-+        // Consider restorecon over contents if label changed
-+        if (restorecon_app_data_lazy(path, seinfo, uid)) {
-+            return -1;
-+        }
-+
-         if (property_get_bool("dalvik.vm.usejitprofiles")) {
-             const std::string profile_path = create_data_user_profile_package_path(userid, pkgname);
-             // read-write-execute only for the app user.
-@@ -2186,6 +2244,9 @@ int move_ab(const char* apk_path, const char* instruction_set, const char* oat_d
-         bool art_success = true;
-         if (!a_image_path.empty()) {
-             art_success = move_ab_path(b_image_path, a_image_path);
-+            if (!art_success) {
-+                unlink(a_image_path.c_str());
-+            }
-         }
- 
-         success = art_success || kIgnoreAppImageFailure;
-@@ -2199,5 +2260,35 @@ int move_ab(const char* apk_path, const char* instruction_set, const char* oat_d
-     return success ? 0 : -1;
- }
- 
-+bool delete_odex(const char *apk_path, const char *instruction_set, const char *oat_dir) {
-+    // Delete the oat/odex file.
-+    char out_path[PKG_PATH_MAX];
-+    if (!create_oat_out_path(apk_path, instruction_set, oat_dir, out_path)) {
-+        return false;
-+    }
-+
-+    // In case of a permission failure report the issue. Otherwise just print a warning.
-+    auto unlink_and_check = [](const char* path) -> bool {
-+        int result = unlink(path);
-+        if (result != 0) {
-+            if (errno == EACCES || errno == EPERM) {
-+                PLOG(ERROR) << "Could not unlink " << path;
-+                return false;
-+            }
-+            PLOG(WARNING) << "Could not unlink " << path;
-+        }
-+        return true;
-+    };
-+
-+    // Delete the oat/odex file.
-+    bool return_value_oat = unlink_and_check(out_path);
-+
-+    // Derive and delete the app image.
-+    bool return_value_art = unlink_and_check(create_image_filename(out_path).c_str());
-+
-+    // Report success.
-+    return return_value_oat && return_value_art;
-+}
-+
- }  // namespace installd
- }  // namespace android
-diff --git a/cmds/installd/commands.h b/cmds/installd/commands.h
-index e990f1b..ba27517 100644
---- a/cmds/installd/commands.h
-+++ b/cmds/installd/commands.h
-@@ -85,6 +85,9 @@ int link_file(const char *relative_path, const char *from_base, const char *to_b
- // Move a B version over to the A location. Only works for oat_dir != nullptr.
- int move_ab(const char *apk_path, const char *instruction_set, const char* oat_dir);
- 
-+// Delete odex files generated by dexopt.
-+bool delete_odex(const char *apk_path, const char *instruction_set, const char *oat_dir);
-+
- }  // namespace installd
- }  // namespace android
- 
-diff --git a/cmds/installd/installd.cpp b/cmds/installd/installd.cpp
-index facbc72..8f883db 100644
---- a/cmds/installd/installd.cpp
-+++ b/cmds/installd/installd.cpp
-@@ -418,6 +418,11 @@ static int do_move_ab(char **arg, char reply[REPLY_MAX] ATTRIBUTE_UNUSED) {
-     return move_ab(arg[0], arg[1], arg[2]);
- }
- 
-+static int do_delete_odex(char **arg, char reply[REPLY_MAX] ATTRIBUTE_UNUSED) {
-+    // apk_path, instruction_set, oat_dir
-+    return delete_odex(arg[0], arg[1], arg[2]) ? 0 : -1;
-+}
-+
- struct cmdinfo {
-     const char *name;
-     unsigned numargs;
-@@ -453,6 +458,7 @@ struct cmdinfo cmds[] = {
-     { "move_ab",              3, do_move_ab },
-     { "merge_profiles",       2, do_merge_profiles },
-     { "dump_profiles",        3, do_dump_profiles },
-+    { "delete_odex",          3, do_delete_odex },
- };
- 
- static int readx(int s, void *_buf, int count)
-diff --git a/data/etc/handheld_core_hardware.xml b/data/etc/handheld_core_hardware.xml
-index 9cb4d6d..f9464e8 100644
---- a/data/etc/handheld_core_hardware.xml
-+++ b/data/etc/handheld_core_hardware.xml
-@@ -50,8 +50,8 @@
-     <!-- Feature to specify if the device support managed users. -->
-     <feature name="android.software.managed_users" />
- 
--    <!-- Feature to specify if the device supports a VR mode. -->
--    <feature name="android.software.vr.mode" />
-+    <!-- Feature to specify if the device supports a VR mode.
-+         feature name="android.software.vr.mode" -->
-     <!-- Devices with all optimizations required to be a "VR Ready" device that
-          pass all CTS tests for this feature must include feature
-          android.hardware.vr.high_performance -->
-diff --git a/include/gui/BufferQueueCore.h b/include/gui/BufferQueueCore.h
-index 82bc121..cc5c536 100644
---- a/include/gui/BufferQueueCore.h
-+++ b/include/gui/BufferQueueCore.h
-@@ -182,6 +182,8 @@ private:
-     // to this BufferQueue. It defaults to NO_CONNECTED_API, and gets updated
-     // by the connect and disconnect methods.
-     int mConnectedApi;
-+    // PID of the process which last successfully called connect(...)
-+    pid_t mConnectedPid;
- 
-     // mConnectedProducerToken is used to set a binder death notification on
-     // the producer.
-diff --git a/include/gui/BufferQueueProducer.h b/include/gui/BufferQueueProducer.h
-index 838632c..8f613ee 100644
---- a/include/gui/BufferQueueProducer.h
-+++ b/include/gui/BufferQueueProducer.h
-@@ -135,15 +135,8 @@ public:
-     virtual status_t connect(const sp<IProducerListener>& listener,
-             int api, bool producerControlledByApp, QueueBufferOutput* output);
- 
--    // disconnect attempts to disconnect a producer API from the BufferQueue.
--    // Calling this method will cause any subsequent calls to other
--    // IGraphicBufferProducer methods to fail except for getAllocator and connect.
--    // Successfully calling connect after this will allow the other methods to
--    // succeed again.
--    //
--    // This method will fail if the the BufferQueue is not currently
--    // connected to the specified producer API.
--    virtual status_t disconnect(int api);
-+    // See IGraphicBufferProducer::disconnect
-+    virtual status_t disconnect(int api, DisconnectMode mode = DisconnectMode::Api);
- 
-     // Attaches a sideband buffer stream to the IGraphicBufferProducer.
-     //
-diff --git a/include/gui/IGraphicBufferProducer.h b/include/gui/IGraphicBufferProducer.h
-index c62bc58..bf427fe 100644
---- a/include/gui/IGraphicBufferProducer.h
-+++ b/include/gui/IGraphicBufferProducer.h
-@@ -458,17 +458,24 @@ public:
-     virtual status_t connect(const sp<IProducerListener>& listener,
-             int api, bool producerControlledByApp, QueueBufferOutput* output) = 0;
- 
-+    enum class DisconnectMode {
-+        // Disconnect only the specified API.
-+        Api,
-+        // Disconnect any API originally connected from the process calling disconnect.
-+        AllLocal
-+    };
-+
-     // disconnect attempts to disconnect a client API from the
-     // IGraphicBufferProducer.  Calling this method will cause any subsequent
-     // calls to other IGraphicBufferProducer methods to fail except for
-     // getAllocator and connect.  Successfully calling connect after this will
-     // allow the other methods to succeed again.
-     //
--    // This method will fail if the the IGraphicBufferProducer is not currently
--    // connected to the specified client API.
--    //
-     // The api should be one of the NATIVE_WINDOW_API_* values in <window.h>
-     //
-+    // Alternatively if mode is AllLocal, then the API value is ignored, and any API
-+    // connected from the same PID calling disconnect will be disconnected.
-+    //
-     // Disconnecting from an abandoned IGraphicBufferProducer is legal and
-     // is considered a no-op.
-     //
-@@ -477,7 +484,7 @@ public:
-     //             * the api specified does not match the one that was connected
-     //             * api was out of range (see above).
-     // * DEAD_OBJECT - the token is hosted by an already-dead process
--    virtual status_t disconnect(int api) = 0;
-+    virtual status_t disconnect(int api, DisconnectMode mode = DisconnectMode::Api) = 0;
- 
-     // Attaches a sideband buffer stream to the IGraphicBufferProducer.
-     //
 diff --git a/include/gui/ISurfaceComposer.h b/include/gui/ISurfaceComposer.h
 index 74a4123..8dc6f6a 100644
 --- a/include/gui/ISurfaceComposer.h
@@ -509,44 +78,6 @@ index 74a4123..8dc6f6a 100644
  
      /* Clears the frame statistics for animations.
       *
-diff --git a/include/gui/Surface.h b/include/gui/Surface.h
-index 8177ec6..f4a22cb 100644
---- a/include/gui/Surface.h
-+++ b/include/gui/Surface.h
-@@ -203,7 +203,6 @@ protected:
-     virtual int lockBuffer_DEPRECATED(ANativeWindowBuffer* buffer);
- 
-     virtual int connect(int api);
--    virtual int disconnect(int api);
-     virtual int setBufferCount(int bufferCount);
-     virtual int setBuffersDimensions(uint32_t width, uint32_t height);
-     virtual int setBuffersUserDimensions(uint32_t width, uint32_t height);
-@@ -217,6 +216,10 @@ protected:
-     virtual void setSurfaceDamage(android_native_rect_t* rects, size_t numRects);
- 
- public:
-+    virtual int disconnect(int api,
-+            IGraphicBufferProducer::DisconnectMode mode =
-+                    IGraphicBufferProducer::DisconnectMode::Api);
-+
-     virtual int setMaxDequeuedBufferCount(int maxDequeuedBuffers);
-     virtual int setAsyncMode(bool async);
-     virtual int setSharedBufferMode(bool sharedBufferMode);
-diff --git a/include/gui/SurfaceComposerClient.h b/include/gui/SurfaceComposerClient.h
-index b8ee331..c4f88b6 100644
---- a/include/gui/SurfaceComposerClient.h
-+++ b/include/gui/SurfaceComposerClient.h
-@@ -166,8 +166,8 @@ public:
-     static status_t getHdrCapabilities(const sp<IBinder>& display,
-             HdrCapabilities* outCapabilities);
- 
--    static void setDisplaySurface(const sp<IBinder>& token,
--            const sp<IGraphicBufferProducer>& bufferProducer);
-+    static status_t setDisplaySurface(const sp<IBinder>& token,
-+            sp<IGraphicBufferProducer> bufferProducer);
-     static void setDisplayLayerStack(const sp<IBinder>& token,
-             uint32_t layerStack);
-     static void setDisplaySize(const sp<IBinder>& token, uint32_t width, uint32_t height);
 diff --git a/libs/binder/IPCThreadState.cpp b/libs/binder/IPCThreadState.cpp
 index d90798f..9b5f0d7 100644
 --- a/libs/binder/IPCThreadState.cpp
@@ -591,86 +122,6 @@ index 46feb1c..1b4a9c5 100644
  
  LOCAL_MODULE := libgui
  
-diff --git a/libs/gui/BufferQueueProducer.cpp b/libs/gui/BufferQueueProducer.cpp
-index 47ab6f2..48b1db8 100644
---- a/libs/gui/BufferQueueProducer.cpp
-+++ b/libs/gui/BufferQueueProducer.cpp
-@@ -28,6 +28,7 @@
- 
- #define EGL_EGLEXT_PROTOTYPES
- 
-+#include <binder/IPCThreadState.h>
- #include <gui/BufferItem.h>
- #include <gui/BufferQueueCore.h>
- #include <gui/BufferQueueProducer.h>
-@@ -1130,7 +1131,7 @@ status_t BufferQueueProducer::connect(const sp<IProducerListener>& listener,
-             status = BAD_VALUE;
-             break;
-     }
--
-+    mCore->mConnectedPid = IPCThreadState::self()->getCallingPid();
-     mCore->mBufferHasBeenQueued = false;
-     mCore->mDequeueBufferCannotBlock = false;
-     if (mDequeueTimeout < 0) {
-@@ -1143,7 +1144,7 @@ status_t BufferQueueProducer::connect(const sp<IProducerListener>& listener,
-     return status;
- }
- 
--status_t BufferQueueProducer::disconnect(int api) {
-+status_t BufferQueueProducer::disconnect(int api, DisconnectMode mode) {
-     ATRACE_CALL();
-     BQ_LOGV("disconnect: api %d", api);
- 
-@@ -1151,6 +1152,14 @@ status_t BufferQueueProducer::disconnect(int api) {
-     sp<IConsumerListener> listener;
-     { // Autolock scope
-         Mutex::Autolock lock(mCore->mMutex);
-+
-+        if (mode == DisconnectMode::AllLocal) {
-+            if (IPCThreadState::self()->getCallingPid() != mCore->mConnectedPid) {
-+                return NO_ERROR;
-+            }
-+            api = BufferQueueCore::CURRENTLY_CONNECTED_API;
-+        }
-+
-         mCore->waitWhileAllocatingLocked();
- 
-         if (mCore->mIsAbandoned) {
-@@ -1189,6 +1198,7 @@ status_t BufferQueueProducer::disconnect(int api) {
-                             BufferQueueCore::INVALID_BUFFER_SLOT;
-                     mCore->mConnectedProducerListener = NULL;
-                     mCore->mConnectedApi = BufferQueueCore::NO_CONNECTED_API;
-+                    mCore->mConnectedPid = -1;
-                     mCore->mSidebandStream.clear();
-                     mCore->mDequeueCondition.broadcast();
-                     listener = mCore->mConsumerListener;
-diff --git a/libs/gui/IGraphicBufferProducer.cpp b/libs/gui/IGraphicBufferProducer.cpp
-index fbd704d..f4ba3bf 100644
---- a/libs/gui/IGraphicBufferProducer.cpp
-+++ b/libs/gui/IGraphicBufferProducer.cpp
-@@ -270,10 +270,11 @@ public:
-         return result;
-     }
- 
--    virtual status_t disconnect(int api) {
-+    virtual status_t disconnect(int api, DisconnectMode mode) {
-         Parcel data, reply;
-         data.writeInterfaceToken(IGraphicBufferProducer::getInterfaceDescriptor());
-         data.writeInt32(api);
-+        data.writeInt32(static_cast<int32_t>(mode));
-         status_t result =remote()->transact(DISCONNECT, data, &reply);
-         if (result != NO_ERROR) {
-             return result;
-@@ -621,7 +622,8 @@ status_t BnGraphicBufferProducer::onTransact(
-         case DISCONNECT: {
-             CHECK_INTERFACE(IGraphicBufferProducer, data, reply);
-             int api = data.readInt32();
--            status_t res = disconnect(api);
-+            DisconnectMode mode = static_cast<DisconnectMode>(data.readInt32());
-+            status_t res = disconnect(api, mode);
-             reply->writeInt32(res);
-             return NO_ERROR;
-         }
 diff --git a/libs/gui/ISurfaceComposer.cpp b/libs/gui/ISurfaceComposer.cpp
 index f0b0ada..3577a33 100644
 --- a/libs/gui/ISurfaceComposer.cpp
@@ -708,152 +159,6 @@ index f0b0ada..3577a33 100644
              reply->writeInt32(res);
              return NO_ERROR;
          }
-diff --git a/libs/gui/Surface.cpp b/libs/gui/Surface.cpp
-index dbf8114..0838290 100644
---- a/libs/gui/Surface.cpp
-+++ b/libs/gui/Surface.cpp
-@@ -844,14 +844,14 @@ int Surface::connect(int api, const sp<IProducerListener>& listener) {
- }
- 
- 
--int Surface::disconnect(int api) {
-+int Surface::disconnect(int api, IGraphicBufferProducer::DisconnectMode mode) {
-     ATRACE_CALL();
-     ALOGV("Surface::disconnect");
-     Mutex::Autolock lock(mMutex);
-     mSharedBufferSlot = BufferItem::INVALID_BUFFER_SLOT;
-     mSharedBufferHasBeenQueued = false;
-     freeAllBuffers();
--    int err = mGraphicBufferProducer->disconnect(api);
-+    int err = mGraphicBufferProducer->disconnect(api, mode);
-     if (!err) {
-         mReqFormat = 0;
-         mReqWidth = 0;
-@@ -1364,12 +1364,18 @@ status_t Surface::writeToParcel(Parcel* parcel, bool nameAlreadyWritten) const {
- 
-     status_t res = OK;
- 
--    if (!nameAlreadyWritten) res = parcel->writeString16(name);
-+    if (!nameAlreadyWritten) {
-+        res = parcel->writeString16(name);
-+        if (res != OK) return res;
- 
--    if (res == OK) {
--        res = parcel->writeStrongBinder(
--                IGraphicBufferProducer::asBinder(graphicBufferProducer));
-+        /* isSingleBuffered defaults to no */
-+        res = parcel->writeInt32(0);
-+        if (res != OK) return res;
-     }
-+
-+    res = parcel->writeStrongBinder(
-+            IGraphicBufferProducer::asBinder(graphicBufferProducer));
-+
-     return res;
- }
- 
-@@ -1380,13 +1386,20 @@ status_t Surface::readFromParcel(const Parcel* parcel) {
- status_t Surface::readFromParcel(const Parcel* parcel, bool nameAlreadyRead) {
-     if (parcel == nullptr) return BAD_VALUE;
- 
-+    status_t res = OK;
-     if (!nameAlreadyRead) {
-         name = readMaybeEmptyString16(parcel);
-+        // Discard this for now
-+        int isSingleBuffered;
-+        res = parcel->readInt32(&isSingleBuffered);
-+        if (res != OK) {
-+            return res;
-+        }
-     }
- 
-     sp<IBinder> binder;
- 
--    status_t res = parcel->readStrongBinder(&binder);
-+    res = parcel->readStrongBinder(&binder);
-     if (res != OK) return res;
- 
-     graphicBufferProducer = interface_cast<IGraphicBufferProducer>(binder);
-diff --git a/libs/gui/SurfaceComposerClient.cpp b/libs/gui/SurfaceComposerClient.cpp
-index 3df5f74..b78de2e 100644
---- a/libs/gui/SurfaceComposerClient.cpp
-+++ b/libs/gui/SurfaceComposerClient.cpp
-@@ -170,8 +170,8 @@ public:
-     status_t setGeometryAppliesWithResize(const sp<SurfaceComposerClient>& client,
-             const sp<IBinder>& id);
- 
--    void setDisplaySurface(const sp<IBinder>& token,
--            const sp<IGraphicBufferProducer>& bufferProducer);
-+    status_t setDisplaySurface(const sp<IBinder>& token,
-+            sp<IGraphicBufferProducer> bufferProducer);
-     void setDisplayLayerStack(const sp<IBinder>& token, uint32_t layerStack);
-     void setDisplayProjection(const sp<IBinder>& token,
-             uint32_t orientation,
-@@ -473,12 +473,24 @@ DisplayState& Composer::getDisplayStateLocked(const sp<IBinder>& token) {
-     return mDisplayStates.editItemAt(static_cast<size_t>(index));
- }
- 
--void Composer::setDisplaySurface(const sp<IBinder>& token,
--        const sp<IGraphicBufferProducer>& bufferProducer) {
-+status_t Composer::setDisplaySurface(const sp<IBinder>& token,
-+        sp<IGraphicBufferProducer> bufferProducer) {
-+    if (bufferProducer.get() != nullptr) {
-+        // Make sure that composition can never be stalled by a virtual display
-+        // consumer that isn't processing buffers fast enough.
-+        status_t err = bufferProducer->setAsyncMode(true);
-+        if (err != NO_ERROR) {
-+            ALOGE("Composer::setDisplaySurface Failed to enable async mode on the "
-+                    "BufferQueue. This BufferQueue cannot be used for virtual "
-+                    "display. (%d)", err);
-+            return err;
-+        }
-+    }
-     Mutex::Autolock _l(mLock);
-     DisplayState& s(getDisplayStateLocked(token));
-     s.surface = bufferProducer;
-     s.what |= DisplayState::eSurfaceChanged;
-+    return NO_ERROR;
- }
- 
- void Composer::setDisplayLayerStack(const sp<IBinder>& token,
-@@ -716,9 +728,9 @@ status_t SurfaceComposerClient::setGeometryAppliesWithResize(
- 
- // ----------------------------------------------------------------------------
- 
--void SurfaceComposerClient::setDisplaySurface(const sp<IBinder>& token,
--        const sp<IGraphicBufferProducer>& bufferProducer) {
--    Composer::getInstance().setDisplaySurface(token, bufferProducer);
-+status_t SurfaceComposerClient::setDisplaySurface(const sp<IBinder>& token,
-+        sp<IGraphicBufferProducer> bufferProducer) {
-+    return Composer::getInstance().setDisplaySurface(token, bufferProducer);
- }
- 
- void SurfaceComposerClient::setDisplayLayerStack(const sp<IBinder>& token,
-diff --git a/libs/gui/tests/SurfaceTextureGL_test.cpp b/libs/gui/tests/SurfaceTextureGL_test.cpp
-index dddcf92..5311c59 100644
---- a/libs/gui/tests/SurfaceTextureGL_test.cpp
-+++ b/libs/gui/tests/SurfaceTextureGL_test.cpp
-@@ -115,13 +115,13 @@ TEST_F(SurfaceTextureGLTest, TexturingFromCpuFilledYV12BufferPow2) {
-     EXPECT_TRUE(checkPixel(63, 63,   0, 133,   0, 255));
-     EXPECT_TRUE(checkPixel( 0, 63, 255, 127, 255, 255));
- 
--    EXPECT_TRUE(checkPixel(22, 19, 100, 255,  74, 255));
--    EXPECT_TRUE(checkPixel(45, 11, 100, 255,  74, 255));
--    EXPECT_TRUE(checkPixel(52, 12, 155,   0, 181, 255));
--    EXPECT_TRUE(checkPixel( 7, 32, 150, 237, 170, 255));
--    EXPECT_TRUE(checkPixel(31, 54,   0,  71, 117, 255));
--    EXPECT_TRUE(checkPixel(29, 28,   0, 133,   0, 255));
--    EXPECT_TRUE(checkPixel(36, 41, 100, 232, 255, 255));
-+    EXPECT_TRUE(checkPixel(22, 19, 100, 255,  74, 255, 3));
-+    EXPECT_TRUE(checkPixel(45, 11, 100, 255,  74, 255, 3));
-+    EXPECT_TRUE(checkPixel(52, 12, 155,   0, 181, 255, 3));
-+    EXPECT_TRUE(checkPixel( 7, 32, 150, 237, 170, 255, 3));
-+    EXPECT_TRUE(checkPixel(31, 54,   0,  71, 117, 255, 3));
-+    EXPECT_TRUE(checkPixel(29, 28,   0, 133,   0, 255, 3));
-+    EXPECT_TRUE(checkPixel(36, 41, 100, 232, 255, 255, 3));
- }
- 
- TEST_F(SurfaceTextureGLTest, TexturingFromCpuFilledYV12BufferWithCrop) {
 diff --git a/libs/ui/Region.cpp b/libs/ui/Region.cpp
 index ee152bf..9c82295 100644
 --- a/libs/ui/Region.cpp
@@ -871,18 +176,9 @@ index ee152bf..9c82295 100644
      result.mStorage.clear();
      for (size_t r = 0; r < numRects; ++r) {
 diff --git a/opengl/libs/Android.mk b/opengl/libs/Android.mk
-index eb86860..038fe4d 100644
+index 24e4c19..038fe4d 100644
 --- a/opengl/libs/Android.mk
 +++ b/opengl/libs/Android.mk
-@@ -31,7 +31,7 @@ LOCAL_SRC_FILES:= 	       \
- 	EGL/Loader.cpp 	       \
- #
- 
--LOCAL_SHARED_LIBRARIES += libcutils libutils liblog libui
-+LOCAL_SHARED_LIBRARIES += libbinder libcutils libutils liblog libui
- LOCAL_MODULE:= libEGL
- LOCAL_LDFLAGS += -Wl,--exclude-libs=ALL
- LOCAL_SHARED_LIBRARIES += libdl
 @@ -77,7 +77,6 @@ LOCAL_SRC_FILES:= 		\
  	GLES_CM/gl.cpp.arm 	\
  #
@@ -899,129 +195,6 @@ index eb86860..038fe4d 100644
  LOCAL_ARM_MODE := arm
  LOCAL_SHARED_LIBRARIES += libcutils libutils liblog libEGL
  LOCAL_MODULE:= libGLESv2
-diff --git a/opengl/libs/EGL/eglApi.cpp b/opengl/libs/EGL/eglApi.cpp
-index 03abc49..f41e6e2 100644
---- a/opengl/libs/EGL/eglApi.cpp
-+++ b/opengl/libs/EGL/eglApi.cpp
-@@ -33,6 +33,8 @@
- #include <cutils/properties.h>
- #include <cutils/memory.h>
- 
-+#include <gui/ISurfaceComposer.h>
-+
- #include <ui/GraphicBuffer.h>
- 
- #include <utils/KeyedVector.h>
-@@ -40,6 +42,10 @@
- #include <utils/String8.h>
- #include <utils/Trace.h>
- 
-+#include "binder/Binder.h"
-+#include "binder/Parcel.h"
-+#include "binder/IServiceManager.h"
-+
- #include "../egl_impl.h"
- #include "../hooks.h"
- 
-@@ -1872,20 +1878,77 @@ EGLClientBuffer eglCreateNativeClientBufferANDROID(const EGLint *attrib_list)
-         return setError(EGL_BAD_PARAMETER, (EGLClientBuffer)0);
-     }
- 
--    GraphicBuffer* gBuffer = new GraphicBuffer(width, height, format, usage,
-+#define CHECK_ERROR_CONDITION(message) \
-+    if (err != NO_ERROR) { \
-+        ALOGE(message); \
-+        goto error_condition; \
-+    }
-+
-+    // The holder is used to destroy the buffer if an error occurs.
-+    GraphicBuffer* gBuffer = new GraphicBuffer();
-+    sp<IServiceManager> sm = defaultServiceManager();
-+    sp<IBinder> surfaceFlinger = sm->getService(String16("SurfaceFlinger"));
-+    sp<IBinder> allocator;
-+    Parcel sc_data, sc_reply, data, reply;
-+    status_t err = NO_ERROR;
-+    if (sm == NULL) {
-+        ALOGE("Unable to connect to ServiceManager");
-+        goto error_condition;
-+    }
-+
-+    // Obtain an allocator.
-+    if (surfaceFlinger == NULL) {
-+        ALOGE("Unable to connect to SurfaceFlinger");
-+        goto error_condition;
-+    }
-+    sc_data.writeInterfaceToken(String16("android.ui.ISurfaceComposer"));
-+    err = surfaceFlinger->transact(
-+            BnSurfaceComposer::CREATE_GRAPHIC_BUFFER_ALLOC, sc_data, &sc_reply);
-+    CHECK_ERROR_CONDITION("Unable to obtain allocator from SurfaceFlinger");
-+    allocator = sc_reply.readStrongBinder();
-+
-+    if (allocator == NULL) {
-+        ALOGE("Unable to obtain an ISurfaceComposer");
-+        goto error_condition;
-+    }
-+    data.writeInterfaceToken(String16("android.ui.IGraphicBufferAlloc"));
-+    err = data.writeUint32(width);
-+    CHECK_ERROR_CONDITION("Unable to write width");
-+    err = data.writeUint32(height);
-+    CHECK_ERROR_CONDITION("Unable to write height");
-+    err = data.writeInt32(static_cast<int32_t>(format));
-+    CHECK_ERROR_CONDITION("Unable to write format");
-+    err = data.writeUint32(usage);
-+    CHECK_ERROR_CONDITION("Unable to write usage");
-+    err = data.writeUtf8AsUtf16(
-             std::string("[eglCreateNativeClientBufferANDROID pid ") +
-             std::to_string(getpid()) + ']');
--    const status_t err = gBuffer->initCheck();
-+    CHECK_ERROR_CONDITION("Unable to write requestor name");
-+    err = allocator->transact(IBinder::FIRST_CALL_TRANSACTION, data,
-+            &reply);
-+    CHECK_ERROR_CONDITION(
-+            "Unable to request buffer allocation from surface composer");
-+    err = reply.readInt32();
-+    CHECK_ERROR_CONDITION("Unable to obtain buffer from surface composer");
-+    err = reply.read(*gBuffer);
-+    CHECK_ERROR_CONDITION("Unable to read buffer from surface composer");
-+
-+    err = gBuffer->initCheck();
-     if (err != NO_ERROR) {
-         ALOGE("Unable to create native buffer { w=%d, h=%d, f=%d, u=%#x }: %#x",
-                 width, height, format, usage, err);
--        // Destroy the buffer.
--        sp<GraphicBuffer> holder(gBuffer);
--        return setError(EGL_BAD_ALLOC, (EGLClientBuffer)0);
-+        goto error_condition;
-     }
-     ALOGD("Created new native buffer %p { w=%d, h=%d, f=%d, u=%#x }",
-             gBuffer, width, height, format, usage);
-     return static_cast<EGLClientBuffer>(gBuffer->getNativeBuffer());
-+
-+#undef CHECK_ERROR_CONDITION
-+
-+error_condition:
-+    // Delete the buffer.
-+    sp<GraphicBuffer> holder(gBuffer);
-+    return setError(EGL_BAD_ALLOC, (EGLClientBuffer)0);
- }
- 
- // ----------------------------------------------------------------------------
-diff --git a/opengl/libs/EGL/egl_display.cpp b/opengl/libs/EGL/egl_display.cpp
-index e335a6c..1e39aae 100644
---- a/opengl/libs/EGL/egl_display.cpp
-+++ b/opengl/libs/EGL/egl_display.cpp
-@@ -66,7 +66,10 @@ egl_display_t::~egl_display_t() {
- 
- egl_display_t* egl_display_t::get(EGLDisplay dpy) {
-     uintptr_t index = uintptr_t(dpy)-1U;
--    return (index >= NUM_DISPLAYS) ? NULL : &sDisplay[index];
-+    if (index >= NUM_DISPLAYS || !sDisplay[index].isValid()) {
-+        return nullptr;
-+    }
-+    return &sDisplay[index];
- }
- 
- void egl_display_t::addObject(egl_object_t* object) {
 diff --git a/opengl/libs/GLES2/gl2.cpp b/opengl/libs/GLES2/gl2.cpp
 index 6034a8e..f1feeda 100644
 --- a/opengl/libs/GLES2/gl2.cpp
@@ -1193,172 +366,8 @@ index b9be675..4dec34b 100644
          outCount += 1;
      }
  
-diff --git a/services/sensorservice/SensorEventConnection.cpp b/services/sensorservice/SensorEventConnection.cpp
-index c1e1bad..f2f1444 100644
---- a/services/sensorservice/SensorEventConnection.cpp
-+++ b/services/sensorservice/SensorEventConnection.cpp
-@@ -206,7 +206,7 @@ void SensorService::SensorEventConnection::incrementPendingFlushCount(int32_t ha
- status_t SensorService::SensorEventConnection::sendEvents(
-         sensors_event_t const* buffer, size_t numEvents,
-         sensors_event_t* scratch,
--        SensorEventConnection const * const * mapFlushEventsToConnections) {
-+        wp<const SensorEventConnection> const * mapFlushEventsToConnections) {
-     // filter out events not for this connection
-     int count = 0;
-     Mutex::Autolock _l(mConnectionLock);
-@@ -234,7 +234,7 @@ status_t SensorService::SensorEventConnection::sendEvents(
-             FlushInfo& flushInfo = mSensorInfo.editValueAt(index);
-             // Check if there is a pending flush_complete event for this sensor on this connection.
-             if (buffer[i].type == SENSOR_TYPE_META_DATA && flushInfo.mFirstFlushPending == true &&
--                    this == mapFlushEventsToConnections[i]) {
-+                    mapFlushEventsToConnections[i] == this) {
-                 flushInfo.mFirstFlushPending = false;
-                 ALOGD_IF(DEBUG_CONNECTIONS, "First flush event for sensor==%d ",
-                         buffer[i].meta_data.sensor);
-@@ -255,7 +255,7 @@ status_t SensorService::SensorEventConnection::sendEvents(
-                 // from the same sensor_handle AND the current connection is mapped to the
-                 // corresponding flush_complete_event.
-                 if (buffer[i].type == SENSOR_TYPE_META_DATA) {
--                    if (this == mapFlushEventsToConnections[i]) {
-+                    if (mapFlushEventsToConnections[i] == this) {
-                         scratch[count++] = buffer[i];
-                     }
-                     ++i;
-diff --git a/services/sensorservice/SensorEventConnection.h b/services/sensorservice/SensorEventConnection.h
-index b796cc0..883c16e 100644
---- a/services/sensorservice/SensorEventConnection.h
-+++ b/services/sensorservice/SensorEventConnection.h
-@@ -52,7 +52,7 @@ public:
-                           bool isDataInjectionMode, const String16& opPackageName);
- 
-     status_t sendEvents(sensors_event_t const* buffer, size_t count, sensors_event_t* scratch,
--                        SensorEventConnection const * const * mapFlushEventsToConnections = NULL);
-+                        wp<const SensorEventConnection> const * mapFlushEventsToConnections = NULL);
-     bool hasSensor(int32_t handle) const;
-     bool hasAnySensor() const;
-     bool hasOneShotSensors() const;
-diff --git a/services/sensorservice/SensorRecord.cpp b/services/sensorservice/SensorRecord.cpp
-index 644cfb0..53fb9de 100644
---- a/services/sensorservice/SensorRecord.cpp
-+++ b/services/sensorservice/SensorRecord.cpp
-@@ -21,13 +21,13 @@
- namespace android {
- 
- SensorService::SensorRecord::SensorRecord(
--        const sp<SensorEventConnection>& connection)
-+        const sp<const SensorEventConnection>& connection)
- {
-     mConnections.add(connection);
- }
- 
- bool SensorService::SensorRecord::addConnection(
--        const sp<SensorEventConnection>& connection)
-+        const sp<const SensorEventConnection>& connection)
- {
-     if (mConnections.indexOf(connection) < 0) {
-         mConnections.add(connection);
-@@ -37,16 +37,16 @@ bool SensorService::SensorRecord::addConnection(
- }
- 
- bool SensorService::SensorRecord::removeConnection(
--        const wp<SensorEventConnection>& connection)
-+        const wp<const SensorEventConnection>& connection)
- {
-     ssize_t index = mConnections.indexOf(connection);
-     if (index >= 0) {
-         mConnections.removeItemsAt(index, 1);
-     }
-     // Remove this connections from the queue of flush() calls made on this sensor.
--    for (Vector< wp<SensorEventConnection> >::iterator it = mPendingFlushConnections.begin();
-+    for (Vector< wp<const SensorEventConnection> >::iterator it = mPendingFlushConnections.begin();
-             it != mPendingFlushConnections.end(); ) {
--        if (it->unsafe_get() == connection.unsafe_get()) {
-+        if (*it == connection) {
-             it = mPendingFlushConnections.erase(it);
-         } else {
-             ++it;
-@@ -56,7 +56,7 @@ bool SensorService::SensorRecord::removeConnection(
- }
- 
- void SensorService::SensorRecord::addPendingFlushConnection(
--        const sp<SensorEventConnection>& connection) {
-+        const sp<const SensorEventConnection>& connection) {
-     mPendingFlushConnections.add(connection);
- }
- 
-@@ -66,10 +66,10 @@ void SensorService::SensorRecord::removeFirstPendingFlushConnection() {
-     }
- }
- 
--SensorService::SensorEventConnection *
-+wp<const SensorService::SensorEventConnection>
-         SensorService::SensorRecord::getFirstPendingFlushConnection() {
-     if (mPendingFlushConnections.size() > 0) {
--        return mPendingFlushConnections[0].unsafe_get();
-+        return mPendingFlushConnections[0];
-     }
-     return NULL;
- }
-diff --git a/services/sensorservice/SensorRecord.h b/services/sensorservice/SensorRecord.h
-index 29b970d..5a35410 100644
---- a/services/sensorservice/SensorRecord.h
-+++ b/services/sensorservice/SensorRecord.h
-@@ -25,20 +25,20 @@ class SensorService;
- 
- class SensorService::SensorRecord {
- public:
--    SensorRecord(const sp<SensorEventConnection>& connection);
--    bool addConnection(const sp<SensorEventConnection>& connection);
--    bool removeConnection(const wp<SensorEventConnection>& connection);
-+    SensorRecord(const sp<const SensorEventConnection>& connection);
-+    bool addConnection(const sp<const SensorEventConnection>& connection);
-+    bool removeConnection(const wp<const SensorEventConnection>& connection);
-     size_t getNumConnections() const { return mConnections.size(); }
- 
--    void addPendingFlushConnection(const sp<SensorEventConnection>& connection);
-+    void addPendingFlushConnection(const sp<const SensorEventConnection>& connection);
-     void removeFirstPendingFlushConnection();
--    SensorEventConnection * getFirstPendingFlushConnection();
-+    wp<const SensorEventConnection> getFirstPendingFlushConnection();
-     void clearAllPendingFlushConnections();
- private:
--    SortedVector< wp<SensorEventConnection> > mConnections;
-+    SortedVector< wp<const SensorEventConnection> > mConnections;
-     // A queue of all flush() calls made on this sensor. Flush complete events
-     // will be sent in this order.
--    Vector< wp<SensorEventConnection> > mPendingFlushConnections;
-+    Vector< wp<const SensorEventConnection> > mPendingFlushConnections;
- };
- 
- }
-diff --git a/services/sensorservice/SensorService.cpp b/services/sensorservice/SensorService.cpp
-index a24740b..dbd0624 100644
---- a/services/sensorservice/SensorService.cpp
-+++ b/services/sensorservice/SensorService.cpp
-@@ -260,7 +260,7 @@ void SensorService::onFirstRef() {
-             const size_t minBufferSize = SensorEventQueue::MAX_RECEIVE_BUFFER_EVENT_COUNT;
-             mSensorEventBuffer = new sensors_event_t[minBufferSize];
-             mSensorEventScratch = new sensors_event_t[minBufferSize];
--            mMapFlushEventsToConnections = new SensorEventConnection const * [minBufferSize];
-+            mMapFlushEventsToConnections = new wp<const SensorEventConnection> [minBufferSize];
-             mCurrentOperatingMode = NORMAL;
- 
-             mNextSensorRegIndex = 0;
-diff --git a/services/sensorservice/SensorService.h b/services/sensorservice/SensorService.h
-index 1e1ea5a..4a63ef0 100644
---- a/services/sensorservice/SensorService.h
-+++ b/services/sensorservice/SensorService.h
-@@ -237,7 +237,7 @@ private:
-     SortedVector< wp<SensorEventConnection> > mActiveConnections;
-     bool mWakeLockAcquired;
-     sensors_event_t *mSensorEventBuffer, *mSensorEventScratch;
--    SensorEventConnection const **mMapFlushEventsToConnections;
-+    wp<const SensorEventConnection> * mMapFlushEventsToConnections;
-     std::unordered_map<int, RecentEventLogger*> mRecentEvent;
-     Mode mCurrentOperatingMode;
- 
 diff --git a/services/surfaceflinger/Android.mk b/services/surfaceflinger/Android.mk
-index dc5e97b..cb292ef 100644
+index ffda035..cb292ef 100644
 --- a/services/surfaceflinger/Android.mk
 +++ b/services/surfaceflinger/Android.mk
 @@ -56,6 +56,9 @@ else
@@ -1371,255 +380,6 @@ index dc5e97b..cb292ef 100644
  ifeq ($(TARGET_BOARD_PLATFORM),omap4)
      LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
  endif
-@@ -79,18 +82,36 @@ ifeq ($(TARGET_RUNNING_WITHOUT_SYNC_FRAMEWORK),true)
-     LOCAL_CFLAGS += -DRUNNING_WITHOUT_SYNC_FRAMEWORK
- endif
- 
--# See build/target/board/generic/BoardConfig.mk for a description of this setting.
-+# The following two BoardConfig variables define (respectively):
-+#
-+#   - The phase offset between hardware vsync and when apps are woken up by the
-+#     Choreographer callback
-+#   - The phase offset between hardware vsync and when SurfaceFlinger wakes up
-+#     to consume input
-+#
-+# Their values can be tuned to trade off between display pipeline latency (both
-+# overall latency and the lengths of the app --> SF and SF --> display phases)
-+# and frame delivery jitter (which typically manifests as "jank" or "jerkiness"
-+# while interacting with the device). The default values should produce a
-+# relatively low amount of jitter at the expense of roughly two frames of
-+# app --> display latency, and unless significant testing is performed to avoid
-+# increased display jitter (both manual investigation using systrace [1] and
-+# automated testing using dumpsys gfxinfo [2] are recommended), they should not
-+# be modified.
-+#
-+# [1] https://developer.android.com/studio/profile/systrace.html
-+# [2] https://developer.android.com/training/testing/performance.html
-+
- ifneq ($(VSYNC_EVENT_PHASE_OFFSET_NS),)
-     LOCAL_CFLAGS += -DVSYNC_EVENT_PHASE_OFFSET_NS=$(VSYNC_EVENT_PHASE_OFFSET_NS)
- else
--    LOCAL_CFLAGS += -DVSYNC_EVENT_PHASE_OFFSET_NS=0
-+    LOCAL_CFLAGS += -DVSYNC_EVENT_PHASE_OFFSET_NS=1000000
- endif
- 
--# See build/target/board/generic/BoardConfig.mk for a description of this setting.
- ifneq ($(SF_VSYNC_EVENT_PHASE_OFFSET_NS),)
-     LOCAL_CFLAGS += -DSF_VSYNC_EVENT_PHASE_OFFSET_NS=$(SF_VSYNC_EVENT_PHASE_OFFSET_NS)
- else
--    LOCAL_CFLAGS += -DSF_VSYNC_EVENT_PHASE_OFFSET_NS=0
-+    LOCAL_CFLAGS += -DSF_VSYNC_EVENT_PHASE_OFFSET_NS=1000000
- endif
- 
- ifneq ($(PRESENT_TIME_OFFSET_FROM_VSYNC_NS),)
-diff --git a/services/surfaceflinger/DispSync.cpp b/services/surfaceflinger/DispSync.cpp
-index c67feb3..1a9820d 100644
---- a/services/surfaceflinger/DispSync.cpp
-+++ b/services/surfaceflinger/DispSync.cpp
-@@ -385,7 +385,7 @@ DispSync::DispSync(const char* name) :
-     mThread->run("DispSync", PRIORITY_URGENT_DISPLAY + PRIORITY_MORE_FAVORABLE);
-     // set DispSync to SCHED_FIFO to minimize jitter
-     struct sched_param param = {0};
--    param.sched_priority = 1;
-+    param.sched_priority = 2;
-     if (sched_setscheduler(mThread->getTid(), SCHED_FIFO, &param) != 0) {
-         ALOGE("Couldn't set SCHED_FIFO for DispSyncThread");
-     }
-diff --git a/services/surfaceflinger/DisplayHardware/HWC2On1Adapter.cpp b/services/surfaceflinger/DisplayHardware/HWC2On1Adapter.cpp
-index 8bcee39..cc0dfb0 100644
---- a/services/surfaceflinger/DisplayHardware/HWC2On1Adapter.cpp
-+++ b/services/surfaceflinger/DisplayHardware/HWC2On1Adapter.cpp
-@@ -2305,7 +2305,14 @@ void HWC2On1Adapter::Layer::applyCompositionType(hwc_layer_1_t& hwc1Layer,
-                 hwc1Layer.compositionType = HWC_FRAMEBUFFER;
-                 break;
-             case Composition::SolidColor:
--                hwc1Layer.compositionType = HWC_BACKGROUND;
-+                // In theory the following line should work, but since the HWC1
-+                // version of SurfaceFlinger never used HWC_BACKGROUND, HWC1
-+                // devices may not work correctly. To be on the safe side, we
-+                // fall back to client composition.
-+                //
-+                // hwc1Layer.compositionType = HWC_BACKGROUND;
-+                hwc1Layer.compositionType = HWC_FRAMEBUFFER;
-+                hwc1Layer.flags |= HWC_SKIP_LAYER;
-                 break;
-             case Composition::Cursor:
-                 hwc1Layer.compositionType = HWC_FRAMEBUFFER;
-diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
-index 61bb0bd..2190466 100644
---- a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
-+++ b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
-@@ -563,8 +563,8 @@ status_t VirtualDisplaySurface::connect(const sp<IProducerListener>& listener,
-     return result;
- }
- 
--status_t VirtualDisplaySurface::disconnect(int api) {
--    return mSource[SOURCE_SINK]->disconnect(api);
-+status_t VirtualDisplaySurface::disconnect(int api, DisconnectMode mode) {
-+    return mSource[SOURCE_SINK]->disconnect(api, mode);
- }
- 
- status_t VirtualDisplaySurface::setSidebandStream(const sp<NativeHandle>& /*stream*/) {
-diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.h b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.h
-index bf9b39c..70f717f 100644
---- a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.h
-+++ b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.h
-@@ -115,7 +115,7 @@ private:
-     virtual int query(int what, int* value);
-     virtual status_t connect(const sp<IProducerListener>& listener,
-             int api, bool producerControlledByApp, QueueBufferOutput* output);
--    virtual status_t disconnect(int api);
-+    virtual status_t disconnect(int api, DisconnectMode mode);
-     virtual status_t setSidebandStream(const sp<NativeHandle>& stream);
-     virtual void allocateBuffers(uint32_t width, uint32_t height,
-             PixelFormat format, uint32_t usage);
-diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
-index 785df1a..dfece93 100644
---- a/services/surfaceflinger/Layer.cpp
-+++ b/services/surfaceflinger/Layer.cpp
-@@ -591,19 +591,25 @@ void Layer::setGeometry(
-     const Transform& tr(displayDevice->getTransform());
-     Rect transformedFrame = tr.transform(frame);
-     auto error = hwcLayer->setDisplayFrame(transformedFrame);
--    ALOGE_IF(error != HWC2::Error::None, "[%s] Failed to set display frame "
--            "[%d, %d, %d, %d]: %s (%d)", mName.string(), transformedFrame.left,
--            transformedFrame.top, transformedFrame.right,
--            transformedFrame.bottom, to_string(error).c_str(),
--            static_cast<int32_t>(error));
-+    if (error != HWC2::Error::None) {
-+        ALOGE("[%s] Failed to set display frame [%d, %d, %d, %d]: %s (%d)",
-+                mName.string(), transformedFrame.left, transformedFrame.top,
-+                transformedFrame.right, transformedFrame.bottom,
-+                to_string(error).c_str(), static_cast<int32_t>(error));
-+    } else {
-+        hwcInfo.displayFrame = transformedFrame;
-+    }
- 
-     FloatRect sourceCrop = computeCrop(displayDevice);
-     error = hwcLayer->setSourceCrop(sourceCrop);
--    ALOGE_IF(error != HWC2::Error::None, "[%s] Failed to set source crop "
--            "[%.3f, %.3f, %.3f, %.3f]: %s (%d)", mName.string(),
--            sourceCrop.left, sourceCrop.top, sourceCrop.right,
--            sourceCrop.bottom, to_string(error).c_str(),
--            static_cast<int32_t>(error));
-+    if (error != HWC2::Error::None) {
-+        ALOGE("[%s] Failed to set source crop [%.3f, %.3f, %.3f, %.3f]: "
-+                "%s (%d)", mName.string(), sourceCrop.left, sourceCrop.top,
-+                sourceCrop.right, sourceCrop.bottom, to_string(error).c_str(),
-+                static_cast<int32_t>(error));
-+    } else {
-+        hwcInfo.sourceCrop = sourceCrop;
-+    }
- 
-     error = hwcLayer->setPlaneAlpha(s.alpha);
-     ALOGE_IF(error != HWC2::Error::None, "[%s] Failed to set plane alpha %.3f: "
-@@ -2235,6 +2241,54 @@ void Layer::dump(String8& result, Colorizer& colorizer) const
-     }
- }
- 
-+#ifdef USE_HWC2
-+void Layer::miniDumpHeader(String8& result) {
-+    result.append("----------------------------------------");
-+    result.append("---------------------------------------\n");
-+    result.append(" Layer name\n");
-+    result.append("           Z | ");
-+    result.append(" Comp Type | ");
-+    result.append("  Disp Frame (LTRB) | ");
-+    result.append("         Source Crop (LTRB)\n");
-+    result.append("----------------------------------------");
-+    result.append("---------------------------------------\n");
-+}
-+
-+void Layer::miniDump(String8& result, int32_t hwcId) const {
-+    if (mHwcLayers.count(hwcId) == 0) {
-+        return;
-+    }
-+
-+    String8 name;
-+    if (mName.length() > 77) {
-+        std::string shortened;
-+        shortened.append(mName.string(), 36);
-+        shortened.append("[...]");
-+        shortened.append(mName.string() + (mName.length() - 36), 36);
-+        name = shortened.c_str();
-+    } else {
-+        name = mName;
-+    }
-+
-+    result.appendFormat(" %s\n", name.string());
-+
-+    const Layer::State& layerState(getDrawingState());
-+    const HWCInfo& hwcInfo = mHwcLayers.at(hwcId);
-+    result.appendFormat("  %10u | ", layerState.z);
-+    result.appendFormat("%10s | ",
-+            to_string(getCompositionType(hwcId)).c_str());
-+    const Rect& frame = hwcInfo.displayFrame;
-+    result.appendFormat("%4d %4d %4d %4d | ", frame.left, frame.top,
-+            frame.right, frame.bottom);
-+    const FloatRect& crop = hwcInfo.sourceCrop;
-+    result.appendFormat("%6.1f %6.1f %6.1f %6.1f\n", crop.left, crop.top,
-+            crop.right, crop.bottom);
-+
-+    result.append("- - - - - - - - - - - - - - - - - - - - ");
-+    result.append("- - - - - - - - - - - - - - - - - - - -\n");
-+}
-+#endif
-+
- void Layer::dumpFrameStats(String8& result) const {
-     mFrameTracker.dumpStats(result);
- }
-diff --git a/services/surfaceflinger/Layer.h b/services/surfaceflinger/Layer.h
-index 6533953..2ce1340 100644
---- a/services/surfaceflinger/Layer.h
-+++ b/services/surfaceflinger/Layer.h
-@@ -402,6 +402,10 @@ public:
- 
-     /* always call base class first */
-     void dump(String8& result, Colorizer& colorizer) const;
-+#ifdef USE_HWC2
-+    static void miniDumpHeader(String8& result);
-+    void miniDump(String8& result, int32_t hwcId) const;
-+#endif
-     void dumpFrameStats(String8& result) const;
-     void clearFrameStats();
-     void logFrameStats();
-@@ -588,6 +592,8 @@ private:
-         bool forceClientComposition;
-         HWC2::Composition compositionType;
-         bool clearClientTarget;
-+        Rect displayFrame;
-+        FloatRect sourceCrop;
-     };
-     std::unordered_map<int32_t, HWCInfo> mHwcLayers;
- #else
-diff --git a/services/surfaceflinger/MonitoredProducer.cpp b/services/surfaceflinger/MonitoredProducer.cpp
-index 36cfa37..ffaee7a 100644
---- a/services/surfaceflinger/MonitoredProducer.cpp
-+++ b/services/surfaceflinger/MonitoredProducer.cpp
-@@ -102,8 +102,8 @@ status_t MonitoredProducer::connect(const sp<IProducerListener>& listener,
-     return mProducer->connect(listener, api, producerControlledByApp, output);
- }
- 
--status_t MonitoredProducer::disconnect(int api) {
--    return mProducer->disconnect(api);
-+status_t MonitoredProducer::disconnect(int api, DisconnectMode mode) {
-+    return mProducer->disconnect(api, mode);
- }
- 
- status_t MonitoredProducer::setSidebandStream(const sp<NativeHandle>& stream) {
-diff --git a/services/surfaceflinger/MonitoredProducer.h b/services/surfaceflinger/MonitoredProducer.h
-index f64fe51..66f6cf0 100644
---- a/services/surfaceflinger/MonitoredProducer.h
-+++ b/services/surfaceflinger/MonitoredProducer.h
-@@ -50,7 +50,7 @@ public:
-     virtual int query(int what, int* value);
-     virtual status_t connect(const sp<IProducerListener>& token, int api,
-             bool producerControlledByApp, QueueBufferOutput* output);
--    virtual status_t disconnect(int api);
-+    virtual status_t disconnect(int api, DisconnectMode mode);
-     virtual status_t setSidebandStream(const sp<NativeHandle>& stream);
-     virtual void allocateBuffers(uint32_t width, uint32_t height,
-             PixelFormat format, uint32_t usage);
 diff --git a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
 index 847cdb3..b2821b7 100644
 --- a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
@@ -1862,46 +622,10 @@ index 0259881..5a5910a 100644
          int getStatus() const;
      };
 diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
-index 2a67f4c..874cdc8 100644
+index 8db071e..874cdc8 100644
 --- a/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger.cpp
-@@ -471,7 +471,7 @@ void SurfaceFlinger::init() {
- 
-         // set SFEventThread to SCHED_FIFO to minimize jitter
-         struct sched_param param = {0};
--        param.sched_priority = 1;
-+        param.sched_priority = 2;
-         if (sched_setscheduler(mSFEventThread->getTid(), SCHED_FIFO, &param) != 0) {
-             ALOGE("Couldn't set SCHED_FIFO for SFEventThread");
-         }
-@@ -3057,6 +3057,26 @@ void SurfaceFlinger::dumpAllLocked(const Vector<String16>& args, size_t& index,
-      * VSYNC state
-      */
-     mEventThread->dump(result);
-+    result.append("\n");
-+
-+    /*
-+     * HWC layer minidump
-+     */
-+    for (size_t d = 0; d < mDisplays.size(); d++) {
-+        const sp<const DisplayDevice>& displayDevice(mDisplays[d]);
-+        int32_t hwcId = displayDevice->getHwcDisplayId();
-+        if (hwcId == DisplayDevice::DISPLAY_ID_INVALID) {
-+            continue;
-+        }
-+
-+        result.appendFormat("Display %d HWC layers:\n", hwcId);
-+        Layer::miniDumpHeader(result);
-+        for (size_t l = 0; l < count; l++) {
-+            const sp<Layer>& layer(currentLayers[l]);
-+            layer->miniDump(result, hwcId);
-+        }
-+        result.append("\n");
-+    }
- 
-     /*
-      * Dump HWComposer state
-@@ -3418,7 +3438,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3438,7 +3438,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          const sp<IGraphicBufferProducer>& producer,
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
@@ -1911,7 +635,7 @@ index 2a67f4c..874cdc8 100644
  
      if (CC_UNLIKELY(display == 0))
          return BAD_VALUE;
-@@ -3462,6 +3483,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3482,6 +3483,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          bool useIdentityTransform;
          Transform::orientation_flags rotation;
          status_t result;
@@ -1919,7 +643,7 @@ index 2a67f4c..874cdc8 100644
          bool isLocalScreenshot;
      public:
          MessageCaptureScreen(SurfaceFlinger* flinger,
-@@ -3471,12 +3493,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3491,12 +3493,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
                  uint32_t minLayerZ, uint32_t maxLayerZ,
                  bool useIdentityTransform,
                  Transform::orientation_flags rotation,
@@ -1934,7 +658,7 @@ index 2a67f4c..874cdc8 100644
                isLocalScreenshot(isLocalScreenshot)
          {
          }
-@@ -3486,9 +3509,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3506,9 +3509,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          virtual bool handler() {
              Mutex::Autolock _l(flinger->mStateLock);
              sp<const DisplayDevice> hw(flinger->getDisplayDevice(display));
@@ -1946,7 +670,7 @@ index 2a67f4c..874cdc8 100644
              static_cast<GraphicProducerWrapper*>(IInterface::asBinder(producer).get())->exit(result);
              return true;
          }
-@@ -3504,7 +3528,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3524,7 +3528,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
      sp<MessageBase> msg = new MessageCaptureScreen(this,
              display, IGraphicBufferProducer::asInterface( wrapper ),
              sourceCrop, reqWidth, reqHeight, minLayerZ, maxLayerZ,
@@ -1955,7 +679,7 @@ index 2a67f4c..874cdc8 100644
  
      status_t res = postMessageAsync(msg);
      if (res == NO_ERROR) {
-@@ -3587,7 +3611,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3607,7 +3611,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
          bool useIdentityTransform, Transform::orientation_flags rotation,
@@ -1964,7 +688,7 @@ index 2a67f4c..874cdc8 100644
  {
      ATRACE_CALL();
  
-@@ -3665,7 +3689,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3685,7 +3689,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                  if (image != EGL_NO_IMAGE_KHR) {
                      // this binds the given EGLImage as a framebuffer for the
                      // duration of this scope.
@@ -1973,7 +697,7 @@ index 2a67f4c..874cdc8 100644
                      if (imageBond.getStatus() == NO_ERROR) {
                          // this will in fact render into our dequeued buffer
                          // via an FBO, which means we didn't have to create
-@@ -3712,6 +3736,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3732,6 +3736,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                                  ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                              }
                          }
@@ -2014,7 +738,7 @@ index b98924b..2c3bd19 100644
      /* ------------------------------------------------------------------------
       * EGL
 diff --git a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-index 650d6b4..ca03830 100644
+index b0f418c..ca03830 100644
 --- a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 @@ -466,10 +466,12 @@ void SurfaceFlinger::init() {
@@ -2022,7 +746,7 @@ index 650d6b4..ca03830 100644
  
      // set SFEventThread to SCHED_FIFO to minimize jitter
 -    struct sched_param param = {0};
--    param.sched_priority = 1;
+-    param.sched_priority = 2;
 -    if (sched_setscheduler(mSFEventThread->getTid(), SCHED_FIFO, &param) != 0) {
 -        ALOGE("Couldn't set SCHED_FIFO for SFEventThread");
 +    if (mSFEventThread != NULL) {
