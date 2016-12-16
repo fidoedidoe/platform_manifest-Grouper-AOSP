@@ -18,7 +18,7 @@ index 7e36c5e..aca7a19 100644
  include $(BUILD_EXECUTABLE)
 +endif
 diff --git a/include/media/stagefright/MediaBufferGroup.h b/include/media/stagefright/MediaBufferGroup.h
-index 3051406..e0e5856 100644
+index 3051406..870bb9b 100644
 --- a/include/media/stagefright/MediaBufferGroup.h
 +++ b/include/media/stagefright/MediaBufferGroup.h
 @@ -49,7 +49,10 @@ public:
@@ -26,7 +26,7 @@ index 3051406..e0e5856 100644
      // size of at least requstedSize.
      status_t acquire_buffer(
 -            MediaBuffer **buffer, bool nonBlocking = false, size_t requestedSize = 0);
-+            MediaBuffer **buffer, bool nonBlocking, size_t requestedSize);
++            MediaBuffer **buffer, bool nonBlocking, size_t requestedSize = 0);
 +
 +    status_t acquire_buffer(MediaBuffer **buffer);
 +    status_t acquire_buffer(MediaBuffer **buffer, bool nonBlocking);
@@ -34,7 +34,7 @@ index 3051406..e0e5856 100644
      size_t buffers() const { return mBuffers.size(); }
  
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
-index 37fd5a5..706ba4e 100644
+index 37fd5a5..77a2a39 100644
 --- a/media/libstagefright/ACodec.cpp
 +++ b/media/libstagefright/ACodec.cpp
 @@ -804,13 +804,22 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
@@ -75,7 +75,26 @@ index 37fd5a5..706ba4e 100644
          uint32_t usageBits;
          if (mOMX->getParameter(
                  mNode, (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits,
-@@ -6036,6 +6053,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
+@@ -4274,7 +4291,9 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+ 
+         h264type.eProfile = static_cast<OMX_VIDEO_AVCPROFILETYPE>(profile);
+         h264type.eLevel = static_cast<OMX_VIDEO_AVCLEVELTYPE>(level);
+-    } else {
++    }
++#ifdef USE_AVC_BASELINE_PROFILE
++      else {
+         h264type.eProfile = OMX_VIDEO_AVCProfileBaseline;
+ #if 0   /* DON'T YET DEFAULT TO HIGHEST PROFILE */
+         // Use largest supported profile for AVC recording if profile is not specified.
+@@ -4287,6 +4306,7 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+         }
+ #endif
+     }
++#endif
+ 
+     ALOGI("setupAVCEncoderParameters with [profile: %s] [level: %s]",
+             asString(h264type.eProfile), asString(h264type.eLevel));
+@@ -6036,6 +6056,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
                  status_t err2 = OK;
                  switch (metaType) {
                  case kMetadataBufferTypeInvalid:
@@ -85,7 +104,7 @@ index 37fd5a5..706ba4e 100644
                      break;
  #ifndef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
                  case kMetadataBufferTypeNativeHandleSource:
-@@ -6267,6 +6287,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6267,6 +6290,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                  native_handle_t *handle = NULL;
                  VideoNativeHandleMetadata &nativeMeta =
                      *(VideoNativeHandleMetadata *)info->mData->data();
@@ -96,7 +115,7 @@ index 37fd5a5..706ba4e 100644
                  if (info->mData->size() >= sizeof(nativeMeta)
                          && nativeMeta.eType == kMetadataBufferTypeNativeHandleSource) {
  #ifdef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
-@@ -6276,6 +6300,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6276,6 +6303,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                      handle = (native_handle_t *)nativeMeta.pHandle;
  #endif
                  }
@@ -109,7 +128,7 @@ index 37fd5a5..706ba4e 100644
                  info->mData->meta()->setPointer("handle", handle);
                  info->mData->meta()->setInt32("rangeOffset", rangeOffset);
                  info->mData->meta()->setInt32("rangeLength", rangeLength);
-@@ -6968,10 +6998,12 @@ void ACodec::LoadedState::onCreateInputSurface(
+@@ -6968,10 +7001,12 @@ void ACodec::LoadedState::onCreateInputSurface(
          err = mCodec->mOMX->createInputSurface(
                  mCodec->mNode, kPortIndexInput, dataSpace, &bufferProducer,
                  &mCodec->mInputMetadataType);
@@ -122,7 +141,7 @@ index 37fd5a5..706ba4e 100644
      }
  
      if (err == OK) {
-@@ -7014,10 +7046,12 @@ void ACodec::LoadedState::onSetInputSurface(
+@@ -7014,10 +7049,12 @@ void ACodec::LoadedState::onSetInputSurface(
          err = mCodec->mOMX->setInputSurface(
                  mCodec->mNode, kPortIndexInput, surface->getBufferConsumer(),
                  &mCodec->mInputMetadataType);
@@ -136,10 +155,21 @@ index 37fd5a5..706ba4e 100644
  
      if (err == OK) {
 diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
-index 3848502..c06f6a4 100644
+index 3848502..1635375 100644
 --- a/media/libstagefright/Android.mk
 +++ b/media/libstagefright/Android.mk
-@@ -124,6 +124,10 @@ LOCAL_SHARED_LIBRARIES += \
+@@ -102,6 +102,10 @@ LOCAL_SHARED_LIBRARIES := \
+         libz \
+         libpowermanager
+ 
++ifeq ($(TARGET_USE_AVC_BASELINE_PROFILE), true)
++LOCAL_CFLAGS += -DUSE_AVC_BASELINE_PROFILE
++endif
++
+ LOCAL_STATIC_LIBRARIES := \
+         libstagefright_color_conversion \
+         libyuv_static \
+@@ -124,6 +128,10 @@ LOCAL_SHARED_LIBRARIES += \
          libdl \
          libRScpp \
  
@@ -151,9 +181,18 @@ index 3848502..c06f6a4 100644
  
  # enable experiments only in userdebug and eng builds
 diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
-index 893da89..c9f60ec 100644
+index 893da89..0bc6847 100644
 --- a/media/libstagefright/CameraSource.cpp
 +++ b/media/libstagefright/CameraSource.cpp
+@@ -1117,7 +1117,7 @@ void CameraSource::releaseRecordingFrameHandle(native_handle_t* handle) {
+         int64_t token = IPCThreadState::self()->clearCallingIdentity();
+         mCamera->releaseRecordingFrameHandle(handle);
+         IPCThreadState::self()->restoreCallingIdentity(token);
+-    } else {
++    } else if (handle != nullptr) {
+         native_handle_close(handle);
+         native_handle_delete(handle);
+     }
 @@ -1250,6 +1250,10 @@ void CameraSource::processBufferQueueFrame(BufferItem& buffer) {
  MetadataBufferType CameraSource::metaDataStoredInVideoBuffers() const {
      ALOGV("metaDataStoredInVideoBuffers");
@@ -251,19 +290,13 @@ index 54f768a..1334f93 100644
      mCondition.signal();
  }
 diff --git a/media/libstagefright/omx/Android.mk b/media/libstagefright/omx/Android.mk
-index e4fbd81..c262782 100644
+index e4fbd81..8fc788f 100644
 --- a/media/libstagefright/omx/Android.mk
 +++ b/media/libstagefright/omx/Android.mk
-@@ -31,6 +31,18 @@ LOCAL_SHARED_LIBRARIES :=               \
+@@ -31,6 +31,12 @@ LOCAL_SHARED_LIBRARIES :=               \
          libstagefright_foundation       \
          libdl
  
-+ifneq ($(TARGET_USES_MEDIA_EXTENSIONS),true)
-+ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
-+LOCAL_CFLAGS += -DCAMCORDER_GRALLOC_SOURCE
-+endif
-+endif
-+
 +ifneq ($(TARGET_USES_MEDIA_EXTENSIONS),true)
 +ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
 +LOCAL_CFLAGS += -DCAMCORDER_GRALLOC_SOURCE
@@ -394,6 +427,33 @@ index ecddc48..0abe6ac 100644
      registerExtensions();
      ProcessState::self()->startThreadPool();
      IPCThreadState::self()->joinThreadPool();
+diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
+index 1785a03..d5499f0 100644
+--- a/services/audioflinger/AudioFlinger.cpp
++++ b/services/audioflinger/AudioFlinger.cpp
+@@ -1509,7 +1509,8 @@ sp<IAudioRecord> AudioFlinger::openRecord(
+     }
+ 
+     // check calling permissions
+-    if (!recordingAllowed(opPackageName, tid, clientUid)) {
++    if (!isTrustedCallingUid(callingUid) &&
++		!recordingAllowed(opPackageName, tid, clientUid)) {
+         ALOGE("openRecord() permission denied: recording not allowed");
+         lStatus = PERMISSION_DENIED;
+         goto Exit;
+diff --git a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp b/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
+index c9b3abc..57d26e6 100644
+--- a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
++++ b/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
+@@ -318,7 +318,7 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
+             case AudioPolicyInterface::API_INPUT_TELEPHONY_RX:
+                 // FIXME: use the same permission as for remote submix for now.
+             case AudioPolicyInterface::API_INPUT_MIX_CAPTURE:
+-                if (!captureAudioOutputAllowed(pid, uid)) {
++                if (!isTrustedCallingUid(callingUid) && !captureAudioOutputAllowed(pid, uid)) {
+                     ALOGE("getInputForAttr() permission denied: capture not allowed");
+                     status = PERMISSION_DENIED;
+                 }
 diff --git a/services/camera/libcameraservice/Android.mk b/services/camera/libcameraservice/Android.mk
 index 8d7f71c..d98ad47 100644
 --- a/services/camera/libcameraservice/Android.mk
