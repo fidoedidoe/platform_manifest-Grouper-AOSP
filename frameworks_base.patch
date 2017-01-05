@@ -24,6 +24,127 @@ index aed7a36..bf96926 100644
              // if canceling out of addAccount and the original state caused us to skip this,
              // finish this activity
              if (mAccounts.isEmpty()) {
+diff --git a/core/jni/com_android_internal_os_Zygote.cpp b/core/jni/com_android_internal_os_Zygote.cpp
+index d1fe07b..f94c861 100644
+--- a/core/jni/com_android_internal_os_Zygote.cpp
++++ b/core/jni/com_android_internal_os_Zygote.cpp
+@@ -454,6 +454,20 @@ static pid_t ForkAndSpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArra
+   SetForkLoad(true);
+ #endif
+ 
++  sigset_t sigchld;
++  sigemptyset(&sigchld);
++  sigaddset(&sigchld, SIGCHLD);
++
++  // Temporarily block SIGCHLD during forks. The SIGCHLD handler might
++  // log, which would result in the logging FDs we close being reopened.
++  // This would cause failures because the FDs are not whitelisted.
++  //
++  // Note that the zygote process is single threaded at this point.
++  if (sigprocmask(SIG_BLOCK, &sigchld, nullptr) == -1) {
++    ALOGE("sigprocmask(SIG_SETMASK, { SIGCHLD }) failed: %s", strerror(errno));
++    RuntimeAbort(env, __LINE__, "Call to sigprocmask(SIG_BLOCK, { SIGCHLD }) failed.");
++  }
++
+   // Close any logging related FDs before we start evaluating the list of
+   // file descriptors.
+   __android_log_close();
+@@ -485,6 +499,11 @@ static pid_t ForkAndSpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArra
+       RuntimeAbort(env, __LINE__, "Unable to reopen whitelisted descriptors.");
+     }
+ 
++    if (sigprocmask(SIG_UNBLOCK, &sigchld, nullptr) == -1) {
++      ALOGE("sigprocmask(SIG_SETMASK, { SIGCHLD }) failed: %s", strerror(errno));
++      RuntimeAbort(env, __LINE__, "Call to sigprocmask(SIG_UNBLOCK, { SIGCHLD }) failed.");
++    }
++
+     // Keep capabilities across UID change, unless we're staying root.
+     if (uid != 0) {
+       EnableKeepCapabilities(env);
+@@ -618,6 +637,11 @@ static pid_t ForkAndSpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArra
+     SetForkLoad(false);
+ #endif
+ 
++    // We blocked SIGCHLD prior to a fork, we unblock it here.
++    if (sigprocmask(SIG_UNBLOCK, &sigchld, nullptr) == -1) {
++      ALOGE("sigprocmask(SIG_SETMASK, { SIGCHLD }) failed: %s", strerror(errno));
++      RuntimeAbort(env, __LINE__, "Call to sigprocmask(SIG_UNBLOCK, { SIGCHLD }) failed.");
++    }
+   }
+   return pid;
+ }
+diff --git a/core/jni/fd_utils-inl.h b/core/jni/fd_utils-inl.h
+index c67662b..d1129a3e 100644
+--- a/core/jni/fd_utils-inl.h
++++ b/core/jni/fd_utils-inl.h
+@@ -239,9 +239,22 @@ class FileDescriptorInfo {
+     is_sock(false) {
+   }
+ 
++  static bool StartsWith(const std::string& str, const std::string& prefix) {
++    return str.compare(0, prefix.size(), prefix) == 0;
++  }
++
++  static bool EndsWith(const std::string& str, const std::string& suffix) {
++    if (suffix.size() > str.size()) {
++      return false;
++    }
++
++    return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
++  }
++
+   // Returns true iff. a given path is whitelisted. A path is whitelisted
+   // if it belongs to the whitelist (see kPathWhitelist) or if it's a path
+-  // under /system/framework that ends with ".jar".
++  // under /system/framework that ends with ".jar" or if it is a system
++  // framework overlay.
+   static bool IsWhitelisted(const std::string& path) {
+     for (size_t i = 0; i < (sizeof(kPathWhitelist) / sizeof(kPathWhitelist[0])); ++i) {
+       if (kPathWhitelist[i] == path) {
+@@ -251,10 +264,41 @@ class FileDescriptorInfo {
+ 
+     static const std::string kFrameworksPrefix = "/system/framework/";
+     static const std::string kJarSuffix = ".jar";
+-    if (path.compare(0, kFrameworksPrefix.size(), kFrameworksPrefix) == 0 &&
+-        path.compare(path.size() - kJarSuffix.size(), kJarSuffix.size(), kJarSuffix) == 0) {
++    if (StartsWith(path, kFrameworksPrefix) && EndsWith(path, kJarSuffix)) {
+       return true;
+     }
++
++    // Whitelist files needed for Runtime Resource Overlay, like these:
++    // /system/vendor/overlay/framework-res.apk
++    // /system/vendor/overlay-subdir/pg/framework-res.apk
++    // /data/resource-cache/system@vendor@overlay@framework-res.apk@idmap
++    // /data/resource-cache/system@vendor@overlay-subdir@pg@framework-res.apk@idmap
++    // See AssetManager.cpp for more details on overlay-subdir.
++    static const std::string kOverlayDir = "/system/vendor/overlay/";
++    static const std::string kVendorOverlayDir = "/vendor/overlay";
++    static const std::string kOverlaySubdir = "/system/vendor/overlay-subdir/";
++    static const std::string kApkSuffix = ".apk";
++
++    if ((StartsWith(path, kOverlayDir) || StartsWith(path, kOverlaySubdir)
++         || StartsWith(path, kVendorOverlayDir))
++        && EndsWith(path, kApkSuffix)
++        && path.find("/../") == std::string::npos) {
++      return true;
++    }
++
++    static const std::string kOverlayIdmapPrefix = "/data/resource-cache/";
++    static const std::string kOverlayIdmapSuffix = ".apk@idmap";
++    if (StartsWith(path, kOverlayIdmapPrefix) && EndsWith(path, kOverlayIdmapSuffix)
++        && path.find("/../") == std::string::npos) {
++      return true;
++    }
++
++    // All regular files that are placed under this path are whitelisted automatically.
++    static const std::string kZygoteWhitelistPath = "/vendor/zygote_whitelist/";
++    if (StartsWith(path, kZygoteWhitelistPath) && path.find("/../") == std::string::npos) {
++      return true;
++    }
++
+     return false;
+   }
+ 
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
 index f062b59..574f7c1 100644
 --- a/core/res/res/xml/config_webview_packages.xml
@@ -53,6 +174,18 @@ index f062b59..574f7c1 100644
 +  <!-- The default WebView implementation -->
 +    <webviewprovider description="AOSP WebView" packageName="com.android.webview" availableByDefault="true" isFallback="true" />
  </webviewproviders>
+diff --git a/libs/androidfw/AssetManager.cpp b/libs/androidfw/AssetManager.cpp
+index 07044d0..7a10343 100644
+--- a/libs/androidfw/AssetManager.cpp
++++ b/libs/androidfw/AssetManager.cpp
+@@ -804,6 +804,7 @@ void AssetManager::addSystemOverlays(const char* pathOverlaysList,
+             sharedRes->add(oass, oidmap, offset + 1, false);
+             const_cast<AssetManager*>(this)->mAssetPaths.add(oap);
+             const_cast<AssetManager*>(this)->mZipSet.addOverlay(targetPackagePath, oap);
++            delete oidmap;
+         }
+     }
+ 
 diff --git a/libs/hwui/Android.mk b/libs/hwui/Android.mk
 index cacfce1..0b177b9 100644
 --- a/libs/hwui/Android.mk
@@ -78,6 +211,20 @@ index 2c9c9d9..7c187fb 100644
  }
  
  /**
+diff --git a/packages/ExternalStorageProvider/src/com/android/externalstorage/ExternalStorageProvider.java b/packages/ExternalStorageProvider/src/com/android/externalstorage/ExternalStorageProvider.java
+index 3ef9b8e..10e5dcc 100644
+--- a/packages/ExternalStorageProvider/src/com/android/externalstorage/ExternalStorageProvider.java
++++ b/packages/ExternalStorageProvider/src/com/android/externalstorage/ExternalStorageProvider.java
+@@ -161,7 +161,8 @@ public class ExternalStorageProvider extends DocumentsProvider {
+                     final VolumeInfo privateVol = mStorageManager.findPrivateForEmulated(volume);
+                     title = mStorageManager.getBestVolumeDescription(privateVol);
+                 }
+-            } else if (volume.getType() == VolumeInfo.TYPE_PUBLIC) {
++            } else if (volume.getType() == VolumeInfo.TYPE_PUBLIC
++                    && volume.getMountUserId() == userId) {
+                 rootId = volume.getFsUuid();
+                 title = mStorageManager.getBestVolumeDescription(volume);
+             } else {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
 index c850a25..1829e59 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
@@ -405,6 +552,32 @@ index 3fffefb..49fe79c 100644
          }
          if (receivers.size() > 0) {
              pw.print(prefix); pw.println("Receivers:");
+diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
+index ffbea9f..8dd05b1 100644
+--- a/services/net/java/android/net/dhcp/DhcpClient.java
++++ b/services/net/java/android/net/dhcp/DhcpClient.java
+@@ -40,6 +40,7 @@ import android.os.SystemClock;
+ import android.system.ErrnoException;
+ import android.system.Os;
+ import android.system.PacketSocketAddress;
++import android.util.EventLog;
+ import android.util.Log;
+ import android.util.SparseArray;
+ import android.util.TimeUtils;
+@@ -369,6 +370,13 @@ public class DhcpClient extends StateMachine {
+                     if (PACKET_DBG) {
+                         Log.d(TAG, HexDump.dumpHexString(mPacket, 0, length));
+                     }
++                    if (e.errorCode == DhcpErrorEvent.DHCP_NO_COOKIE) {
++                        int snetTagId = 0x534e4554;
++                        String bugId = "31850211";
++                        int uid = -1;
++                        String data = DhcpPacket.ParseException.class.getName();
++                        EventLog.writeEvent(snetTagId, bugId, uid, data);
++                    }
+                     logError(e.errorCode);
+                 }
+             }
 diff --git a/services/tests/Android.mk b/services/tests/Android.mk
 deleted file mode 100644
 index 40369ee..0000000
