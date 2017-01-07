@@ -51,27 +51,6 @@ index 5885738..86c315c 100644
      return ok;
  }
  
-diff --git a/include/binder/Parcel.h b/include/binder/Parcel.h
-index 1c355c4..2490b82 100644
---- a/include/binder/Parcel.h
-+++ b/include/binder/Parcel.h
-@@ -589,8 +589,16 @@ status_t Parcel::unsafeReadTypedVector(
-         return UNEXPECTED_NULL;
-     }
- 
-+    if (val->max_size() < size) {
-+        return NO_MEMORY;
-+    }
-+
-     val->resize(size);
- 
-+    if (val->size() < size) {
-+        return NO_MEMORY;
-+    }
-+
-     for (auto& v: *val) {
-         status = (this->*read_func)(&v);
- 
 diff --git a/include/gui/ISurfaceComposer.h b/include/gui/ISurfaceComposer.h
 index 74a4123..8dc6f6a 100644
 --- a/include/gui/ISurfaceComposer.h
@@ -142,18 +121,6 @@ index 46feb1c..1b4a9c5 100644
 +endif
  
  LOCAL_MODULE := libgui
- 
-diff --git a/libs/gui/BufferQueueConsumer.cpp b/libs/gui/BufferQueueConsumer.cpp
-index ca2a374..73d2042 100644
---- a/libs/gui/BufferQueueConsumer.cpp
-+++ b/libs/gui/BufferQueueConsumer.cpp
-@@ -715,6 +715,7 @@ status_t BufferQueueConsumer::setTransformHint(uint32_t hint) {
- }
- 
- sp<NativeHandle> BufferQueueConsumer::getSidebandStream() const {
-+    Mutex::Autolock lock(mCore->mMutex);
-     return mCore->mSidebandStream;
- }
  
 diff --git a/libs/gui/ISurfaceComposer.cpp b/libs/gui/ISurfaceComposer.cpp
 index f0b0ada..3577a33 100644

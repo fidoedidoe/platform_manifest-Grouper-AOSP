@@ -33,155 +33,6 @@ index 3051406..870bb9b 100644
  
      size_t buffers() const { return mBuffers.size(); }
  
-diff --git a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
-index a1892e4..ed38584 100644
---- a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
-+++ b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
-@@ -2357,8 +2357,12 @@ int Equalizer_getParameter(EffectContext     *pContext,
- 
-     case EQ_PARAM_BAND_LEVEL:
-         param2 = *pParamTemp;
--        if (param2 >= FIVEBAND_NUMBANDS) {
-+        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
-             status = -EINVAL;
-+            if (param2 < 0) {
-+                android_errorWriteLog(0x534e4554, "32438598");
-+                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_BAND_LEVEL band %d", param2);
-+            }
-             break;
-         }
-         *(int16_t *)pValue = (int16_t)EqualizerGetBandLevel(pContext, param2);
-@@ -2368,8 +2372,12 @@ int Equalizer_getParameter(EffectContext     *pContext,
- 
-     case EQ_PARAM_CENTER_FREQ:
-         param2 = *pParamTemp;
--        if (param2 >= FIVEBAND_NUMBANDS) {
-+        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
-             status = -EINVAL;
-+            if (param2 < 0) {
-+                android_errorWriteLog(0x534e4554, "32436341");
-+                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_CENTER_FREQ band %d", param2);
-+            }
-             break;
-         }
-         *(int32_t *)pValue = EqualizerGetCentreFrequency(pContext, param2);
-@@ -2379,8 +2387,12 @@ int Equalizer_getParameter(EffectContext     *pContext,
- 
-     case EQ_PARAM_BAND_FREQ_RANGE:
-         param2 = *pParamTemp;
--        if (param2 >= FIVEBAND_NUMBANDS) {
-+        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
-             status = -EINVAL;
-+            if (param2 < 0) {
-+                android_errorWriteLog(0x534e4554, "32247948");
-+                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_BAND_FREQ_RANGE band %d", param2);
-+            }
-             break;
-         }
-         EqualizerGetBandFreqRange(pContext, param2, (uint32_t *)pValue, ((uint32_t *)pValue + 1));
-@@ -2407,9 +2419,13 @@ int Equalizer_getParameter(EffectContext     *pContext,
- 
-     case EQ_PARAM_GET_PRESET_NAME:
-         param2 = *pParamTemp;
--        if (param2 >= EqualizerGetNumPresets()) {
--        //if (param2 >= 20) {     // AGO FIX
-+        if ((param2 < 0 && param2 != PRESET_CUSTOM) ||  param2 >= EqualizerGetNumPresets()) {
-             status = -EINVAL;
-+            if (param2 < 0) {
-+                android_errorWriteLog(0x534e4554, "32448258");
-+                ALOGE("\tERROR Equalizer_getParameter() EQ_PARAM_GET_PRESET_NAME preset %d",
-+                        param2);
-+            }
-             break;
-         }
-         name = (char *)pValue;
-@@ -2479,8 +2495,12 @@ int Equalizer_setParameter (EffectContext *pContext, void *pParam, void *pValue)
-         band =  *pParamTemp;
-         level = (int32_t)(*(int16_t *)pValue);
-         //ALOGV("\tEqualizer_setParameter() EQ_PARAM_BAND_LEVEL band %d, level %d", band, level);
--        if (band >= FIVEBAND_NUMBANDS) {
-+        if (band < 0 || band >= FIVEBAND_NUMBANDS) {
-             status = -EINVAL;
-+            if (band < 0) {
-+                android_errorWriteLog(0x534e4554, "32095626");
-+                ALOGE("\tERROR Equalizer_setParameter() EQ_PARAM_BAND_LEVEL band %d", band);
-+            }
-             break;
-         }
-         EqualizerSetBandLevel(pContext, band, level);
-diff --git a/media/libeffects/visualizer/EffectVisualizer.cpp b/media/libeffects/visualizer/EffectVisualizer.cpp
-index 21fddb1..b7d27d6 100644
---- a/media/libeffects/visualizer/EffectVisualizer.cpp
-+++ b/media/libeffects/visualizer/EffectVisualizer.cpp
-@@ -59,6 +59,8 @@ enum visualizer_state_e {
- 
- #define DISCARD_MEASUREMENTS_TIME_MS 2000 // discard measurements older than this number of ms
- 
-+#define MAX_LATENCY_MS 3000 // 3 seconds of latency for audio pipeline
-+
- // maximum number of buffers for which we keep track of the measurements
- #define MEASUREMENT_WINDOW_MAX_SIZE_IN_BUFFERS 25 // note: buffer index is stored in uint8_t
- 
-@@ -521,18 +523,29 @@ int Visualizer_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
-             break;
-         }
-         switch (*(uint32_t *)p->data) {
--        case VISUALIZER_PARAM_CAPTURE_SIZE:
--            pContext->mCaptureSize = *((uint32_t *)p->data + 1);
--            ALOGV("set mCaptureSize = %" PRIu32, pContext->mCaptureSize);
--            break;
-+        case VISUALIZER_PARAM_CAPTURE_SIZE: {
-+            const uint32_t captureSize = *((uint32_t *)p->data + 1);
-+            if (captureSize > VISUALIZER_CAPTURE_SIZE_MAX) {
-+                android_errorWriteLog(0x534e4554, "31781965");
-+                *(int32_t *)pReplyData = -EINVAL;
-+                ALOGW("set mCaptureSize = %u > %u", captureSize, VISUALIZER_CAPTURE_SIZE_MAX);
-+            } else {
-+                pContext->mCaptureSize = captureSize;
-+                ALOGV("set mCaptureSize = %u", captureSize);
-+            }
-+            } break;
-         case VISUALIZER_PARAM_SCALING_MODE:
-             pContext->mScalingMode = *((uint32_t *)p->data + 1);
-             ALOGV("set mScalingMode = %" PRIu32, pContext->mScalingMode);
-             break;
--        case VISUALIZER_PARAM_LATENCY:
--            pContext->mLatency = *((uint32_t *)p->data + 1);
--            ALOGV("set mLatency = %" PRIu32, pContext->mLatency);
--            break;
-+        case VISUALIZER_PARAM_LATENCY: {
-+            uint32_t latency = *((uint32_t *)p->data + 1);
-+            if (latency > MAX_LATENCY_MS) {
-+                latency = MAX_LATENCY_MS; // clamp latency b/31781965
-+            }
-+            pContext->mLatency = latency;
-+            ALOGV("set mLatency = %u", latency);
-+            } break;
-         case VISUALIZER_PARAM_MEASUREMENT_MODE:
-             pContext->mMeasurementMode = *((uint32_t *)p->data + 1);
-             ALOGV("set mMeasurementMode = %" PRIu32, pContext->mMeasurementMode);
-@@ -571,10 +584,18 @@ int Visualizer_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
-                 if (latencyMs < 0) {
-                     latencyMs = 0;
-                 }
--                const uint32_t deltaSmpl =
--                    pContext->mConfig.inputCfg.samplingRate * latencyMs / 1000;
--                int32_t capturePoint = pContext->mCaptureIdx - captureSize - deltaSmpl;
-+                uint32_t deltaSmpl = captureSize
-+                        + pContext->mConfig.inputCfg.samplingRate * latencyMs / 1000;
-+
-+                // large sample rate, latency, or capture size, could cause overflow.
-+                // do not offset more than the size of buffer.
-+                if (deltaSmpl > CAPTURE_BUF_SIZE) {
-+                    android_errorWriteLog(0x534e4554, "31781965");
-+                    deltaSmpl = CAPTURE_BUF_SIZE;
-+                }
- 
-+                int32_t capturePoint = pContext->mCaptureIdx - deltaSmpl;
-+                // a negative capturePoint means we wrap the buffer.
-                 if (capturePoint < 0) {
-                     uint32_t size = -capturePoint;
-                     if (size > captureSize) {
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
 index 37fd5a5..77a2a39 100644
 --- a/media/libstagefright/ACodec.cpp
@@ -417,43 +268,6 @@ index 15ff569..0e9b4e6 100644
  
      (*buffer)->setObserver(this);
      (*buffer)->add_ref();
-diff --git a/media/libstagefright/VBRISeeker.cpp b/media/libstagefright/VBRISeeker.cpp
-index 58f2c60..5b8f23a 100644
---- a/media/libstagefright/VBRISeeker.cpp
-+++ b/media/libstagefright/VBRISeeker.cpp
-@@ -83,8 +83,23 @@ sp<VBRISeeker> VBRISeeker::CreateFromSource(
-          scale,
-          entrySize);
- 
-+    if (entrySize > 4) {
-+        ALOGE("invalid VBRI entry size: %zu", entrySize);
-+        return NULL;
-+    }
-+
-+    sp<VBRISeeker> seeker = new (std::nothrow) VBRISeeker;
-+    if (seeker == NULL) {
-+        ALOGW("Couldn't allocate VBRISeeker");
-+        return NULL;
-+    }
-+
-     size_t totalEntrySize = numEntries * entrySize;
--    uint8_t *buffer = new uint8_t[totalEntrySize];
-+    uint8_t *buffer = new (std::nothrow) uint8_t[totalEntrySize];
-+    if (!buffer) {
-+        ALOGW("Couldn't allocate %zu bytes", totalEntrySize);
-+        return NULL;
-+    }
- 
-     n = source->readAt(pos + sizeof(vbriHeader), buffer, totalEntrySize);
-     if (n < (ssize_t)totalEntrySize) {
-@@ -94,7 +109,6 @@ sp<VBRISeeker> VBRISeeker::CreateFromSource(
-         return NULL;
-     }
- 
--    sp<VBRISeeker> seeker = new VBRISeeker;
-     seeker->mBasePos = post_id3_pos + frameSize;
-     // only update mDurationUs if the calculated duration is valid (non zero)
-     // otherwise, leave duration at -1 so that getDuration() and getOffsetForTime()
 diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
 index 54f768a..1334f93 100644
 --- a/media/libstagefright/foundation/MediaBufferGroup.cpp
@@ -475,111 +289,6 @@ index 54f768a..1334f93 100644
  void MediaBufferGroup::signalBufferReturned(MediaBuffer *) {
      mCondition.signal();
  }
-diff --git a/media/libstagefright/id3/ID3.cpp b/media/libstagefright/id3/ID3.cpp
-index 3942158..33f79fd 100644
---- a/media/libstagefright/id3/ID3.cpp
-+++ b/media/libstagefright/id3/ID3.cpp
-@@ -836,20 +836,21 @@ void ID3::Iterator::findFrame() {
-     }
- }
- 
--static size_t StringSize(const uint8_t *start, uint8_t encoding) {
-+// return includes terminator;  if unterminated, returns > limit
-+static size_t StringSize(const uint8_t *start, size_t limit, uint8_t encoding) {
-+
-     if (encoding == 0x00 || encoding == 0x03) {
-         // ISO 8859-1 or UTF-8
--        return strlen((const char *)start) + 1;
-+        return strnlen((const char *)start, limit) + 1;
-     }
- 
-     // UCS-2
-     size_t n = 0;
--    while (start[n] != '\0' || start[n + 1] != '\0') {
-+    while ((n+1 < limit) && (start[n] != '\0' || start[n + 1] != '\0')) {
-         n += 2;
-     }
--
--    // Add size of null termination.
--    return n + 2;
-+    n += 2;
-+    return n;
- }
- 
- const void *
-@@ -870,11 +871,19 @@ ID3::getAlbumArt(size_t *length, String8 *mime) const {
- 
-         if (mVersion == ID3_V2_3 || mVersion == ID3_V2_4) {
-             uint8_t encoding = data[0];
--            mime->setTo((const char *)&data[1]);
--            size_t mimeLen = strlen((const char *)&data[1]) + 1;
-+            size_t consumed = 1;
-+
-+            // *always* in an 8-bit encoding
-+            size_t mimeLen = StringSize(&data[consumed], size - consumed, 0x00);
-+            if (mimeLen > size - consumed) {
-+                ALOGW("bogus album art size: mime");
-+                return NULL;
-+            }
-+            mime->setTo((const char *)&data[consumed]);
-+            consumed += mimeLen;
- 
- #if 0
--            uint8_t picType = data[1 + mimeLen];
-+            uint8_t picType = data[consumed];
-             if (picType != 0x03) {
-                 // Front Cover Art
-                 it.next();
-@@ -882,20 +891,30 @@ ID3::getAlbumArt(size_t *length, String8 *mime) const {
-             }
- #endif
- 
--            size_t descLen = StringSize(&data[2 + mimeLen], encoding);
-+            consumed++;
-+            if (consumed >= size) {
-+                ALOGW("bogus album art size: pic type");
-+                return NULL;
-+            }
-+
-+            size_t descLen = StringSize(&data[consumed], size - consumed, encoding);
-+            consumed += descLen;
- 
--            if (size < 2 ||
--                    size - 2 < mimeLen ||
--                    size - 2 - mimeLen < descLen) {
--                ALOGW("bogus album art sizes");
-+            if (consumed >= size) {
-+                ALOGW("bogus album art size: description");
-                 return NULL;
-             }
--            *length = size - 2 - mimeLen - descLen;
- 
--            return &data[2 + mimeLen + descLen];
-+            *length = size - consumed;
-+
-+            return &data[consumed];
-         } else {
-             uint8_t encoding = data[0];
- 
-+            if (size <= 5) {
-+                return NULL;
-+            }
-+
-             if (!memcmp(&data[1], "PNG", 3)) {
-                 mime->setTo("image/png");
-             } else if (!memcmp(&data[1], "JPG", 3)) {
-@@ -915,7 +934,10 @@ ID3::getAlbumArt(size_t *length, String8 *mime) const {
-             }
- #endif
- 
--            size_t descLen = StringSize(&data[5], encoding);
-+            size_t descLen = StringSize(&data[5], size - 5, encoding);
-+            if (descLen > size - 5) {
-+                return NULL;
-+            }
- 
-             *length = size - 5 - descLen;
- 
 diff --git a/media/libstagefright/omx/Android.mk b/media/libstagefright/omx/Android.mk
 index e4fbd81..8fc788f 100644
 --- a/media/libstagefright/omx/Android.mk
@@ -623,7 +332,7 @@ index 6132a2c..7f0d270 100644
  
  void OMXMaster::addPlugin(const char *libname) {
 diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
-index 5f903a9..2fa9989 100644
+index 43a50ae..2fa9989 100644
 --- a/media/libstagefright/omx/OMXNodeInstance.cpp
 +++ b/media/libstagefright/omx/OMXNodeInstance.cpp
 @@ -795,7 +795,11 @@ status_t OMXNodeInstance::useBuffer(
@@ -638,21 +347,7 @@ index 5f903a9..2fa9989 100644
      OMX_U8 *data = static_cast<OMX_U8 *>(params->pointer());
      // allocate backup buffer
      if (useBackup) {
-@@ -805,13 +809,6 @@ status_t OMXNodeInstance::useBuffer(
-         }
-         memset(data, 0, allottedSize);
- 
--        // if we are not connecting the buffers, the sizes must match
--        if (allottedSize != params->size()) {
--            CLOG_ERROR(useBuffer, BAD_VALUE, SIMPLE_BUFFER(portIndex, (size_t)allottedSize, data));
--            delete[] data;
--            return BAD_VALUE;
--        }
--
-         buffer_meta = new BufferMeta(
-                 params, portIndex, false /* copyToOmx */, false /* copyFromOmx */, data);
-     } else {
-@@ -1286,7 +1283,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
+@@ -1279,7 +1283,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
      }
  
      // metadata buffers are not connected cross process; only copy if not meta
@@ -664,7 +359,7 @@ index 5f903a9..2fa9989 100644
  
      BufferMeta *buffer_meta = new BufferMeta(
              params, portIndex,
-@@ -1404,10 +1405,30 @@ status_t OMXNodeInstance::emptyBuffer(
+@@ -1397,10 +1405,30 @@ status_t OMXNodeInstance::emptyBuffer(
      BufferMeta *buffer_meta =
          static_cast<BufferMeta *>(header->pAppPrivate);
  
@@ -746,24 +441,6 @@ index 1785a03..d5499f0 100644
          ALOGE("openRecord() permission denied: recording not allowed");
          lStatus = PERMISSION_DENIED;
          goto Exit;
-diff --git a/services/audioflinger/Effects.cpp b/services/audioflinger/Effects.cpp
-index 9711f2d..bb3067f 100644
---- a/services/audioflinger/Effects.cpp
-+++ b/services/audioflinger/Effects.cpp
-@@ -600,6 +600,13 @@ status_t AudioFlinger::EffectModule::command(uint32_t cmdCode,
-         android_errorWriteLog(0x534e4554, "29251553");
-         return -EINVAL;
-     }
-+    if (cmdCode == EFFECT_CMD_GET_PARAM &&
-+            (sizeof(effect_param_t) > cmdSize ||
-+                    ((effect_param_t *)pCmdData)->psize > cmdSize
-+                                                          - sizeof(effect_param_t))) {
-+        android_errorWriteLog(0x534e4554, "32438594");
-+        return -EINVAL;
-+    }
-     if ((cmdCode == EFFECT_CMD_SET_PARAM
-             || cmdCode == EFFECT_CMD_SET_PARAM_DEFERRED) &&  // DEFERRED not generally used
-         (sizeof(effect_param_t) > cmdSize
 diff --git a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp b/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
 index c9b3abc..57d26e6 100644
 --- a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
