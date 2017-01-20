@@ -13,7 +13,7 @@ index a612f83..921eb32 100644
  
 diff --git a/core/tasks/kernel.mk b/core/tasks/kernel.mk
 new file mode 100644
-index 0000000..9c12bc0
+index 0000000..ee76dc2
 --- /dev/null
 +++ b/core/tasks/kernel.mk
 @@ -0,0 +1,196 @@
@@ -158,10 +158,10 @@ index 0000000..9c12bc0
 +        ifeq ($(HOST_OS),darwin)
 +            ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/darwin-x86/arm/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/arm-eabi-"
 +        else
-+            ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/linux-x86/arm/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/arm-linux-androidkernel-"
++            ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/linux-x86/arm/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/arm-eabi-"
 +        endif
 +    else
-+        ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ARM_EABI_TOOLCHAIN)/arm-linux-androidkernel-"
++        ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ARM_EABI_TOOLCHAIN)/arm-eabi-"
 +    endif
 +    ccache = 
 +endif

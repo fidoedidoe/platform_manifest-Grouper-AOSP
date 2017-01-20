@@ -204,6 +204,21 @@ index 893da89..0bc6847 100644
      // Output buffers will contain metadata if camera sends us buffer in metadata mode or via
      // buffer queue.
      switch (mVideoBufferMode) {
+diff --git a/media/libstagefright/MediaSource.cpp b/media/libstagefright/MediaSource.cpp
+index a17757a..f1ad5c5 100644
+--- a/media/libstagefright/MediaSource.cpp
++++ b/media/libstagefright/MediaSource.cpp
+@@ -22,4 +22,10 @@ MediaSource::MediaSource() {}
+ 
+ MediaSource::~MediaSource() {}
+ 
++extern "C" {
++bool _ZNK7android11MediaSource11ReadOptions9getSeekToEPxPNS1_8SeekModeE(android::IMediaSource::ReadOptions *readOptions, int64_t *time_us, android::IMediaSource::ReadOptions::SeekMode *mode) {
++    bool res = readOptions->getSeekTo(time_us, mode);
++    return res;
++}
++}
+ }  // namespace android
 diff --git a/media/libstagefright/SurfaceMediaSource.cpp b/media/libstagefright/SurfaceMediaSource.cpp
 index 15ff569..0e9b4e6 100644
 --- a/media/libstagefright/SurfaceMediaSource.cpp
@@ -269,10 +284,22 @@ index 15ff569..0e9b4e6 100644
      (*buffer)->setObserver(this);
      (*buffer)->add_ref();
 diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
-index 54f768a..1334f93 100644
+index 54f768a..8200bf1 100644
 --- a/media/libstagefright/foundation/MediaBufferGroup.cpp
 +++ b/media/libstagefright/foundation/MediaBufferGroup.cpp
-@@ -179,6 +179,16 @@ status_t MediaBufferGroup::acquire_buffer(
+@@ -99,6 +99,11 @@ MediaBufferGroup::~MediaBufferGroup() {
+     }
+ }
+ 
++extern "C" int _ZN7android16MediaBufferGroupC1Ej(unsigned int);
++extern "C" int _ZN7android16MediaBufferGroupC1Ev() {
++    return _ZN7android16MediaBufferGroupC1Ej(0);
++}
++
+ void MediaBufferGroup::add_buffer(MediaBuffer *buffer) {
+     Mutex::Autolock autoLock(mLock);
+ 
+@@ -179,6 +184,16 @@ status_t MediaBufferGroup::acquire_buffer(
      // Never gets here.
  }
  
