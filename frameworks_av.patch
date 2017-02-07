@@ -33,6 +33,29 @@ index 3051406..870bb9b 100644
  
      size_t buffers() const { return mBuffers.size(); }
  
+diff --git a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
+index dc4e5d4..b64d899 100644
+--- a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
++++ b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
+@@ -1534,6 +1534,7 @@ void NuPlayer::restartAudio(
+     mRenderer->flush(true /* audio */, false /* notifyComplete */);
+     if (mVideoDecoder != NULL) {
+         mRenderer->flush(false /* audio */, false /* notifyComplete */);
++        flushDecoder(false /* audio */, false /*needShutdown*/);
+     }
+ 
+     performSeek(currentPositionUs);
+@@ -1545,6 +1546,10 @@ void NuPlayer::restartAudio(
+     if (needsToCreateAudioDecoder) {
+         instantiateDecoder(true /* audio */, &mAudioDecoder, !forceNonOffload);
+     }
++    if (mVideoDecoder != NULL) {
++        // After a flush without shutdown, decoder is paused.
++        mVideoDecoder->signalResume(false /* needNotify */);
++    }
+ }
+ 
+ void NuPlayer::determineAudioModeChange(const sp<AMessage> &audioFormat) {
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
 index 37fd5a5..77a2a39 100644
 --- a/media/libstagefright/ACodec.cpp
@@ -204,6 +227,21 @@ index 893da89..0bc6847 100644
      // Output buffers will contain metadata if camera sends us buffer in metadata mode or via
      // buffer queue.
      switch (mVideoBufferMode) {
+diff --git a/media/libstagefright/MediaCodecList.cpp b/media/libstagefright/MediaCodecList.cpp
+index 0fb5072..a25c47d 100644
+--- a/media/libstagefright/MediaCodecList.cpp
++++ b/media/libstagefright/MediaCodecList.cpp
+@@ -1165,7 +1165,9 @@ void MediaCodecList::findMatchingCodecs(
+         CHECK(info != NULL);
+         AString componentName = info->getCodecName();
+ 
+-        if (!((flags & kHardwareCodecsOnly) && !isSoftwareCodec(componentName))) {
++        if ((flags & kHardwareCodecsOnly) && isSoftwareCodec(componentName)) {
++            ALOGV("skipping SW codec '%s'", componentName.c_str());
++        } else {
+             matches->push(componentName);
+             ALOGV("matching '%s'", componentName.c_str());
+         }
 diff --git a/media/libstagefright/MediaSource.cpp b/media/libstagefright/MediaSource.cpp
 index a17757a..f1ad5c5 100644
 --- a/media/libstagefright/MediaSource.cpp
@@ -219,6 +257,57 @@ index a17757a..f1ad5c5 100644
 +}
 +}
  }  // namespace android
+diff --git a/media/libstagefright/SampleTable.cpp b/media/libstagefright/SampleTable.cpp
+index eb1f193..770681a 100644
+--- a/media/libstagefright/SampleTable.cpp
++++ b/media/libstagefright/SampleTable.cpp
+@@ -567,6 +567,10 @@ status_t SampleTable::setSyncSampleParams(off64_t data_offset, size_t data_size)
+     }
+ 
+     for (size_t i = 0; i < mNumSyncSamples; ++i) {
++        if (mSyncSamples[i] == 0) {
++            ALOGE("b/32423862, unexpected zero value in stss");
++            continue;
++        }
+         mSyncSamples[i] = ntohl(mSyncSamples[i]) - 1;
+     }
+ 
+diff --git a/media/libstagefright/StagefrightMetadataRetriever.cpp b/media/libstagefright/StagefrightMetadataRetriever.cpp
+index be5067d..2fef7ca 100644
+--- a/media/libstagefright/StagefrightMetadataRetriever.cpp
++++ b/media/libstagefright/StagefrightMetadataRetriever.cpp
+@@ -483,6 +483,10 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
+     for (i = 0; i < n; ++i) {
+         sp<MetaData> meta = mExtractor->getTrackMetaData(i);
+ 
++        if (meta == NULL) {
++            continue;
++        }
++
+         const char *mime;
+         CHECK(meta->findCString(kKeyMIMEType, &mime));
+ 
+@@ -652,6 +656,10 @@ void StagefrightMetadataRetriever::parseMetaData() {
+ 
+     size_t numTracks = mExtractor->countTracks();
+ 
++    if (numTracks == 0) {      //If no tracks available, corrupt or not valid stream
++        return;
++    }
++
+     char tmp[32];
+     sprintf(tmp, "%zu", numTracks);
+ 
+@@ -675,6 +683,9 @@ void StagefrightMetadataRetriever::parseMetaData() {
+     String8 timedTextLang;
+     for (size_t i = 0; i < numTracks; ++i) {
+         sp<MetaData> trackMeta = mExtractor->getTrackMetaData(i);
++        if (trackMeta == NULL) {
++            continue;
++        }
+ 
+         int64_t durationUs;
+         if (trackMeta->findInt64(kKeyDuration, &durationUs)) {
 diff --git a/media/libstagefright/SurfaceMediaSource.cpp b/media/libstagefright/SurfaceMediaSource.cpp
 index 15ff569..0e9b4e6 100644
 --- a/media/libstagefright/SurfaceMediaSource.cpp
@@ -316,6 +405,22 @@ index 54f768a..8200bf1 100644
  void MediaBufferGroup::signalBufferReturned(MediaBuffer *) {
      mCondition.signal();
  }
+diff --git a/media/libstagefright/httplive/LiveSession.cpp b/media/libstagefright/httplive/LiveSession.cpp
+index 7abc019..590146d 100644
+--- a/media/libstagefright/httplive/LiveSession.cpp
++++ b/media/libstagefright/httplive/LiveSession.cpp
+@@ -157,6 +157,11 @@ bool LiveSession::BandwidthEstimator::estimateBandwidth(
+     }
+ 
+     *bandwidthBps = ((double)mTotalTransferBytes * 8E6 / mTotalTransferTimeUs);
++    static const int32_t kMaxBandwidthBps = 0x7fffffff / 7;
++    if (*bandwidthBps > kMaxBandwidthBps) {
++        ALOGW("Override bandwidth because it's too huge. %d -> %d", *bandwidthBps, kMaxBandwidthBps);
++        *bandwidthBps = kMaxBandwidthBps;
++    }
+     mPrevEstimates.push_back(*bandwidthBps);
+     while (mPrevEstimates.size() > 3) {
+         mPrevEstimates.erase(mPrevEstimates.begin());
 diff --git a/media/libstagefright/omx/Android.mk b/media/libstagefright/omx/Android.mk
 index e4fbd81..8fc788f 100644
 --- a/media/libstagefright/omx/Android.mk
@@ -497,10 +602,22 @@ index 8d7f71c..d98ad47 100644
  
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
-index d0df6d1..a0c74d8 100644
+index d0df6d1..0083738 100644
 --- a/services/camera/libcameraservice/CameraService.cpp
 +++ b/services/camera/libcameraservice/CameraService.cpp
-@@ -831,7 +831,11 @@ String8 CameraService::toString(std::set<userid_t> intSet) {
+@@ -273,7 +273,10 @@ void CameraService::onFirstRef()
+ 
+ sp<ICameraServiceProxy> CameraService::getCameraServiceProxy() {
+     sp<IServiceManager> sm = defaultServiceManager();
+-    sp<IBinder> binder = sm->getService(String16("media.camera.proxy"));
++    // Use checkService because cameraserver normally starts before the
++    // system server and the proxy service. So the long timeout that getService
++    // has before giving up is inappropriate.
++    sp<IBinder> binder = sm->checkService(String16("media.camera.proxy"));
+     if (binder == nullptr) {
+         return nullptr;
+     }
+@@ -831,7 +834,11 @@ String8 CameraService::toString(std::set<userid_t> intSet) {
  Status CameraService::initializeShimMetadata(int cameraId) {
      int uid = getCallingUid();
  
@@ -512,7 +629,7 @@ index d0df6d1..a0c74d8 100644
      String8 id = String8::format("%d", cameraId);
      Status ret = Status::ok();
      sp<Client> tmp = nullptr;
-@@ -912,7 +916,9 @@ Status CameraService::getLegacyParametersLazy(int cameraId,
+@@ -912,7 +919,9 @@ Status CameraService::getLegacyParametersLazy(int cameraId,
  static bool isTrustedCallingUid(uid_t uid) {
      switch (uid) {
          case AID_MEDIA:        // mediaserver

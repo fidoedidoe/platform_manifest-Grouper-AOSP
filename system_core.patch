@@ -182,10 +182,10 @@ index 84da2b9..dc3be38 100644
      am.QueueBuiltinAction(console_init_action, "console_init");
  
 diff --git a/rootdir/init.rc b/rootdir/init.rc
-index a9b6af0..7a5c9b3 100644
+index a22d5c1..90d4ae0 100644
 --- a/rootdir/init.rc
 +++ b/rootdir/init.rc
-@@ -668,6 +668,6 @@ on property:ro.debuggable=1
+@@ -664,6 +664,6 @@ on property:ro.debuggable=1
      chmod 0773 /data/misc/trace
      start console
  
