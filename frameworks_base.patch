@@ -229,7 +229,7 @@ index 5f59e32..23172a2 100644
                  // this request
                  if (VDBG) {
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index bc9d58e..d2dc0d0 100644
+index bc9d58e..9ed5af9 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
 @@ -9590,7 +9590,7 @@ public final class ActivityManagerService extends ActivityManagerNative
@@ -241,7 +241,15 @@ index bc9d58e..d2dc0d0 100644
                  pr.kill("remove task", true);
              } else {
                  // We delay killing processes that are not in the background or running a receiver.
-@@ -19204,26 +19204,28 @@ public final class ActivityManagerService extends ActivityManagerNative
+@@ -16933,6 +16933,7 @@ public final class ActivityManagerService extends ActivityManagerNative
+ 
+         app.crashing = false;
+         app.notResponding = false;
++        app.renderThreadTid = 0;
+ 
+         app.resetPackageList(mProcessStats);
+         app.unlinkDeathRecipient();
+@@ -19204,26 +19205,28 @@ public final class ActivityManagerService extends ActivityManagerNative
      // LIFETIME MANAGEMENT
      // =========================================================
  
@@ -284,7 +292,7 @@ index bc9d58e..d2dc0d0 100644
      }
  
      Association startAssociationLocked(int sourceUid, String sourceProcess, int sourceState,
-@@ -19390,7 +19392,7 @@ public final class ActivityManagerService extends ActivityManagerNative
+@@ -19390,7 +19393,7 @@ public final class ActivityManagerService extends ActivityManagerNative
          int schedGroup;
          int procState;
          boolean foregroundActivities = false;
@@ -293,7 +301,7 @@ index bc9d58e..d2dc0d0 100644
          if (app == TOP_APP) {
              // The last app on the list is the foreground app.
              adj = ProcessList.FOREGROUND_APP_ADJ;
-@@ -19404,13 +19406,13 @@ public final class ActivityManagerService extends ActivityManagerNative
+@@ -19404,13 +19407,13 @@ public final class ActivityManagerService extends ActivityManagerNative
              schedGroup = ProcessList.SCHED_GROUP_DEFAULT;
              app.adjType = "instrumentation";
              procState = ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE;
@@ -309,7 +317,7 @@ index bc9d58e..d2dc0d0 100644
                      ? ProcessList.SCHED_GROUP_DEFAULT : ProcessList.SCHED_GROUP_BACKGROUND;
              app.adjType = "broadcast";
              procState = ActivityManager.PROCESS_STATE_RECEIVER;
-@@ -20421,7 +20423,7 @@ public final class ActivityManagerService extends ActivityManagerNative
+@@ -20421,7 +20424,7 @@ public final class ActivityManagerService extends ActivityManagerNative
              if (DEBUG_SWITCH || DEBUG_OOM_ADJ) Slog.v(TAG_OOM_ADJ,
                      "Setting sched group of " + app.processName
                      + " to " + app.curSchedGroup);
@@ -318,7 +326,7 @@ index bc9d58e..d2dc0d0 100644
                      && app.setSchedGroup == ProcessList.SCHED_GROUP_BACKGROUND) {
                  app.kill(app.waitingToKill, true);
                  success = false;
-@@ -21361,7 +21363,7 @@ public final class ActivityManagerService extends ActivityManagerNative
+@@ -21361,7 +21364,7 @@ public final class ActivityManagerService extends ActivityManagerNative
              for (i=mRemovedProcesses.size()-1; i>=0; i--) {
                  final ProcessRecord app = mRemovedProcesses.get(i);
                  if (app.activities.size() == 0

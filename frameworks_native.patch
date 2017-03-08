@@ -63,6 +63,29 @@ index ddf3aa8..5c04f6c 100644
          return false;
      }
      delete[] src;
+diff --git a/cmds/installd/commands.cpp b/cmds/installd/commands.cpp
+index 271c75b..cadcd1e 100644
+--- a/cmds/installd/commands.cpp
++++ b/cmds/installd/commands.cpp
+@@ -238,11 +238,15 @@ int migrate_app_data(const char *uuid, const char *pkgname, userid_t userid, int
+     auto ce_path = create_data_user_ce_package_path(uuid, userid, pkgname);
+     auto de_path = create_data_user_de_package_path(uuid, userid, pkgname);
+ 
+-    // If neither directory is marked as default, assume CE is default
++    // If neither directory is marked as default, use DE if requested by
++    // the app (and it exists), otherwise assume CE.
+     if (getxattr(ce_path.c_str(), kXattrDefault, nullptr, 0) == -1
+             && getxattr(de_path.c_str(), kXattrDefault, nullptr, 0) == -1) {
+-        if (setxattr(ce_path.c_str(), kXattrDefault, nullptr, 0, 0) != 0) {
+-            PLOG(ERROR) << "Failed to mark default storage " << ce_path;
++        struct stat s;
++        const char *data_path = (flags & FLAG_STORAGE_DE) && !stat(de_path.c_str(), &s)
++                ? de_path.c_str() : ce_path.c_str();
++        if (setxattr(data_path, kXattrDefault, nullptr, 0, 0) != 0) {
++            PLOG(ERROR) << "Failed to mark default storage " << data_path;
+             return -1;
+         }
+     }
 diff --git a/include/gui/ISurfaceComposer.h b/include/gui/ISurfaceComposer.h
 index 74a4123..8dc6f6a 100644
 --- a/include/gui/ISurfaceComposer.h
@@ -90,6 +113,114 @@ index 74a4123..8dc6f6a 100644
  
      /* Clears the frame statistics for animations.
       *
+diff --git a/include/ui/FramebufferNativeWindow.h b/include/ui/FramebufferNativeWindow.h
+new file mode 100644
+index 0000000..2eb1cc1
+--- /dev/null
++++ b/include/ui/FramebufferNativeWindow.h
+@@ -0,0 +1,102 @@
++/*
++ * Copyright (C) 2007 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef INCLUDED_FROM_FRAMEBUFFER_NATIVE_WINDOW_CPP
++//#warning "FramebufferNativeWindow is deprecated"
++#endif
++
++#ifndef ANDROID_FRAMEBUFFER_NATIVE_WINDOW_H
++#define ANDROID_FRAMEBUFFER_NATIVE_WINDOW_H
++
++#include <stdint.h>
++#include <sys/types.h>
++
++#include <EGL/egl.h>
++
++#include <utils/threads.h>
++#include <utils/String8.h>
++
++#include <ui/ANativeObjectBase.h>
++#include <ui/Rect.h>
++
++#define MIN_NUM_FRAME_BUFFERS  2
++#define MAX_NUM_FRAME_BUFFERS  3
++
++extern "C" EGLNativeWindowType android_createDisplaySurface(void);
++
++// ---------------------------------------------------------------------------
++namespace android {
++// ---------------------------------------------------------------------------
++
++class Surface;
++class NativeBuffer;
++
++// ---------------------------------------------------------------------------
++
++class FramebufferNativeWindow 
++    : public ANativeObjectBase<
++        ANativeWindow, 
++        FramebufferNativeWindow, 
++        LightRefBase<FramebufferNativeWindow> >
++{
++public:
++    FramebufferNativeWindow(); 
++
++    framebuffer_device_t const * getDevice() const { return fbDev; } 
++
++    bool isUpdateOnDemand() const { return mUpdateOnDemand; }
++    status_t setUpdateRectangle(const Rect& updateRect);
++    status_t compositionComplete();
++
++    void dump(String8& result);
++
++    // for debugging only
++    int getCurrentBufferIndex() const;
++
++private:
++    friend class LightRefBase<FramebufferNativeWindow>;    
++    ~FramebufferNativeWindow(); // this class cannot be overloaded
++    static int setSwapInterval(ANativeWindow* window, int interval);
++    static int dequeueBuffer(ANativeWindow* window, ANativeWindowBuffer** buffer, int* fenceFd);
++    static int queueBuffer(ANativeWindow* window, ANativeWindowBuffer* buffer, int fenceFd);
++    static int query(const ANativeWindow* window, int what, int* value);
++    static int perform(ANativeWindow* window, int operation, ...);
++
++    static int dequeueBuffer_DEPRECATED(ANativeWindow* window, ANativeWindowBuffer** buffer);
++    static int queueBuffer_DEPRECATED(ANativeWindow* window, ANativeWindowBuffer* buffer);
++    static int lockBuffer_DEPRECATED(ANativeWindow* window, ANativeWindowBuffer* buffer);
++
++    framebuffer_device_t* fbDev;
++    alloc_device_t* grDev;
++
++    sp<NativeBuffer> buffers[MAX_NUM_FRAME_BUFFERS];
++    sp<NativeBuffer> front;
++    
++    mutable Mutex mutex;
++    Condition mCondition;
++    int32_t mNumBuffers;
++    int32_t mNumFreeBuffers;
++    int32_t mBufferHead;
++    int32_t mCurrentBufferIndex;
++    bool mUpdateOnDemand;
++};
++    
++// ---------------------------------------------------------------------------
++}; // namespace android
++// ---------------------------------------------------------------------------
++
++#endif // ANDROID_FRAMEBUFFER_NATIVE_WINDOW_H
++
 diff --git a/libs/binder/IPCThreadState.cpp b/libs/binder/IPCThreadState.cpp
 index d90798f..9b5f0d7 100644
 --- a/libs/binder/IPCThreadState.cpp
@@ -171,6 +302,452 @@ index f0b0ada..3577a33 100644
              reply->writeInt32(res);
              return NO_ERROR;
          }
+diff --git a/libs/gui/Surface.cpp b/libs/gui/Surface.cpp
+index 0838290..0bb142b 100644
+--- a/libs/gui/Surface.cpp
++++ b/libs/gui/Surface.cpp
+@@ -1260,6 +1260,7 @@ status_t Surface::lock(
+         }
+ 
+         // figure out if we can copy the frontbuffer back
++        int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
+         const sp<GraphicBuffer>& frontBuffer(mPostedBuffer);
+         const bool canCopyBack = (frontBuffer != 0 &&
+                 backBuffer->width  == frontBuffer->width &&
+@@ -1267,15 +1268,23 @@ status_t Surface::lock(
+                 backBuffer->format == frontBuffer->format);
+ 
+         if (canCopyBack) {
+-            // copy the area that is invalid and not repainted this round
+-            const Region copyback(mDirtyRegion.subtract(newDirtyRegion));
++            Mutex::Autolock lock(mMutex);
++            Region oldDirtyRegion;
++            if(mSlots[backBufferSlot].dirtyRegion.isEmpty()) {
++                oldDirtyRegion.set(bounds);
++            } else {
++                for(int i = 0 ; i < NUM_BUFFER_SLOTS; i++ ) {
++                    if(i != backBufferSlot && !mSlots[i].dirtyRegion.isEmpty())
++                        oldDirtyRegion.orSelf(mSlots[i].dirtyRegion);
++                }
++            }
++            const Region copyback(oldDirtyRegion.subtract(newDirtyRegion));
+             if (!copyback.isEmpty())
+                 copyBlt(backBuffer, frontBuffer, copyback);
+         } else {
+             // if we can't copy-back anything, modify the user's dirty
+             // region to make sure they redraw the whole buffer
+             newDirtyRegion.set(bounds);
+-            mDirtyRegion.clear();
+             Mutex::Autolock lock(mMutex);
+             for (size_t i=0 ; i<NUM_BUFFER_SLOTS ; i++) {
+                 mSlots[i].dirtyRegion.clear();
+@@ -1285,15 +1294,9 @@ status_t Surface::lock(
+ 
+         { // scope for the lock
+             Mutex::Autolock lock(mMutex);
+-            int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
+-            if (backBufferSlot >= 0) {
+-                Region& dirtyRegion(mSlots[backBufferSlot].dirtyRegion);
+-                mDirtyRegion.subtract(dirtyRegion);
+-                dirtyRegion = newDirtyRegion;
+-            }
++            mSlots[backBufferSlot].dirtyRegion = newDirtyRegion;
+         }
+ 
+-        mDirtyRegion.orSelf(newDirtyRegion);
+         if (inOutDirtyBounds) {
+             *inOutDirtyBounds = newDirtyRegion.getBounds();
+         }
+diff --git a/libs/ui/Android.mk b/libs/ui/Android.mk
+index e690ede..3927031 100644
+--- a/libs/ui/Android.mk
++++ b/libs/ui/Android.mk
+@@ -36,6 +36,7 @@ LOCAL_CPPFLAGS += -Wno-padded
+ 
+ LOCAL_SRC_FILES := \
+ 	Fence.cpp \
++        FramebufferNativeWindow.cpp \
+ 	FrameStats.cpp \
+ 	Gralloc1.cpp \
+ 	Gralloc1On0Adapter.cpp \
+diff --git a/libs/ui/FramebufferNativeWindow.cpp b/libs/ui/FramebufferNativeWindow.cpp
+new file mode 100644
+index 0000000..3ead25c
+--- /dev/null
++++ b/libs/ui/FramebufferNativeWindow.cpp
+@@ -0,0 +1,372 @@
++/*
++**
++** Copyright 2007 The Android Open Source Project
++**
++** Licensed under the Apache License Version 2.0(the "License");
++** you may not use this file except in compliance with the License.
++** You may obtain a copy of the License at
++**
++**     http://www.apache.org/licenses/LICENSE-2.0
++**
++** Unless required by applicable law or agreed to in writing software
++** distributed under the License is distributed on an "AS IS" BASIS
++** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND either express or implied.
++** See the License for the specific language governing permissions and
++** limitations under the License.
++*/
++
++#define LOG_TAG "FramebufferNativeWindow"
++
++#include <stdlib.h>
++#include <stdio.h>
++#include <string.h>
++#include <errno.h>
++
++#include <cutils/log.h>
++#include <cutils/atomic.h>
++#include <utils/threads.h>
++#include <utils/RefBase.h>
++
++#include <ui/ANativeObjectBase.h>
++#include <ui/Fence.h>
++#define INCLUDED_FROM_FRAMEBUFFER_NATIVE_WINDOW_CPP
++#include <ui/FramebufferNativeWindow.h>
++#undef INCLUDED_FROM_FRAMEBUFFER_NATIVE_WINDOW_CPP
++#include <ui/Rect.h>
++
++#include <EGL/egl.h>
++
++#include <hardware/hardware.h>
++#include <hardware/gralloc.h>
++
++// ----------------------------------------------------------------------------
++namespace android {
++// ----------------------------------------------------------------------------
++
++class NativeBuffer final
++    : public ANativeObjectBase<
++        ANativeWindowBuffer,
++        NativeBuffer,
++        LightRefBase<NativeBuffer>>
++{
++public:
++    NativeBuffer(int w, int h, int f, int u) : BASE() {
++        ANativeWindowBuffer::width  = w;
++        ANativeWindowBuffer::height = h;
++        ANativeWindowBuffer::format = f;
++        ANativeWindowBuffer::usage  = u;
++    }
++private:
++    friend class LightRefBase<NativeBuffer>;
++};
++
++
++/*
++ * This implements the (main) framebuffer management. This class is used
++ * mostly by SurfaceFlinger, but also by command line GL application.
++ *
++ * In fact this is an implementation of ANativeWindow on top of
++ * the framebuffer.
++ *
++ * Currently it is pretty simple, it manages only two buffers (the front and
++ * back buffer).
++ *
++ */
++
++FramebufferNativeWindow::FramebufferNativeWindow()
++    : BASE(), fbDev(0), grDev(0), mUpdateOnDemand(false)
++{
++    hw_module_t const* module;
++    if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) == 0) {
++        int err;
++        int i;
++        err = framebuffer_open(module, &fbDev);
++        ALOGE_IF(err, "couldn't open framebuffer HAL (%s)", strerror(-err));
++
++        err = gralloc_open(module, &grDev);
++        ALOGE_IF(err, "couldn't open gralloc HAL (%s)", strerror(-err));
++
++        // bail out if we can't initialize the modules
++        if (!fbDev || !grDev)
++            return;
++
++        mUpdateOnDemand = (fbDev->setUpdateRect != 0);
++
++        // initialize the buffer FIFO
++        if(fbDev->numFramebuffers >= MIN_NUM_FRAME_BUFFERS &&
++           fbDev->numFramebuffers <= MAX_NUM_FRAME_BUFFERS){
++            mNumBuffers = fbDev->numFramebuffers;
++        } else {
++            mNumBuffers = MIN_NUM_FRAME_BUFFERS;
++        }
++        mNumFreeBuffers = mNumBuffers;
++        mBufferHead = mNumBuffers-1;
++
++        /*
++         * This does not actually change the framebuffer format. It merely
++         * fakes this format to surfaceflinger so that when it creates
++         * framebuffer surfaces it will use this format. It's really a giant
++         * HACK to allow interworking with buggy gralloc+GPU driver
++         * implementations. You should *NEVER* need to set this for shipping
++         * devices.
++         */
++#ifdef FRAMEBUFFER_FORCE_FORMAT
++        *((uint32_t *)&fbDev->format) = FRAMEBUFFER_FORCE_FORMAT;
++#endif
++
++        for (i = 0; i < mNumBuffers; i++) {
++            buffers[i] = new NativeBuffer(
++                    static_cast<int>(fbDev->width),
++                    static_cast<int>(fbDev->height),
++                    fbDev->format, GRALLOC_USAGE_HW_FB);
++        }
++
++        for (i = 0; i < mNumBuffers; i++) {
++            err = grDev->alloc(grDev,
++                    static_cast<int>(fbDev->width),
++                    static_cast<int>(fbDev->height),
++                    fbDev->format, GRALLOC_USAGE_HW_FB,
++                    &buffers[i]->handle, &buffers[i]->stride);
++
++            ALOGE_IF(err, "fb buffer %d allocation failed w=%d, h=%d, err=%s",
++                    i, fbDev->width, fbDev->height, strerror(-err));
++
++            if (err) {
++                mNumBuffers = i;
++                mNumFreeBuffers = i;
++                mBufferHead = mNumBuffers-1;
++                break;
++            }
++        }
++
++        const_cast<uint32_t&>(ANativeWindow::flags) = fbDev->flags;
++        const_cast<float&>(ANativeWindow::xdpi) = fbDev->xdpi;
++        const_cast<float&>(ANativeWindow::ydpi) = fbDev->ydpi;
++        const_cast<int&>(ANativeWindow::minSwapInterval) =
++            fbDev->minSwapInterval;
++        const_cast<int&>(ANativeWindow::maxSwapInterval) =
++            fbDev->maxSwapInterval;
++    } else {
++        ALOGE("Couldn't get gralloc module");
++    }
++
++    ANativeWindow::setSwapInterval = setSwapInterval;
++    ANativeWindow::dequeueBuffer = dequeueBuffer;
++    ANativeWindow::queueBuffer = queueBuffer;
++    ANativeWindow::query = query;
++    ANativeWindow::perform = perform;
++
++    ANativeWindow::dequeueBuffer_DEPRECATED = dequeueBuffer_DEPRECATED;
++    ANativeWindow::lockBuffer_DEPRECATED = lockBuffer_DEPRECATED;
++    ANativeWindow::queueBuffer_DEPRECATED = queueBuffer_DEPRECATED;
++}
++
++FramebufferNativeWindow::~FramebufferNativeWindow()
++{
++    if (grDev) {
++        for(int i = 0; i < mNumBuffers; i++) {
++            if (buffers[i] != NULL) {
++                grDev->free(grDev, buffers[i]->handle);
++            }
++        }
++        gralloc_close(grDev);
++    }
++
++    if (fbDev) {
++        framebuffer_close(fbDev);
++    }
++}
++
++status_t FramebufferNativeWindow::setUpdateRectangle(const Rect& r)
++{
++    if (!mUpdateOnDemand) {
++        return INVALID_OPERATION;
++    }
++    return fbDev->setUpdateRect(fbDev, r.left, r.top, r.width(), r.height());
++}
++
++status_t FramebufferNativeWindow::compositionComplete()
++{
++    if (fbDev->compositionComplete) {
++        return fbDev->compositionComplete(fbDev);
++    }
++    return INVALID_OPERATION;
++}
++
++int FramebufferNativeWindow::setSwapInterval(
++        ANativeWindow* window, int interval)
++{
++    framebuffer_device_t* fb = getSelf(window)->fbDev;
++    return fb->setSwapInterval(fb, interval);
++}
++
++void FramebufferNativeWindow::dump(String8& result) {
++    if (fbDev->common.version >= 1 && fbDev->dump) {
++        const size_t SIZE = 4096;
++        char buffer[SIZE];
++
++        fbDev->dump(fbDev, buffer, SIZE);
++        result.append(buffer);
++    }
++}
++
++// only for debugging / logging
++int FramebufferNativeWindow::getCurrentBufferIndex() const
++{
++    Mutex::Autolock _l(mutex);
++    const int index = mCurrentBufferIndex;
++    return index;
++}
++
++int FramebufferNativeWindow::dequeueBuffer_DEPRECATED(ANativeWindow* window,
++        ANativeWindowBuffer** buffer)
++{
++    int fenceFd = -1;
++    int result = dequeueBuffer(window, buffer, &fenceFd);
++    sp<Fence> fence(new Fence(fenceFd));
++    int waitResult = fence->wait(Fence::TIMEOUT_NEVER);
++    if (waitResult != OK) {
++        ALOGE("dequeueBuffer_DEPRECATED: Fence::wait returned an "
++                "error: %d", waitResult);
++        return waitResult;
++    }
++    return result;
++}
++
++int FramebufferNativeWindow::dequeueBuffer(ANativeWindow* window,
++        ANativeWindowBuffer** buffer, int* fenceFd)
++{
++    FramebufferNativeWindow* self = getSelf(window);
++    Mutex::Autolock _l(self->mutex);
++
++    int index = self->mBufferHead++;
++    if (self->mBufferHead >= self->mNumBuffers)
++        self->mBufferHead = 0;
++
++    // wait for a free non-front buffer
++    while (self->mNumFreeBuffers < 2) {
++        self->mCondition.wait(self->mutex);
++    }
++    ALOG_ASSERT(self->buffers[index] != self->front, "");
++
++    // get this buffer
++    self->mNumFreeBuffers--;
++    self->mCurrentBufferIndex = index;
++
++    *buffer = self->buffers[index].get();
++    *fenceFd = -1;
++
++    return 0;
++}
++
++int FramebufferNativeWindow::lockBuffer_DEPRECATED(ANativeWindow* /*window*/,
++        ANativeWindowBuffer* /*buffer*/)
++{
++    return NO_ERROR;
++}
++
++int FramebufferNativeWindow::queueBuffer_DEPRECATED(ANativeWindow* window,
++        ANativeWindowBuffer* buffer)
++{
++    return queueBuffer(window, buffer, -1);
++}
++
++int FramebufferNativeWindow::queueBuffer(ANativeWindow* window,
++        ANativeWindowBuffer* buffer, int fenceFd)
++{
++    FramebufferNativeWindow* self = getSelf(window);
++    Mutex::Autolock _l(self->mutex);
++    framebuffer_device_t* fb = self->fbDev;
++    buffer_handle_t handle = static_cast<NativeBuffer*>(buffer)->handle;
++
++    sp<Fence> fence(new Fence(fenceFd));
++    fence->wait(Fence::TIMEOUT_NEVER);
++
++    int res = fb->post(fb, handle);
++    self->front = static_cast<NativeBuffer*>(buffer);
++    self->mNumFreeBuffers++;
++    self->mCondition.broadcast();
++    return res;
++}
++
++int FramebufferNativeWindow::query(const ANativeWindow* window,
++        int what, int* value)
++{
++    const FramebufferNativeWindow* self = getSelf(window);
++    Mutex::Autolock _l(self->mutex);
++    framebuffer_device_t* fb = self->fbDev;
++    switch (what) {
++        case NATIVE_WINDOW_WIDTH:
++            *value = static_cast<int>(fb->width);
++            return NO_ERROR;
++        case NATIVE_WINDOW_HEIGHT:
++            *value = static_cast<int>(fb->height);
++            return NO_ERROR;
++        case NATIVE_WINDOW_FORMAT:
++            *value = fb->format;
++            return NO_ERROR;
++        case NATIVE_WINDOW_CONCRETE_TYPE:
++            *value = NATIVE_WINDOW_FRAMEBUFFER;
++            return NO_ERROR;
++        case NATIVE_WINDOW_QUEUES_TO_WINDOW_COMPOSER:
++            *value = 0;
++            return NO_ERROR;
++        case NATIVE_WINDOW_DEFAULT_WIDTH:
++            *value = static_cast<int>(fb->width);
++            return NO_ERROR;
++        case NATIVE_WINDOW_DEFAULT_HEIGHT:
++            *value = static_cast<int>(fb->height);
++            return NO_ERROR;
++        case NATIVE_WINDOW_TRANSFORM_HINT:
++            *value = 0;
++            return NO_ERROR;
++    }
++    *value = 0;
++    return BAD_VALUE;
++}
++
++int FramebufferNativeWindow::perform(ANativeWindow* /*window*/,
++        int operation, ...)
++{
++    switch (operation) {
++        case NATIVE_WINDOW_CONNECT:
++        case NATIVE_WINDOW_DISCONNECT:
++        case NATIVE_WINDOW_SET_USAGE:
++        case NATIVE_WINDOW_SET_BUFFERS_GEOMETRY:
++        case NATIVE_WINDOW_SET_BUFFERS_DIMENSIONS:
++        case NATIVE_WINDOW_SET_BUFFERS_FORMAT:
++        case NATIVE_WINDOW_SET_BUFFERS_TRANSFORM:
++        case NATIVE_WINDOW_API_CONNECT:
++        case NATIVE_WINDOW_API_DISCONNECT:
++            // TODO: we should implement these
++            return NO_ERROR;
++
++        case NATIVE_WINDOW_LOCK:
++        case NATIVE_WINDOW_UNLOCK_AND_POST:
++        case NATIVE_WINDOW_SET_CROP:
++        case NATIVE_WINDOW_SET_BUFFER_COUNT:
++        case NATIVE_WINDOW_SET_BUFFERS_TIMESTAMP:
++        case NATIVE_WINDOW_SET_SCALING_MODE:
++            return INVALID_OPERATION;
++    }
++    return NAME_NOT_FOUND;
++}
++
++// ----------------------------------------------------------------------------
++}; // namespace android
++// ----------------------------------------------------------------------------
++
++using android::sp;
++using android::FramebufferNativeWindow;
++
++EGLNativeWindowType android_createDisplaySurface(void)
++{
++    FramebufferNativeWindow* w;
++    w = new FramebufferNativeWindow();
++    if (w->getDevice() == NULL) {
++        // get a ref so it can be destroyed when we exit this block
++        sp<FramebufferNativeWindow> ref(w);
++        return NULL;
++    }
++    return static_cast<EGLNativeWindowType>(w);
++}
 diff --git a/libs/ui/Gralloc1On0Adapter.cpp b/libs/ui/Gralloc1On0Adapter.cpp
 index d5b88de..ec7df31 100644
 --- a/libs/ui/Gralloc1On0Adapter.cpp
@@ -433,6 +1010,19 @@ index ffda035..cb292ef 100644
  ifeq ($(TARGET_BOARD_PLATFORM),omap4)
      LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
  endif
+diff --git a/services/surfaceflinger/DisplayDevice.cpp b/services/surfaceflinger/DisplayDevice.cpp
+index 5c2c0ad..1f2e554 100644
+--- a/services/surfaceflinger/DisplayDevice.cpp
++++ b/services/surfaceflinger/DisplayDevice.cpp
+@@ -166,7 +166,7 @@ DisplayDevice::DisplayDevice(
+     setProjection(DisplayState::eOrientationDefault, mViewport, mFrame);
+ 
+ #ifdef NUM_FRAMEBUFFER_SURFACE_BUFFERS
+-    surface->allocateBuffers();
++    mSurface->allocateBuffers();
+ #endif
+ }
+ 
 diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
 index ef41658..086acc9 100644
 --- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
@@ -446,6 +1036,60 @@ index ef41658..086acc9 100644
          char buffer[SIZE];
          mHwc->dump(mHwc, buffer, SIZE);
          result.append(buffer);
+diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
+index 170e382..0f0c65d 100644
+--- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
++++ b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
+@@ -236,6 +236,9 @@ public:
+         bool operator != (const LayerListIterator& rhs) const {
+             return !operator==(rhs);
+         }
++        bool operator ! () const {
++             return !mLayerList;
++        }
+     };
+ 
+     // Returns an iterator to the beginning of the layer list
+diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
+index 2190466..8c36d85 100644
+--- a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
++++ b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
+@@ -344,6 +344,13 @@ status_t VirtualDisplaySurface::dequeueBuffer(Source source,
+         PixelFormat format, uint32_t usage, int* sslot, sp<Fence>* fence) {
+     LOG_FATAL_IF(mDisplayId < 0, "mDisplayId=%d but should not be < 0.", mDisplayId);
+ 
++    // Exclude video encoder usage flag from scratch buffer usage flags
++    if (source == SOURCE_SCRATCH) {
++        usage &= ~(GRALLOC_USAGE_HW_VIDEO_ENCODER);
++        VDS_LOGV("dequeueBuffer(%s): updated scratch buffer usage flags=%#x",
++                dbgSourceStr(source), usage);
++    }
++
+     status_t result = mSource[source]->dequeueBuffer(sslot, fence,
+             mSinkBufferWidth, mSinkBufferHeight, format, usage);
+     if (result < 0)
+diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
+index dfece93..646014a 100644
+--- a/services/surfaceflinger/Layer.cpp
++++ b/services/surfaceflinger/Layer.cpp
+@@ -2055,11 +2055,16 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
+ 
+             // Remove any stale buffers that have been dropped during
+             // updateTexImage
+-            while (mQueueItems[0].mFrameNumber != currentFrameNumber) {
++            while ((mQueuedFrames > 0) && (mQueueItems[0].mFrameNumber != currentFrameNumber)) {
+                 mQueueItems.removeAt(0);
+                 android_atomic_dec(&mQueuedFrames);
+             }
+ 
++            if (mQueuedFrames == 0) {
++                ALOGE("[%s] mQueuedFrames is zero !!", mName.string());
++                return outDirtyRegion;
++            }
++
+             mQueueItems.removeAt(0);
+         }
+ 
 diff --git a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
 index 847cdb3..b2821b7 100644
 --- a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
@@ -838,11 +1482,34 @@ index e0e4c61..6f2520b 100644
  #ifdef USE_HWC2
      err = updateAndReleaseLocked(item, &mPendingRelease);
 diff --git a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-index b0f418c..ca03830 100644
+index b0f418c..94c95a6 100644
 --- a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-@@ -466,10 +466,12 @@ void SurfaceFlinger::init() {
-     mEventQueue.setEventThread(mSFEventThread);
+@@ -457,19 +457,28 @@ void SurfaceFlinger::init() {
+     eglInitialize(mEGLDisplay, NULL, NULL);
+ 
+     // start the EventThread
+-    sp<VSyncSource> vsyncSrc = new DispSyncSource(&mPrimaryDispSync,
+-            vsyncPhaseOffsetNs, true, "app");
+-    mEventThread = new EventThread(vsyncSrc, *this);
+-    sp<VSyncSource> sfVsyncSrc = new DispSyncSource(&mPrimaryDispSync,
+-            sfVsyncPhaseOffsetNs, true, "sf");
+-    mSFEventThread = new EventThread(sfVsyncSrc, *this);
+-    mEventQueue.setEventThread(mSFEventThread);
++    if (vsyncPhaseOffsetNs != sfVsyncPhaseOffsetNs) {
++        sp<VSyncSource> vsyncSrc = new DispSyncSource(&mPrimaryDispSync,
++                vsyncPhaseOffsetNs, true, "app");
++        mEventThread = new EventThread(vsyncSrc, *this);
++        sp<VSyncSource> sfVsyncSrc = new DispSyncSource(&mPrimaryDispSync,
++                sfVsyncPhaseOffsetNs, true, "sf");
++        mSFEventThread = new EventThread(sfVsyncSrc, *this);
++        mEventQueue.setEventThread(mSFEventThread);
++    } else {
++        sp<VSyncSource> vsyncSrc = new DispSyncSource(&mPrimaryDispSync,
++                         vsyncPhaseOffsetNs, true, "sf-app");
++        mEventThread = new EventThread(vsyncSrc, *this);
++        mEventQueue.setEventThread(mEventThread);
++    }
  
      // set SFEventThread to SCHED_FIFO to minimize jitter
 -    struct sched_param param = {0};
@@ -858,7 +1525,7 @@ index b0f418c..ca03830 100644
      }
  
  
-@@ -635,10 +637,21 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
+@@ -635,10 +644,21 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
              info.orientation = 0;
          }
  
@@ -884,7 +1551,24 @@ index b0f418c..ca03830 100644
          info.fps = float(1e9 / hwConfig.refresh);
          info.appVsyncOffset = VSYNC_EVENT_PHASE_OFFSET_NS;
  
-@@ -3331,7 +3344,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3187,12 +3207,14 @@ status_t SurfaceFlinger::onTransact(
+             }
+             case 1018: { // Modify Choreographer's phase offset
+                 n = data.readInt32();
+-                mEventThread->setPhaseOffset(static_cast<nsecs_t>(n));
++                if (mEventThread != NULL)
++                    mEventThread->setPhaseOffset(static_cast<nsecs_t>(n));
+                 return NO_ERROR;
+             }
+             case 1019: { // Modify SurfaceFlinger's phase offset
+                 n = data.readInt32();
+-                mSFEventThread->setPhaseOffset(static_cast<nsecs_t>(n));
++                if (mSFEventThread != NULL)
++                    mSFEventThread->setPhaseOffset(static_cast<nsecs_t>(n));
+                 return NO_ERROR;
+             }
+             case 1021: { // Disable HWC virtual displays
+@@ -3331,7 +3353,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          const sp<IGraphicBufferProducer>& producer,
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
@@ -894,7 +1578,7 @@ index b0f418c..ca03830 100644
  
      if (CC_UNLIKELY(display == 0))
          return BAD_VALUE;
-@@ -3375,6 +3389,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3375,6 +3398,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          bool useIdentityTransform;
          Transform::orientation_flags rotation;
          status_t result;
@@ -902,7 +1586,7 @@ index b0f418c..ca03830 100644
          bool isLocalScreenshot;
      public:
          MessageCaptureScreen(SurfaceFlinger* flinger,
-@@ -3384,12 +3399,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3384,12 +3408,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
                  uint32_t minLayerZ, uint32_t maxLayerZ,
                  bool useIdentityTransform,
                  Transform::orientation_flags rotation,
@@ -917,7 +1601,7 @@ index b0f418c..ca03830 100644
                isLocalScreenshot(isLocalScreenshot)
          {
          }
-@@ -3399,9 +3415,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3399,9 +3424,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          virtual bool handler() {
              Mutex::Autolock _l(flinger->mStateLock);
              sp<const DisplayDevice> hw(flinger->getDisplayDevice(display));
@@ -929,7 +1613,7 @@ index b0f418c..ca03830 100644
              static_cast<GraphicProducerWrapper*>(IInterface::asBinder(producer).get())->exit(result);
              return true;
          }
-@@ -3417,7 +3434,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3417,7 +3443,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
      sp<MessageBase> msg = new MessageCaptureScreen(this,
              display, IGraphicBufferProducer::asInterface( wrapper ),
              sourceCrop, reqWidth, reqHeight, minLayerZ, maxLayerZ,
@@ -938,7 +1622,7 @@ index b0f418c..ca03830 100644
  
      status_t res = postMessageAsync(msg);
      if (res == NO_ERROR) {
-@@ -3502,7 +3519,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3502,7 +3528,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
          bool useIdentityTransform, Transform::orientation_flags rotation,
@@ -947,7 +1631,7 @@ index b0f418c..ca03830 100644
  {
      ATRACE_CALL();
  
-@@ -3572,7 +3589,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3572,7 +3598,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                  if (image != EGL_NO_IMAGE_KHR) {
                      // this binds the given EGLImage as a framebuffer for the
                      // duration of this scope.
@@ -956,7 +1640,7 @@ index b0f418c..ca03830 100644
                      if (imageBond.getStatus() == NO_ERROR) {
                          // this will in fact render into our dequeued buffer
                          // via an FBO, which means we didn't have to create
-@@ -3619,6 +3636,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3619,6 +3645,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                                  ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                              }
                          }

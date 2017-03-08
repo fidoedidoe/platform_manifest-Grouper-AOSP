@@ -1,3 +1,38 @@
+diff --git a/camera/ICameraClient.cpp b/camera/ICameraClient.cpp
+index 68cbfb8..8a7430f 100644
+--- a/camera/ICameraClient.cpp
++++ b/camera/ICameraClient.cpp
+@@ -50,7 +50,12 @@ public:
+         data.writeInterfaceToken(ICameraClient::getInterfaceDescriptor());
+         data.writeInt32(msgType);
+         data.writeInt32(ext1);
+-        data.writeInt32(ext2);
++        if ((msgType == CAMERA_MSG_PREVIEW_FRAME) && (ext1 == CAMERA_FRAME_DATA_FD)) {
++            ALOGD("notifyCallback: CAMERA_MSG_PREVIEW_FRAME fd = %d", ext2);
++            data.writeFileDescriptor(ext2);
++        } else {
++            data.writeInt32(ext2);
++        }
+         remote()->transact(NOTIFY_CALLBACK, data, &reply, IBinder::FLAG_ONEWAY);
+     }
+ 
+@@ -105,8 +110,14 @@ status_t BnCameraClient::onTransact(
+             ALOGV("NOTIFY_CALLBACK");
+             CHECK_INTERFACE(ICameraClient, data, reply);
+             int32_t msgType = data.readInt32();
+-            int32_t ext1 = data.readInt32();
+-            int32_t ext2 = data.readInt32();
++            int32_t ext1    = data.readInt32();
++            int32_t ext2    = 0;
++            if ((msgType == CAMERA_MSG_PREVIEW_FRAME) && (ext1 == CAMERA_FRAME_DATA_FD)) {
++                ext2 = data.readFileDescriptor();
++                ALOGD("onTransact: CAMERA_MSG_PREVIEW_FRAME fd = %d", ext2);
++            } else {
++                ext2 = data.readInt32();
++            }
+             notifyCallback(msgType, ext1, ext2);
+             return NO_ERROR;
+         } break;
 diff --git a/camera/cameraserver/Android.mk b/camera/cameraserver/Android.mk
 index 7e36c5e..aca7a19 100644
 --- a/camera/cameraserver/Android.mk
@@ -17,6 +52,40 @@ index 7e36c5e..aca7a19 100644
  
  include $(BUILD_EXECUTABLE)
 +endif
+diff --git a/camera/ndk/NdkCaptureRequest.cpp b/camera/ndk/NdkCaptureRequest.cpp
+index 77b9a33..7c37955 100644
+--- a/camera/ndk/NdkCaptureRequest.cpp
++++ b/camera/ndk/NdkCaptureRequest.cpp
+@@ -51,8 +51,13 @@ camera_status_t ACaptureRequest_addTarget(
+         ACaptureRequest* req, const ACameraOutputTarget* target) {
+     ATRACE_CALL();
+     if (req == nullptr || req->targets == nullptr || target == nullptr) {
++        void* req_targets;
++        if (req != nullptr)
++            req_targets = req->targets;
++        else
++            req_targets = nullptr;
+         ALOGE("%s: Error: invalid input: req %p, req-targets %p, target %p",
+-                __FUNCTION__, req, req->targets, target);
++                __FUNCTION__, req, req_targets, target);
+         return ACAMERA_ERROR_INVALID_PARAMETER;
+     }
+     auto pair = req->targets->mOutputs.insert(*target);
+@@ -67,8 +72,13 @@ camera_status_t ACaptureRequest_removeTarget(
+         ACaptureRequest* req, const ACameraOutputTarget* target) {
+     ATRACE_CALL();
+     if (req == nullptr || req->targets == nullptr || target == nullptr) {
++        void* req_targets;
++        if (req != nullptr)
++            req_targets = req->targets;
++        else
++            req_targets = nullptr;
+         ALOGE("%s: Error: invalid input: req %p, req-targets %p, target %p",
+-                __FUNCTION__, req, req->targets, target);
++                __FUNCTION__, req, req_targets, target);
+         return ACAMERA_ERROR_INVALID_PARAMETER;
+     }
+     req->targets->mOutputs.erase(*target);
 diff --git a/include/media/stagefright/MediaBufferGroup.h b/include/media/stagefright/MediaBufferGroup.h
 index 3051406..870bb9b 100644
 --- a/include/media/stagefright/MediaBufferGroup.h
@@ -257,21 +326,6 @@ index a17757a..f1ad5c5 100644
 +}
 +}
  }  // namespace android
-diff --git a/media/libstagefright/SampleTable.cpp b/media/libstagefright/SampleTable.cpp
-index eb1f193..770681a 100644
---- a/media/libstagefright/SampleTable.cpp
-+++ b/media/libstagefright/SampleTable.cpp
-@@ -567,6 +567,10 @@ status_t SampleTable::setSyncSampleParams(off64_t data_offset, size_t data_size)
-     }
- 
-     for (size_t i = 0; i < mNumSyncSamples; ++i) {
-+        if (mSyncSamples[i] == 0) {
-+            ALOGE("b/32423862, unexpected zero value in stss");
-+            continue;
-+        }
-         mSyncSamples[i] = ntohl(mSyncSamples[i]) - 1;
-     }
- 
 diff --git a/media/libstagefright/StagefrightMetadataRetriever.cpp b/media/libstagefright/StagefrightMetadataRetriever.cpp
 index be5067d..2fef7ca 100644
 --- a/media/libstagefright/StagefrightMetadataRetriever.cpp
@@ -560,7 +614,7 @@ index ecddc48..0abe6ac 100644
      ProcessState::self()->startThreadPool();
      IPCThreadState::self()->joinThreadPool();
 diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
-index 1785a03..d5499f0 100644
+index fec3a57..a0ef28c 100644
 --- a/services/audioflinger/AudioFlinger.cpp
 +++ b/services/audioflinger/AudioFlinger.cpp
 @@ -1509,7 +1509,8 @@ sp<IAudioRecord> AudioFlinger::openRecord(
@@ -573,8 +627,20 @@ index 1785a03..d5499f0 100644
          ALOGE("openRecord() permission denied: recording not allowed");
          lStatus = PERMISSION_DENIED;
          goto Exit;
+diff --git a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
+index 3e5bb7d..2ecd6b1 100644
+--- a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
++++ b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
+@@ -383,6 +383,7 @@ status_t RouteTraits::deserialize(_xmlDoc */*doc*/, const _xmlNode *root, PtrEle
+             sp<AudioPort> source = ctx->findPortByTagName(String8(devTag));
+             if (source == NULL) {
+                 ALOGE("%s: no source found with name=%s", __FUNCTION__, devTag);
++                free(sourcesLiteral);
+                 return BAD_VALUE;
+             }
+             sources.add(source);
 diff --git a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp b/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
-index c9b3abc..57d26e6 100644
+index a75e3dd..67bacd1 100644
 --- a/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
 +++ b/services/audiopolicy/service/AudioPolicyInterfaceImpl.cpp
 @@ -318,7 +318,7 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
