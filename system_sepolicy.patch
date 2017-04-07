@@ -99,7 +99,7 @@ index 45569de..21c9df2 100644
  neverallow {
    domain
 diff --git a/file.te b/file.te
-index 84af4a7..55910d2 100644
+index 87cec82..bdc7cbe 100644
 --- a/file.te
 +++ b/file.te
 @@ -46,6 +46,8 @@ type devpts, fs_type, mlstrustedobject;

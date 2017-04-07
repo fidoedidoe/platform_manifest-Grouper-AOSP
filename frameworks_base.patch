@@ -24,6 +24,128 @@ index aed7a36..bf96926 100644
              // if canceling out of addAccount and the original state caused us to skip this,
              // finish this activity
              if (mAccounts.isEmpty()) {
+diff --git a/core/java/android/app/Notification.java b/core/java/android/app/Notification.java
+index 0dd9c63..bcdf3f4 100644
+--- a/core/java/android/app/Notification.java
++++ b/core/java/android/app/Notification.java
+@@ -1761,7 +1761,9 @@ public class Notification implements Parcelable
+         if (this.actions != null) {
+             that.actions = new Action[this.actions.length];
+             for(int i=0; i<this.actions.length; i++) {
+-                that.actions[i] = this.actions[i].clone();
++                if ( this.actions[i] != null) {
++                    that.actions[i] = this.actions[i].clone();
++                }
+             }
+         }
+ 
+@@ -3108,7 +3110,9 @@ public class Notification implements Parcelable
+          * @param action The action to add.
+          */
+         public Builder addAction(Action action) {
+-            mActions.add(action);
++            if (action != null) {
++                mActions.add(action);
++            }
+             return this;
+         }
+ 
+@@ -3122,7 +3126,9 @@ public class Notification implements Parcelable
+         public Builder setActions(Action... actions) {
+             mActions.clear();
+             for (int i = 0; i < actions.length; i++) {
+-                mActions.add(actions[i]);
++                if (actions[i] != null) {
++                    mActions.add(actions[i]);
++                }
+             }
+             return this;
+         }
+diff --git a/core/java/android/app/ResourcesManager.java b/core/java/android/app/ResourcesManager.java
+index 5cc064e..4916c1c 100644
+--- a/core/java/android/app/ResourcesManager.java
++++ b/core/java/android/app/ResourcesManager.java
+@@ -826,7 +826,8 @@ public class ResourcesManager {
+ 
+             for (int i = mResourceImpls.size() - 1; i >= 0; i--) {
+                 ResourcesKey key = mResourceImpls.keyAt(i);
+-                ResourcesImpl r = mResourceImpls.valueAt(i).get();
++                WeakReference<ResourcesImpl> weakImplRef = mResourceImpls.valueAt(i);
++                ResourcesImpl r = weakImplRef != null ? weakImplRef.get() : null;
+                 if (r != null) {
+                     if (DEBUG || DEBUG_CONFIGURATION) Slog.v(TAG, "Changing resources "
+                             + r + " config to: " + config);
+@@ -890,8 +891,9 @@ public class ResourcesManager {
+ 
+             final int implCount = mResourceImpls.size();
+             for (int i = 0; i < implCount; i++) {
+-                final ResourcesImpl impl = mResourceImpls.valueAt(i).get();
+                 final ResourcesKey key = mResourceImpls.keyAt(i);
++                final WeakReference<ResourcesImpl> weakImplRef = mResourceImpls.valueAt(i);
++                final ResourcesImpl impl = weakImplRef != null ? weakImplRef.get() : null;
+                 if (impl != null && key.mResDir.equals(assetPath)) {
+                     if (!ArrayUtils.contains(key.mLibDirs, libAsset)) {
+                         final int newLibAssetCount = 1 +
+diff --git a/core/java/android/content/pm/RegisteredServicesCache.java b/core/java/android/content/pm/RegisteredServicesCache.java
+index a110383..aea843a 100644
+--- a/core/java/android/content/pm/RegisteredServicesCache.java
++++ b/core/java/android/content/pm/RegisteredServicesCache.java
+@@ -390,15 +390,17 @@ public abstract class RegisteredServicesCache<V> {
+     @VisibleForTesting
+     protected boolean inSystemImage(int callerUid) {
+         String[] packages = mContext.getPackageManager().getPackagesForUid(callerUid);
+-        for (String name : packages) {
+-            try {
+-                PackageInfo packageInfo =
+-                        mContext.getPackageManager().getPackageInfo(name, 0 /* flags */);
+-                if ((packageInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+-                    return true;
++        if (packages != null) {
++            for (String name : packages) {
++                try {
++                    PackageInfo packageInfo =
++                            mContext.getPackageManager().getPackageInfo(name, 0 /* flags */);
++                    if ((packageInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
++                        return true;
++                    }
++                } catch (PackageManager.NameNotFoundException e) {
++                    return false;
+                 }
+-            } catch (PackageManager.NameNotFoundException e) {
+-                return false;
+             }
+         }
+         return false;
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index a8209af..4766d33 100755
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -3559,6 +3559,12 @@ public final class Settings {
+         public static final Validator LOCK_TO_APP_ENABLED_VALIDATOR = sBooleanValidator;
+ 
+         /**
++         * Whether to wake the screen with the home key, the value is boolean.
++         * @hide
++         */
++        public static final String HOME_WAKE_SCREEN = "home_wake_screen";
++
++        /**
+          * I am the lolrus.
+          * <p>
+          * Nonzero values indicate that the user has a bukkit.
+diff --git a/core/java/com/android/internal/app/procstats/ProcessState.java b/core/java/com/android/internal/app/procstats/ProcessState.java
+index 8c5df08..8c2c236 100644
+--- a/core/java/com/android/internal/app/procstats/ProcessState.java
++++ b/core/java/com/android/internal/app/procstats/ProcessState.java
+@@ -379,7 +379,7 @@ public final class ProcessState {
+ 
+     public void setState(int state, long now) {
+         ensureNotDead();
+-        if (mCurState != state) {
++        if (!mDead && (mCurState != state)) {
+             //Slog.i(TAG, "Setting state in " + mName + "/" + mPackage + ": " + state);
+             commitStateTime(now);
+             mCurState = state;
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
 index f062b59..574f7c1 100644
 --- a/core/res/res/xml/config_webview_packages.xml
@@ -78,11 +200,142 @@ index 2c9c9d9..7c187fb 100644
  }
  
  /**
+diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
+index 0fa9a85..925f368 100644
+--- a/packages/SystemUI/res/values/config.xml
++++ b/packages/SystemUI/res/values/config.xml
+@@ -105,7 +105,7 @@
+ 
+     <!-- Tiles native to System UI. Order should match "quick_settings_tiles_default" -->
+     <string name="quick_settings_tiles_stock" translatable="false">
+-        wifi,cell,battery,dnd,flashlight,rotation,bt,airplane,location,hotspot,inversion,saver,work,cast,night
++        wifi,cell,battery,dnd,flashlight,rotation,bt,airplane,location,immersive,hotspot,inversion,saver,work,cast,night
+     </string>
+ 
+     <!-- The tiles to display in QuickSettings -->
+diff --git a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
+index dd80750..005206f 100644
+--- a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
++++ b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
+@@ -22,39 +22,93 @@ import android.content.Context;
+ import android.content.Intent;
+ import android.content.IntentFilter;
+ 
+-public abstract class CurrentUserTracker extends BroadcastReceiver {
++import java.util.ArrayList;
++import java.util.List;
++import java.util.function.Consumer;
+ 
+-    private Context mContext;
+-    private int mCurrentUserId;
++public abstract class CurrentUserTracker {
++    private final UserReceiver mUserReceiver;
++
++    private Consumer<Integer> mCallback = this::onUserSwitched;
+ 
+     public CurrentUserTracker(Context context) {
+-        mContext = context;
++        mUserReceiver = UserReceiver.getInstance(context);
+     }
+ 
+     public int getCurrentUserId() {
+-        return mCurrentUserId;
+-    }
+-
+-    @Override
+-    public void onReceive(Context context, Intent intent) {
+-        if (Intent.ACTION_USER_SWITCHED.equals(intent.getAction())) {
+-            int oldUserId = mCurrentUserId;
+-            mCurrentUserId = intent.getIntExtra(Intent.EXTRA_USER_HANDLE, 0);
+-            if (oldUserId != mCurrentUserId) {
+-                onUserSwitched(mCurrentUserId);
+-            }
+-        }
++        return mUserReceiver.getCurrentUserId();
+     }
+ 
+     public void startTracking() {
+-        mCurrentUserId = ActivityManager.getCurrentUser();
+-        IntentFilter filter = new IntentFilter(Intent.ACTION_USER_SWITCHED);
+-        mContext.registerReceiver(this, filter);
++        mUserReceiver.addTracker(mCallback);
+     }
+ 
+     public void stopTracking() {
+-        mContext.unregisterReceiver(this);
++        mUserReceiver.removeTracker(mCallback);
+     }
+ 
+     public abstract void onUserSwitched(int newUserId);
++
++    private static class UserReceiver extends BroadcastReceiver {
++        private static UserReceiver sInstance;
++
++        private Context mAppContext;
++        private boolean mReceiverRegistered;
++        private int mCurrentUserId;
++
++        private List<Consumer<Integer>> mCallbacks = new ArrayList<>();
++
++        private UserReceiver(Context context) {
++            mAppContext = context.getApplicationContext();
++        }
++
++        static UserReceiver getInstance(Context context) {
++            if (sInstance == null) {
++                sInstance = new UserReceiver(context);
++            }
++            return sInstance;
++        }
++
++        @Override
++        public void onReceive(Context context, Intent intent) {
++            if (Intent.ACTION_USER_SWITCHED.equals(intent.getAction())) {
++                notifyUserSwitched(intent.getIntExtra(Intent.EXTRA_USER_HANDLE, 0));
++            }
++        }
++
++        public int getCurrentUserId() {
++            return mCurrentUserId;
++        }
++
++        private void addTracker(Consumer<Integer> callback) {
++            if (!mCallbacks.contains(callback)) {
++                mCallbacks.add(callback);
++            }
++            if (!mReceiverRegistered) {
++                mCurrentUserId = ActivityManager.getCurrentUser();
++                IntentFilter filter = new IntentFilter(Intent.ACTION_USER_SWITCHED);
++                mAppContext.registerReceiver(this, filter);
++                mReceiverRegistered = true;
++            }
++        }
++
++        private void removeTracker(Consumer<Integer> callback) {
++            if (mCallbacks.contains(callback)) {
++                mCallbacks.remove(callback);
++                if (mCallbacks.size() == 0 && mReceiverRegistered) {
++                    mAppContext.unregisterReceiver(this);
++                    mReceiverRegistered = false;
++                }
++            }
++        }
++
++        private void notifyUserSwitched(int newUserId) {
++            if (mCurrentUserId != newUserId) {
++                mCurrentUserId = newUserId;
++                for (Consumer<Integer> consumer : mCallbacks) {
++                    consumer.accept(newUserId);
++                }
++            }
++        }
++    }
+ }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
-index c850a25..1829e59 100644
+index 63d2891..1829e59 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
-@@ -235,16 +235,16 @@ public class NotificationGuts extends LinearLayout implements TunerService.Tunab
+@@ -235,7 +235,7 @@ public class NotificationGuts extends LinearLayout implements TunerService.Tunab
      }
  
      private int getSelectedImportance() {
@@ -91,17 +344,6 @@ index c850a25..1829e59 100644
              if (mSeekBar.isEnabled()) {
                  return mSeekBar.getProgress();
              } else {
-                 return Ranking.IMPORTANCE_UNSPECIFIED;
-             }
-         } else {
--            if (mBlock.isChecked()) {
-+            if (mBlock != null && mBlock.isChecked()) {
-                 return Ranking.IMPORTANCE_NONE;
--            } else if (mSilent.isChecked()) {
-+            } else if (mSilent != null && mSilent.isChecked()) {
-                 return Ranking.IMPORTANCE_LOW;
-             } else {
-                 return Ranking.IMPORTANCE_UNSPECIFIED;
 diff --git a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java b/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
 index 70f2fdc..ba50161 100644
 --- a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
@@ -184,11 +426,116 @@ index 4caeba8..c95b9d5 100644
                      if (uidState.opModes != null && uidState.opModes.size() > 0) {
                          out.startTag(null, "uid");
                          out.attribute(null, "n", Integer.toString(uidState.uid));
+diff --git a/services/core/java/com/android/server/BluetoothManagerService.java b/services/core/java/com/android/server/BluetoothManagerService.java
+index 2a6f9d2..7ba1fe4 100644
+--- a/services/core/java/com/android/server/BluetoothManagerService.java
++++ b/services/core/java/com/android/server/BluetoothManagerService.java
+@@ -55,6 +55,7 @@ import android.os.UserManager;
+ import android.provider.Settings;
+ import android.provider.Settings.SettingNotFoundException;
+ import android.util.Slog;
++import java.util.concurrent.locks.ReentrantReadWriteLock;
+ 
+ import java.io.FileDescriptor;
+ import java.io.PrintWriter;
+@@ -122,6 +123,7 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+     private static final int SERVICE_IBLUETOOTHGATT = 2;
+ 
+     private final Context mContext;
++    private static int mBleAppCount = 0;
+ 
+     // Locks are not provided for mName and mAddress.
+     // They are accessed in handler or broadcast receiver, same thread context.
+@@ -172,6 +174,8 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+     // configuration from external IBinder call which is used to
+     // synchronize with broadcast receiver.
+     private boolean mQuietEnableExternal;
++    // configuarion from external IBinder call which is used to
++    // synchronize with broadcast receiver.
+     private boolean mEnableExternal;
+ 
+     // Map of apps registered to keep BLE scanning on.
+@@ -351,6 +355,7 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+ 
+     /**
+      *  Save the Bluetooth on/off state
++     *
+      */
+     private void persistBluetoothSetting(int value) {
+         if (DBG) Slog.d(TAG, "Persisting Bluetooth Setting: " + value);
+@@ -644,7 +649,11 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+             if (isBluetoothPersistedStateOnBluetooth() || !isBleAppPresent()) {
+                 // This triggers transition to STATE_ON
+                 mBluetooth.onLeServiceUp();
++
++                // waive WRITE_SECURE_SETTINGS permission check
++                long callingIdentity = Binder.clearCallingIdentity();
+                 persistBluetoothSetting(BLUETOOTH_ON_BLUETOOTH);
++                Binder.restoreCallingIdentity(callingIdentity);
+             }
+         } catch (RemoteException e) {
+             Slog.e(TAG,"Unable to call onServiceUp", e);
+@@ -727,6 +736,8 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+             }
+         }
+ 
++        mContext.enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
++                                                "Need BLUETOOTH ADMIN permission");
+         if (DBG) {
+             Slog.d(TAG,"enable(" + packageName + "):  mBluetooth =" + mBluetooth +
+                     " mBinding = " + mBinding + " mState = " +
+@@ -770,7 +781,10 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+ 
+         synchronized(mReceiver) {
+             if (persist) {
++                // waive WRITE_SECURE_SETTINGS permission check
++                long callingIdentity = Binder.clearCallingIdentity();
+                 persistBluetoothSetting(BLUETOOTH_OFF);
++                Binder.restoreCallingIdentity(callingIdentity);
+             }
+             mEnableExternal = false;
+             sendDisableMsg(packageName);
+@@ -827,8 +841,11 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+                 } catch (RemoteException re) {
+                     Slog.e(TAG, "Unable to unregister BluetoothCallback",re);
+                 }
++
++                if (DBG) Slog.d(TAG, "Sending unbind request.");
+                 mBluetoothBinder = null;
+                 mBluetooth = null;
++                //Unbind
+                 mContext.unbindService(mConnection);
+                 mUnbinding = false;
+                 mBinding = false;
+@@ -1103,6 +1120,7 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+      * Inform BluetoothAdapter instances that Adapter service is up
+      */
+     private void sendBluetoothServiceUpCallback() {
++        if (DBG) Slog.d(TAG,"Calling onBluetoothServiceUp callbacks");
+         try {
+             int n = mCallbacks.beginBroadcast();
+             Slog.d(TAG,"Broadcasting onBluetoothServiceUp() to " + n + " receivers.");
+@@ -1121,6 +1139,7 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+      * Inform BluetoothAdapter instances that Adapter service is down
+      */
+     private void sendBluetoothServiceDownCallback() {
++        if (DBG) Slog.d(TAG,"Calling onBluetoothServiceDown callbacks");
+         try {
+             int n = mCallbacks.beginBroadcast();
+             Slog.d(TAG,"Broadcasting onBluetoothServiceDown() to " + n + " receivers.");
+@@ -1236,6 +1255,7 @@ class BluetoothManagerService extends IBluetoothManager.Stub {
+ 
+         @Override
+         public void handleMessage(Message msg) {
++            if (DBG) Slog.d (TAG, "Message: " + msg.what);
+             switch (msg.what) {
+                 case MESSAGE_GET_NAME_AND_ADDRESS:
+                     if (DBG) Slog.d(TAG, "MESSAGE_GET_NAME_AND_ADDRESS");
 diff --git a/services/core/java/com/android/server/ConnectivityService.java b/services/core/java/com/android/server/ConnectivityService.java
-index 5f59e32..23172a2 100644
+index 2693272..f2368ed 100644
 --- a/services/core/java/com/android/server/ConnectivityService.java
 +++ b/services/core/java/com/android/server/ConnectivityService.java
-@@ -2992,6 +2992,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
+@@ -3007,6 +3007,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
          ConnectivityManager.enforceTetherChangePermission(mContext);
          if (isTetheringSupported()) {
              final int status = mTethering.tether(iface);
@@ -201,7 +548,7 @@ index 5f59e32..23172a2 100644
              return status;
          } else {
              return ConnectivityManager.TETHER_ERROR_UNSUPPORTED;
-@@ -3005,6 +3011,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
+@@ -3020,6 +3026,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
  
          if (isTetheringSupported()) {
              final int status = mTethering.untether(iface);
@@ -214,7 +561,7 @@ index 5f59e32..23172a2 100644
              return status;
          } else {
              return ConnectivityManager.TETHER_ERROR_UNSUPPORTED;
-@@ -4909,6 +4921,13 @@ public class ConnectivityService extends IConnectivityManager.Stub
+@@ -4924,6 +4936,13 @@ public class ConnectivityService extends IConnectivityManager.Stub
              // check if it satisfies the NetworkCapabilities
              if (VDBG) log("  checking if request is satisfied: " + nri.request);
              if (satisfies) {
@@ -228,191 +575,69 @@ index 5f59e32..23172a2 100644
                  // next check if it's better than any current network we're using for
                  // this request
                  if (VDBG) {
-diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index bc9d58e..9ed5af9 100644
---- a/services/core/java/com/android/server/am/ActivityManagerService.java
-+++ b/services/core/java/com/android/server/am/ActivityManagerService.java
-@@ -9590,7 +9590,7 @@ public final class ActivityManagerService extends ActivityManagerNative
-         for (int i = 0; i < procsToKill.size(); i++) {
-             ProcessRecord pr = procsToKill.get(i);
-             if (pr.setSchedGroup == ProcessList.SCHED_GROUP_BACKGROUND
--                    && pr.curReceiver == null) {
-+                    && pr.curReceivers.isEmpty()) {
-                 pr.kill("remove task", true);
-             } else {
-                 // We delay killing processes that are not in the background or running a receiver.
-@@ -16933,6 +16933,7 @@ public final class ActivityManagerService extends ActivityManagerNative
- 
-         app.crashing = false;
-         app.notResponding = false;
-+        app.renderThreadTid = 0;
- 
-         app.resetPackageList(mProcessStats);
-         app.unlinkDeathRecipient();
-@@ -19204,26 +19205,28 @@ public final class ActivityManagerService extends ActivityManagerNative
-     // LIFETIME MANAGEMENT
-     // =========================================================
- 
--    // Returns which broadcast queue the app is the current [or imminent] receiver
--    // on, or 'null' if the app is not an active broadcast recipient.
--    private BroadcastQueue isReceivingBroadcast(ProcessRecord app) {
--        BroadcastRecord r = app.curReceiver;
--        if (r != null) {
--            return r.queue;
-+    // Returns whether the app is receiving broadcast.
-+    // If receiving, fetch all broadcast queues which the app is
-+    // the current [or imminent] receiver on.
-+    private boolean isReceivingBroadcastLocked(ProcessRecord app,
-+            ArraySet<BroadcastQueue> receivingQueues) {
-+        if (!app.curReceivers.isEmpty()) {
-+            for (BroadcastRecord r : app.curReceivers) {
-+                receivingQueues.add(r.queue);
-+            }
-+            return true;
-         }
- 
-         // It's not the current receiver, but it might be starting up to become one
--        synchronized (this) {
--            for (BroadcastQueue queue : mBroadcastQueues) {
--                r = queue.mPendingBroadcast;
--                if (r != null && r.curApp == app) {
--                    // found it; report which queue it's in
--                    return queue;
--                }
-+        for (BroadcastQueue queue : mBroadcastQueues) {
-+            final BroadcastRecord r = queue.mPendingBroadcast;
-+            if (r != null && r.curApp == app) {
-+                // found it; report which queue it's in
-+                receivingQueues.add(queue);
+diff --git a/services/core/java/com/android/server/am/ActivityStackSupervisor.java b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
+index c6ab918..d848081 100644
+--- a/services/core/java/com/android/server/am/ActivityStackSupervisor.java
++++ b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
+@@ -2747,6 +2747,9 @@ public final class ActivityStackSupervisor implements DisplayListener {
              }
          }
- 
--        return null;
-+        return !receivingQueues.isEmpty();
+         checkReadyForSleepLocked();
++        if (mGoingToSleep.isHeld()) {
++            mGoingToSleep.release();
++        }
      }
  
-     Association startAssociationLocked(int sourceUid, String sourceProcess, int sourceState,
-@@ -19390,7 +19393,7 @@ public final class ActivityManagerService extends ActivityManagerNative
-         int schedGroup;
-         int procState;
-         boolean foregroundActivities = false;
--        BroadcastQueue queue;
-+        final ArraySet<BroadcastQueue> queues = new ArraySet<BroadcastQueue>();
-         if (app == TOP_APP) {
-             // The last app on the list is the foreground app.
-             adj = ProcessList.FOREGROUND_APP_ADJ;
-@@ -19404,13 +19407,13 @@ public final class ActivityManagerService extends ActivityManagerNative
-             schedGroup = ProcessList.SCHED_GROUP_DEFAULT;
-             app.adjType = "instrumentation";
-             procState = ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE;
--        } else if ((queue = isReceivingBroadcast(app)) != null) {
-+        } else if (isReceivingBroadcastLocked(app, queues)) {
-             // An app that is currently receiving a broadcast also
-             // counts as being in the foreground for OOM killer purposes.
-             // It's placed in a sched group based on the nature of the
-             // broadcast as reflected by which queue it's active in.
-             adj = ProcessList.FOREGROUND_APP_ADJ;
--            schedGroup = (queue == mFgBroadcastQueue)
-+            schedGroup = (queues.contains(mFgBroadcastQueue))
-                     ? ProcessList.SCHED_GROUP_DEFAULT : ProcessList.SCHED_GROUP_BACKGROUND;
-             app.adjType = "broadcast";
-             procState = ActivityManager.PROCESS_STATE_RECEIVER;
-@@ -20421,7 +20424,7 @@ public final class ActivityManagerService extends ActivityManagerNative
-             if (DEBUG_SWITCH || DEBUG_OOM_ADJ) Slog.v(TAG_OOM_ADJ,
-                     "Setting sched group of " + app.processName
-                     + " to " + app.curSchedGroup);
--            if (app.waitingToKill != null && app.curReceiver == null
-+            if (app.waitingToKill != null && app.curReceivers.isEmpty()
-                     && app.setSchedGroup == ProcessList.SCHED_GROUP_BACKGROUND) {
-                 app.kill(app.waitingToKill, true);
-                 success = false;
-@@ -21361,7 +21364,7 @@ public final class ActivityManagerService extends ActivityManagerNative
-             for (i=mRemovedProcesses.size()-1; i>=0; i--) {
-                 final ProcessRecord app = mRemovedProcesses.get(i);
-                 if (app.activities.size() == 0
--                        && app.curReceiver == null && app.services.size() == 0) {
-+                        && app.curReceivers.isEmpty() && app.services.size() == 0) {
-                     Slog.i(
-                         TAG, "Exiting empty application process "
-                         + app.toShortString() + " ("
-diff --git a/services/core/java/com/android/server/am/BroadcastQueue.java b/services/core/java/com/android/server/am/BroadcastQueue.java
-index 8b8e2c4..5c35419 100644
---- a/services/core/java/com/android/server/am/BroadcastQueue.java
-+++ b/services/core/java/com/android/server/am/BroadcastQueue.java
-@@ -266,7 +266,7 @@ public final class BroadcastQueue {
+     boolean shutdownLocked(int timeout) {
+@@ -2856,9 +2859,6 @@ public final class ActivityStackSupervisor implements DisplayListener {
  
-         r.receiver = app.thread.asBinder();
-         r.curApp = app;
--        app.curReceiver = r;
-+        app.curReceivers.add(r);
-         app.forceProcessStateUpTo(ActivityManager.PROCESS_STATE_RECEIVER);
-         mService.updateLruProcessLocked(app, false, null);
-         mService.updateOomAdjLocked();
-@@ -294,7 +294,7 @@ public final class BroadcastQueue {
-                         "Process cur broadcast " + r + ": NOT STARTED!");
-                 r.receiver = null;
-                 r.curApp = null;
--                app.curReceiver = null;
-+                app.curReceivers.remove(r);
-             }
+         removeSleepTimeouts();
+ 
+-        if (mGoingToSleep.isHeld()) {
+-            mGoingToSleep.release();
+-        }
+         if (mService.mShuttingDown) {
+             mService.notifyAll();
          }
-     }
-@@ -395,8 +395,8 @@ public final class BroadcastQueue {
-         }
-         r.receiver = null;
-         r.intent.setComponent(null);
--        if (r.curApp != null && r.curApp.curReceiver == r) {
--            r.curApp.curReceiver = null;
-+        if (r.curApp != null && r.curApp.curReceivers.contains(r)) {
-+            r.curApp.curReceivers.remove(r);
-         }
-         if (r.curFilter != null) {
-             r.curFilter.receiverList.curBroadcast = null;
-@@ -649,7 +649,7 @@ public final class BroadcastQueue {
-                 // things that directly call the IActivityManager API, which
-                 // are already core system stuff so don't matter for this.
-                 r.curApp = filter.receiverList.app;
--                filter.receiverList.app.curReceiver = r;
-+                filter.receiverList.app.curReceivers.add(r);
-                 mService.updateOomAdjLocked(r.curApp);
-             }
-         }
-@@ -677,7 +677,7 @@ public final class BroadcastQueue {
-                 r.curFilter = null;
-                 filter.receiverList.curBroadcast = null;
-                 if (filter.receiverList.app != null) {
--                    filter.receiverList.app.curReceiver = null;
-+                    filter.receiverList.app.curReceivers.remove(r);
+diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
+index 39e2914..1e95d28 100644
+--- a/services/core/java/com/android/server/pm/PackageManagerService.java
++++ b/services/core/java/com/android/server/pm/PackageManagerService.java
+@@ -423,7 +423,7 @@ public class PackageManagerService extends IPackageManager.Stub {
+      * one gets run at the next available charging+idle time.  This final mandatory
+      * no-fstrim check kicks in only of the other scheduling criteria is never met.
+      */
+-    private static final long DEFAULT_MANDATORY_FSTRIM_INTERVAL = 3 * DateUtils.DAY_IN_MILLIS;
++    private static final long DEFAULT_MANDATORY_FSTRIM_INTERVAL = 1 * DateUtils.DAY_IN_MILLIS;
+ 
+     /**
+      * Whether verification is enabled by default.
+diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
+index ffbea9f..8dd05b1 100644
+--- a/services/net/java/android/net/dhcp/DhcpClient.java
++++ b/services/net/java/android/net/dhcp/DhcpClient.java
+@@ -40,6 +40,7 @@ import android.os.SystemClock;
+ import android.system.ErrnoException;
+ import android.system.Os;
+ import android.system.PacketSocketAddress;
++import android.util.EventLog;
+ import android.util.Log;
+ import android.util.SparseArray;
+ import android.util.TimeUtils;
+@@ -369,6 +370,13 @@ public class DhcpClient extends StateMachine {
+                     if (PACKET_DBG) {
+                         Log.d(TAG, HexDump.dumpHexString(mPacket, 0, length));
+                     }
++                    if (e.errorCode == DhcpErrorEvent.DHCP_NO_COOKIE) {
++                        int snetTagId = 0x534e4554;
++                        String bugId = "31850211";
++                        int uid = -1;
++                        String data = DhcpPacket.ParseException.class.getName();
++                        EventLog.writeEvent(snetTagId, bugId, uid, data);
++                    }
+                     logError(e.errorCode);
                  }
              }
-         }
-diff --git a/services/core/java/com/android/server/am/ProcessRecord.java b/services/core/java/com/android/server/am/ProcessRecord.java
-index 3fffefb..49fe79c 100644
---- a/services/core/java/com/android/server/am/ProcessRecord.java
-+++ b/services/core/java/com/android/server/am/ProcessRecord.java
-@@ -143,7 +143,7 @@ final class ProcessRecord {
-     Bundle instrumentationArguments;// as given to us
-     ComponentName instrumentationResultClass;// copy of instrumentationClass
-     boolean usingWrapper;       // Set to true when process was launched with a wrapper attached
--    BroadcastRecord curReceiver;// receiver currently running in the app
-+    final ArraySet<BroadcastRecord> curReceivers = new ArraySet<BroadcastRecord>();// receivers currently running in the app
-     long lastWakeTime;          // How long proc held wake lock at last check
-     long lastCpuTime;           // How long proc has run CPU at last check
-     long curCpuTime;            // How long proc has run CPU most recently
-@@ -427,8 +427,11 @@ final class ProcessRecord {
-                 pw.print(prefix); pw.print("  - "); pw.println(conProviders.get(i).toShortString());
-             }
-         }
--        if (curReceiver != null) {
--            pw.print(prefix); pw.print("curReceiver="); pw.println(curReceiver);
-+        if (!curReceivers.isEmpty()) {
-+            pw.print(prefix); pw.println("Current Receivers:");
-+            for (int i=0; i < curReceivers.size(); i++) {
-+                pw.print(prefix); pw.print("  - "); pw.println(curReceivers.valueAt(i));
-+            }
-         }
-         if (receivers.size() > 0) {
-             pw.print(prefix); pw.println("Receivers:");
 diff --git a/services/tests/Android.mk b/services/tests/Android.mk
 deleted file mode 100644
 index 40369ee..0000000
@@ -424,10 +649,10 @@ index 40369ee..0000000
 -include $(call all-makefiles-under, $(LOCAL_PATH))
 diff --git a/services/tests/servicestests/Android.mk b/services/tests/servicestests/Android.mk
 deleted file mode 100644
-index 50e0662..0000000
+index 7886b5e..0000000
 --- a/services/tests/servicestests/Android.mk
 +++ /dev/null
-@@ -1,81 +0,0 @@
+@@ -1,87 +0,0 @@
 -#########################################################################
 -# Build FrameworksServicesTests package
 -#########################################################################
@@ -451,7 +676,8 @@ index 50e0662..0000000
 -    guava \
 -    android-support-test \
 -    mockito-target \
--    ShortcutManagerTestUtils
+-    ShortcutManagerTestUtils \
+-    truth-prebuilt
 -
 -LOCAL_JAVA_LIBRARIES := android.test.runner
 -
@@ -475,6 +701,11 @@ index 50e0662..0000000
 -    libutils
 -
 -LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
+-
+-# Code coverage puts us over the dex limit, so enable multi-dex for coverage-enabled builds
+-ifeq (true,$(EMMA_INSTRUMENT))
+-LOCAL_JACK_FLAGS := --multi-dex native
+-endif # EMMA_INSTRUMENT_STATIC
 -
 -include $(BUILD_PACKAGE)
 -
@@ -2532,10 +2763,10 @@ index 221fe0f..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/apf/ApfTest.java b/services/tests/servicestests/src/android/net/apf/ApfTest.java
 deleted file mode 100644
-index f7c61d1..0000000
+index 6092fdd..0000000
 --- a/services/tests/servicestests/src/android/net/apf/ApfTest.java
 +++ /dev/null
-@@ -1,1195 +0,0 @@
+@@ -1,1205 +0,0 @@
 -/*
 - * Copyright (C) 2012 The Android Open Source Project
 - *
@@ -3198,9 +3429,13 @@ index f7c61d1..0000000
 -    // The IPv6 all nodes address ff02::1
 -    private static final byte[] IPV6_ALL_NODES_ADDRESS =
 -            { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+-    private static final byte[] IPV6_ALL_ROUTERS_ADDRESS =
+-            { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 };
 -
 -    private static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
+-    private static final int ICMP6_ROUTER_SOLICITATION = 133;
 -    private static final int ICMP6_ROUTER_ADVERTISEMENT = 134;
+-    private static final int ICMP6_NEIGHBOR_SOLICITATION = 135;
 -    private static final int ICMP6_NEIGHBOR_ANNOUNCEMENT = 136;
 -
 -    private static final int ICMP6_RA_HEADER_LEN = 16;
@@ -3333,6 +3568,12 @@ index f7c61d1..0000000
 -
 -        // Verify ICMPv6 NA to ff02::1 is dropped
 -        put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_NODES_ADDRESS);
+-        assertDrop(program, packet.array());
+-
+-        // Verify ICMPv6 RS to any is dropped
+-        packet.put(ICMP6_TYPE_OFFSET, (byte)ICMP6_ROUTER_SOLICITATION);
+-        assertDrop(program, packet.array());
+-        put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_ROUTERS_ADDRESS);
 -        assertDrop(program, packet.array());
 -
 -        apfFilter.shutdown();
@@ -4066,10 +4307,10 @@ index 220e54d..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java b/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java
 deleted file mode 100644
-index b4e9db7..0000000
+index bc8baa1..0000000
 --- a/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java
 +++ /dev/null
-@@ -1,889 +0,0 @@
+@@ -1,939 +0,0 @@
 -/*
 - * Copyright (C) 2015 The Android Open Source Project
 - *
@@ -4099,6 +4340,7 @@ index b4e9db7..0000000
 -import java.nio.ByteBuffer;
 -import java.util.ArrayList;
 -import java.util.Arrays;
+-import java.util.Random;
 -import junit.framework.TestCase;
 -
 -import static android.net.dhcp.DhcpPacket.*;
@@ -4502,7 +4744,7 @@ index b4e9db7..0000000
 -        try {
 -            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
 -        } catch (DhcpPacket.ParseException expected) {
--            assertDhcpErrorCodes(DhcpErrorEvent.PARSING_ERROR, expected.errorCode);
+-            assertDhcpErrorCodes(DhcpErrorEvent.DHCP_NO_COOKIE, expected.errorCode);
 -            return;
 -        }
 -        fail("Dhcp packet parsing should have failed");
@@ -4542,6 +4784,55 @@ index b4e9db7..0000000
 -
 -    private void assertDhcpErrorCodes(int expected, int got) {
 -        assertEquals(Integer.toHexString(expected), Integer.toHexString(got));
+-    }
+-
+-    public void testTruncatedOfferPackets() throws Exception {
+-        final byte[] packet = HexDump.hexStringToByteArray(
+-            // IP header.
+-            "450001518d0600004011144dc0a82b01c0a82bf7" +
+-            // UDP header.
+-            "00430044013d9ac7" +
+-            // BOOTP header.
+-            "02010600dfc23d1f0002000000000000c0a82bf7c0a82b0100000000" +
+-            // MAC address.
+-            "30766ff2a90c00000000000000000000" +
+-            // Server name.
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            // File.
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            "0000000000000000000000000000000000000000000000000000000000000000" +
+-            // Options
+-            "638253633501023604c0a82b01330400000e103a04000007083b0400000c4e0104ffffff00" +
+-            "1c04c0a82bff0304c0a82b010604c0a82b012b0f414e44524f49445f4d455445524544ff");
+-
+-        for (int len = 0; len < packet.length; len++) {
+-            try {
+-                DhcpPacket.decodeFullPacket(packet, len, ENCAP_L3);
+-            } catch (ParseException e) {
+-                if (e.errorCode == DhcpErrorEvent.PARSING_ERROR) {
+-                    fail(String.format("bad truncated packet of length %d", len));
+-                }
+-            }
+-        }
+-    }
+-
+-    public void testRandomPackets() throws Exception {
+-        final int maxRandomPacketSize = 512;
+-        final Random r = new Random();
+-        for (int i = 0; i < 10000; i++) {
+-            byte[] packet = new byte[r.nextInt(maxRandomPacketSize + 1)];
+-            r.nextBytes(packet);
+-            try {
+-                DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+-            } catch (ParseException e) {
+-                if (e.errorCode == DhcpErrorEvent.PARSING_ERROR) {
+-                    fail("bad packet: " + HexDump.toHexString(packet));
+-                }
+-            }
+-        }
 -    }
 -
 -    private byte[] mtuBytes(int mtu) {
@@ -6923,10 +7214,10 @@ index 10b9e7c..0000000
 -    }
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java b/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
-index 4af1cf1..c2c6e21 100644
+index 65f9399..012bdd8 100644
 --- a/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
 +++ b/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
-@@ -614,6 +614,19 @@ public class ConnectivityServiceTest extends AndroidTestCase {
+@@ -620,6 +620,19 @@ public class ConnectivityServiceTest extends AndroidTestCase {
          }
      }
  
@@ -11049,215 +11340,12 @@ index 984a484..0000000
 -    }
 -}
 \ No newline at end of file
-diff --git a/services/tests/servicestests/src/com/android/server/connectivity/DnsEventListenerServiceTest.java b/services/tests/servicestests/src/com/android/server/connectivity/DnsEventListenerServiceTest.java
-deleted file mode 100644
-index 033b2c9..0000000
---- a/services/tests/servicestests/src/com/android/server/connectivity/DnsEventListenerServiceTest.java
-+++ /dev/null
-@@ -1,197 +0,0 @@
--/*
-- * Copyright (C) 2016, The Android Open Source Project
-- *
-- * Licensed under the Apache License, Version 2.0 (the "License");
-- * you may not use this file except in compliance with the License.
-- * You may obtain a copy of the License at
-- *
-- *      http://www.apache.org/licenses/LICENSE-2.0
-- *
-- * Unless required by applicable law or agreed to in writing, software
-- * distributed under the License is distributed on an "AS IS" BASIS,
-- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-- * See the License for the specific language governing permissions and
-- * limitations under the License.
-- */
--
--package com.android.server.connectivity;
--
--import android.net.ConnectivityManager.NetworkCallback;
--import android.net.ConnectivityManager;
--import android.net.Network;
--import android.net.metrics.DnsEvent;
--import android.net.metrics.IDnsEventListener;
--import android.net.metrics.IpConnectivityLog;
--
--import junit.framework.TestCase;
--import org.junit.Before;
--import org.junit.Test;
--import static org.junit.Assert.assertArrayEquals;
--import static org.junit.Assert.assertTrue;
--
--import org.mockito.ArgumentCaptor;
--import org.mockito.Mock;
--import org.mockito.Mockito;
--import org.mockito.MockitoAnnotations;
--import static org.mockito.Mockito.any;
--import static org.mockito.Mockito.anyInt;
--import static org.mockito.Mockito.eq;
--import static org.mockito.Mockito.timeout;
--import static org.mockito.Mockito.times;
--import static org.mockito.Mockito.verify;
--
--import java.io.FileOutputStream;
--import java.io.PrintWriter;
--import java.util.Arrays;
--import java.util.List;
--import java.util.OptionalInt;
--import java.util.stream.IntStream;
--
--public class DnsEventListenerServiceTest extends TestCase {
--
--    // TODO: read from DnsEventListenerService after this constant is read from system property
--    static final int BATCH_SIZE = 100;
--    static final int EVENT_TYPE = IDnsEventListener.EVENT_GETADDRINFO;
--    // TODO: read from IDnsEventListener
--    static final int RETURN_CODE = 1;
--
--    static final byte[] EVENT_TYPES  = new byte[BATCH_SIZE];
--    static final byte[] RETURN_CODES = new byte[BATCH_SIZE];
--    static final int[] LATENCIES     = new int[BATCH_SIZE];
--    static {
--        for (int i = 0; i < BATCH_SIZE; i++) {
--            EVENT_TYPES[i] = EVENT_TYPE;
--            RETURN_CODES[i] = RETURN_CODE;
--            LATENCIES[i] = i;
--        }
--    }
--
--    DnsEventListenerService mDnsService;
--
--    @Mock ConnectivityManager mCm;
--    @Mock IpConnectivityLog mLog;
--    ArgumentCaptor<NetworkCallback> mCallbackCaptor;
--    ArgumentCaptor<DnsEvent> mEvCaptor;
--
--    public void setUp() {
--        MockitoAnnotations.initMocks(this);
--        mCallbackCaptor = ArgumentCaptor.forClass(NetworkCallback.class);
--        mEvCaptor = ArgumentCaptor.forClass(DnsEvent.class);
--        mDnsService = new DnsEventListenerService(mCm, mLog);
--
--        verify(mCm, times(1)).registerNetworkCallback(any(), mCallbackCaptor.capture());
--    }
--
--    public void testOneBatch() throws Exception {
--        log(105, LATENCIES);
--        log(106, Arrays.copyOf(LATENCIES, BATCH_SIZE - 1)); // one lookup short of a batch event
--
--        verifyLoggedEvents(new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES));
--
--        log(106, Arrays.copyOfRange(LATENCIES, BATCH_SIZE - 1, BATCH_SIZE));
--
--        mEvCaptor = ArgumentCaptor.forClass(DnsEvent.class); // reset argument captor
--        verifyLoggedEvents(
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(106, EVENT_TYPES, RETURN_CODES, LATENCIES));
--    }
--
--    public void testSeveralBatches() throws Exception {
--        log(105, LATENCIES);
--        log(106, LATENCIES);
--        log(105, LATENCIES);
--        log(107, LATENCIES);
--
--        verifyLoggedEvents(
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(106, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(107, EVENT_TYPES, RETURN_CODES, LATENCIES));
--    }
--
--    public void testBatchAndNetworkLost() throws Exception {
--        byte[] eventTypes = Arrays.copyOf(EVENT_TYPES, 20);
--        byte[] returnCodes = Arrays.copyOf(RETURN_CODES, 20);
--        int[] latencies = Arrays.copyOf(LATENCIES, 20);
--
--        log(105, LATENCIES);
--        log(105, latencies);
--        mCallbackCaptor.getValue().onLost(new Network(105));
--        log(105, LATENCIES);
--
--        verifyLoggedEvents(
--            new DnsEvent(105, eventTypes, returnCodes, latencies),
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES));
--    }
--
--    public void testConcurrentBatchesAndDumps() throws Exception {
--        final long stop = System.currentTimeMillis() + 100;
--        final PrintWriter pw = new PrintWriter(new FileOutputStream("/dev/null"));
--        new Thread() {
--            public void run() {
--                while (System.currentTimeMillis() < stop) {
--                    mDnsService.dump(pw);
--                }
--            }
--        }.start();
--
--        logAsync(105, LATENCIES);
--        logAsync(106, LATENCIES);
--        logAsync(107, LATENCIES);
--
--        verifyLoggedEvents(500,
--            new DnsEvent(105, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(106, EVENT_TYPES, RETURN_CODES, LATENCIES),
--            new DnsEvent(107, EVENT_TYPES, RETURN_CODES, LATENCIES));
--    }
--
--    public void testConcurrentBatchesAndNetworkLoss() throws Exception {
--        logAsync(105, LATENCIES);
--        Thread.sleep(10L);
--        // call onLost() asynchronously to logAsync's onDnsEvent() calls.
--        mCallbackCaptor.getValue().onLost(new Network(105));
--
--        // do not verify unpredictable batch
--        verify(mLog, timeout(500).times(1)).log(any());
--    }
--
--    void log(int netId, int[] latencies) {
--        for (int l : latencies) {
--            mDnsService.onDnsEvent(netId, EVENT_TYPE, RETURN_CODE, l);
--        }
--    }
--
--    void logAsync(int netId, int[] latencies) {
--        new Thread() {
--            public void run() {
--                log(netId, latencies);
--            }
--        }.start();
--    }
--
--    void verifyLoggedEvents(DnsEvent... expected) {
--        verifyLoggedEvents(0, expected);
--    }
--
--    void verifyLoggedEvents(int wait, DnsEvent... expectedEvents) {
--        verify(mLog, timeout(wait).times(expectedEvents.length)).log(mEvCaptor.capture());
--        for (DnsEvent got : mEvCaptor.getAllValues()) {
--            OptionalInt index = IntStream.range(0, expectedEvents.length)
--                    .filter(i -> eventsEqual(expectedEvents[i], got))
--                    .findFirst();
--            // Don't match same expected event more than once.
--            index.ifPresent(i -> expectedEvents[i] = null);
--            assertTrue(index.isPresent());
--        }
--    }
--
--    /** equality function for DnsEvent to avoid overriding equals() and hashCode(). */
--    static boolean eventsEqual(DnsEvent expected, DnsEvent got) {
--        return (expected == got) || ((expected != null) && (got != null)
--                && (expected.netId == got.netId)
--                && Arrays.equals(expected.eventTypes, got.eventTypes)
--                && Arrays.equals(expected.returnCodes, got.returnCodes)
--                && Arrays.equals(expected.latenciesMs, got.latenciesMs));
--    }
--}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java b/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java
 deleted file mode 100644
-index aed3635..0000000
+index 011e505..0000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java
 +++ /dev/null
-@@ -1,359 +0,0 @@
+@@ -1,389 +0,0 @@
 -/*
 - * Copyright (C) 2016 The Android Open Source Project
 - *
@@ -11276,6 +11364,17 @@ index aed3635..0000000
 -
 -package com.android.server.connectivity;
 -
+-import static com.android.server.connectivity.MetricsTestUtil.aBool;
+-import static com.android.server.connectivity.MetricsTestUtil.aByteArray;
+-import static com.android.server.connectivity.MetricsTestUtil.aLong;
+-import static com.android.server.connectivity.MetricsTestUtil.aString;
+-import static com.android.server.connectivity.MetricsTestUtil.aType;
+-import static com.android.server.connectivity.MetricsTestUtil.anInt;
+-import static com.android.server.connectivity.MetricsTestUtil.anIntArray;
+-import static com.android.server.connectivity.MetricsTestUtil.b;
+-import static com.android.server.connectivity.MetricsTestUtil.describeIpEvent;
+-import static com.android.server.connectivity.metrics.IpConnectivityLogClass.IpConnectivityLog;
+-
 -import android.net.ConnectivityMetricsEvent;
 -import android.net.metrics.ApfProgramEvent;
 -import android.net.metrics.ApfStats;
@@ -11288,24 +11387,13 @@ index aed3635..0000000
 -import android.net.metrics.NetworkEvent;
 -import android.net.metrics.RaEvent;
 -import android.net.metrics.ValidationProbeEvent;
--import com.google.protobuf.nano.MessageNano;
+-import android.test.suitebuilder.annotation.SmallTest;
 -import java.util.Arrays;
 -import junit.framework.TestCase;
 -
--import static com.android.server.connectivity.metrics.IpConnectivityLogClass.IpConnectivityLog;
--import static com.android.server.connectivity.MetricsTestUtil.aBool;
--import static com.android.server.connectivity.MetricsTestUtil.aByteArray;
--import static com.android.server.connectivity.MetricsTestUtil.aLong;
--import static com.android.server.connectivity.MetricsTestUtil.aString;
--import static com.android.server.connectivity.MetricsTestUtil.aType;
--import static com.android.server.connectivity.MetricsTestUtil.anInt;
--import static com.android.server.connectivity.MetricsTestUtil.anIntArray;
--import static com.android.server.connectivity.MetricsTestUtil.b;
--import static com.android.server.connectivity.MetricsTestUtil.describeIpEvent;
--import static com.android.server.connectivity.MetricsTestUtil.ipEv;
--
 -public class IpConnectivityEventBuilderTest extends TestCase {
 -
+-    @SmallTest
 -    public void testDefaultNetworkEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(DefaultNetworkEvent.class),
@@ -11318,6 +11406,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  default_network_event <",
 -                "    network_id <",
 -                "      network_id: 102",
@@ -11330,12 +11420,13 @@ index aed3635..0000000
 -                "    transport_types: 2",
 -                "    transport_types: 3",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testDhcpClientEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(DhcpClientEvent.class),
@@ -11346,18 +11437,20 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  dhcp_event <",
 -                "    duration_ms: 192",
--                "    error_code: 0",
 -                "    if_name: \"wlan0\"",
 -                "    state_transition: \"SomeState\"",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testDhcpErrorEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(DhcpErrorEvent.class),
@@ -11367,18 +11460,20 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  dhcp_event <",
 -                "    duration_ms: 0",
--                "    error_code: 50397184",
 -                "    if_name: \"wlan0\"",
--                "    state_transition: \"\"",
+-                "    error_code: 50397184",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testDnsEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(DnsEvent.class),
@@ -11390,6 +11485,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  dns_lookup_batch <",
 -                "    event_types: 1",
 -                "    event_types: 1",
@@ -11419,12 +11516,13 @@ index aed3635..0000000
 -                "    return_codes: 200",
 -                "    return_codes: 178",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testIpManagerEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(IpManagerEvent.class),
@@ -11435,17 +11533,20 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  ip_provisioning_event <",
 -                "    event_type: 1",
 -                "    if_name: \"wlan0\"",
 -                "    latency_ms: 5678",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testIpReachabilityEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(IpReachabilityEvent.class),
@@ -11455,16 +11556,19 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  ip_reachability_event <",
 -                "    event_type: 512",
 -                "    if_name: \"wlan0\"",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testNetworkEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(NetworkEvent.class),
@@ -11475,6 +11579,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  network_event <",
 -                "    event_type: 5",
 -                "    latency_ms: 20410",
@@ -11482,12 +11588,13 @@ index aed3635..0000000
 -                "      network_id: 100",
 -                "    >",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testValidationProbeEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(ValidationProbeEvent.class),
@@ -11500,6 +11607,7 @@ index aed3635..0000000
 -                "dropped_events: 0",
 -                "events <",
 -                "  time_ms: 1",
+-                "  transport: 0",
 -                "  validation_probe_event <",
 -                "    latency_ms: 40730",
 -                "    network_id <",
@@ -11508,11 +11616,13 @@ index aed3635..0000000
 -                "    probe_result: 204",
 -                "    probe_type: 1",
 -                "  >",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testApfProgramEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(ApfProgramEvent.class),
@@ -11525,6 +11635,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  apf_program_event <",
 -                "    current_ras: 9",
 -                "    drop_multicast: true",
@@ -11533,12 +11645,13 @@ index aed3635..0000000
 -                "    lifetime: 200",
 -                "    program_length: 2048",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testApfStatsSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(ApfStats.class),
@@ -11554,6 +11667,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  apf_statistics <",
 -                "    dropped_ras: 2",
 -                "    duration_ms: 45000",
@@ -11564,12 +11679,13 @@ index aed3635..0000000
 -                "    received_ras: 10",
 -                "    zero_lifetime_ras: 1",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
+-    @SmallTest
 -    public void testRaEventSerialization() {
 -        ConnectivityMetricsEvent ev = describeIpEvent(
 -                aType(RaEvent.class),
@@ -11583,6 +11699,8 @@ index aed3635..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 1",
+-                "  transport: 0",
 -                "  ra_event <",
 -                "    dnssl_lifetime: -1",
 -                "    prefix_preferred_lifetime: 300",
@@ -11591,17 +11709,17 @@ index aed3635..0000000
 -                "    route_info_lifetime: -1",
 -                "    router_lifetime: 2000",
 -                "  >",
--                "  time_ms: 1",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, ev);
 -    }
 -
 -    static void verifySerialization(String want, ConnectivityMetricsEvent... input) {
 -        try {
--            byte[] got = IpConnectivityEventBuilder.serialize(0, Arrays.asList(input));
--            IpConnectivityLog log = new IpConnectivityLog();
--            MessageNano.mergeFrom(log, got);
+-            byte[] got = IpConnectivityEventBuilder.serialize(0,
+-                    IpConnectivityEventBuilder.toProto(Arrays.asList(input)));
+-            IpConnectivityLog log = IpConnectivityLog.parseFrom(got);
 -            assertEquals(want, log.toString());
 -        } catch (Exception e) {
 -            fail(e.toString());
@@ -11619,10 +11737,10 @@ index aed3635..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java b/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java
 deleted file mode 100644
-index 3fc89b9..0000000
+index 450653c..0000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java
 +++ /dev/null
-@@ -1,269 +0,0 @@
+@@ -1,296 +0,0 @@
 -/*
 - * Copyright (C) 2016, The Android Open Source Project
 - *
@@ -11641,9 +11759,13 @@ index 3fc89b9..0000000
 -
 -package com.android.server.connectivity;
 -
+-import static org.mockito.Mockito.timeout;
+-import static org.mockito.Mockito.verify;
+-
 -import android.content.Context;
 -import android.net.ConnectivityMetricsEvent;
 -import android.net.IIpConnectivityMetrics;
+-import android.net.metrics.ApfProgramEvent;
 -import android.net.metrics.ApfStats;
 -import android.net.metrics.DefaultNetworkEvent;
 -import android.net.metrics.DhcpClientEvent;
@@ -11653,9 +11775,9 @@ index 3fc89b9..0000000
 -import android.net.metrics.RaEvent;
 -import android.net.metrics.ValidationProbeEvent;
 -import android.os.Parcelable;
+-import android.test.suitebuilder.annotation.SmallTest;
 -import android.util.Base64;
 -import com.android.server.connectivity.metrics.IpConnectivityLogClass;
--import com.google.protobuf.nano.MessageNano;
 -import java.io.PrintWriter;
 -import java.io.StringWriter;
 -import java.util.Collections;
@@ -11666,10 +11788,6 @@ index 3fc89b9..0000000
 -import org.mockito.ArgumentCaptor;
 -import org.mockito.Mock;
 -import org.mockito.MockitoAnnotations;
--
--import static org.mockito.Mockito.timeout;
--import static org.mockito.Mockito.times;
--import static org.mockito.Mockito.verify;
 -
 -public class IpConnectivityMetricsTest extends TestCase {
 -    static final IpReachabilityEvent FAKE_EV =
@@ -11682,9 +11800,10 @@ index 3fc89b9..0000000
 -
 -    public void setUp() {
 -        MockitoAnnotations.initMocks(this);
--        mService = new IpConnectivityMetrics(mCtx);
+-        mService = new IpConnectivityMetrics(mCtx, (ctx) -> 2000);
 -    }
 -
+-    @SmallTest
 -    public void testLoggingEvents() throws Exception {
 -        IpConnectivityLog logger = new IpConnectivityLog(mMockService);
 -
@@ -11698,6 +11817,7 @@ index 3fc89b9..0000000
 -        assertEventsEqual(expectedEvent(3), got.get(2));
 -    }
 -
+-    @SmallTest
 -    public void testLoggingEventsWithMultipleCallers() throws Exception {
 -        IpConnectivityLog logger = new IpConnectivityLog(mMockService);
 -
@@ -11725,6 +11845,7 @@ index 3fc89b9..0000000
 -        }
 -    }
 -
+-    @SmallTest
 -    public void testBufferFlushing() {
 -        String output1 = getdump("flush");
 -        assertEquals("", output1);
@@ -11737,6 +11858,29 @@ index 3fc89b9..0000000
 -        assertEquals("", output3);
 -    }
 -
+-    @SmallTest
+-    public void testRateLimiting() {
+-        final IpConnectivityLog logger = new IpConnectivityLog(mService.impl);
+-        final ApfProgramEvent ev = new ApfProgramEvent(0, 0, 0, 0, 0);
+-        final long fakeTimestamp = 1;
+-
+-        int attempt = 100; // More than burst quota, but less than buffer size.
+-        for (int i = 0; i < attempt; i++) {
+-            logger.log(ev);
+-        }
+-
+-        String output1 = getdump("flush");
+-        assertFalse("".equals(output1));
+-
+-        for (int i = 0; i < attempt; i++) {
+-            assertFalse("expected event to be dropped", logger.log(fakeTimestamp, ev));
+-        }
+-
+-        String output2 = getdump("flush");
+-        assertEquals("", output2);
+-    }
+-
+-    @SmallTest
 -    public void testEndToEndLogging() {
 -        IpConnectivityLog logger = new IpConnectivityLog(mService.impl);
 -
@@ -11757,22 +11901,25 @@ index 3fc89b9..0000000
 -        String want = joinLines(
 -                "dropped_events: 0",
 -                "events <",
+-                "  time_ms: 100",
+-                "  transport: 0",
 -                "  ip_reachability_event <",
 -                "    event_type: 512",
 -                "    if_name: \"wlan0\"",
 -                "  >",
--                "  time_ms: 100",
 -                ">",
 -                "events <",
+-                "  time_ms: 200",
+-                "  transport: 0",
 -                "  dhcp_event <",
 -                "    duration_ms: 192",
--                "    error_code: 0",
 -                "    if_name: \"wlan0\"",
 -                "    state_transition: \"SomeState\"",
 -                "  >",
--                "  time_ms: 200",
 -                ">",
 -                "events <",
+-                "  time_ms: 300",
+-                "  transport: 0",
 -                "  default_network_event <",
 -                "    network_id <",
 -                "      network_id: 102",
@@ -11785,18 +11932,19 @@ index 3fc89b9..0000000
 -                "    transport_types: 2",
 -                "    transport_types: 3",
 -                "  >",
--                "  time_ms: 300",
 -                ">",
 -                "events <",
+-                "  time_ms: 400",
+-                "  transport: 0",
 -                "  ip_provisioning_event <",
 -                "    event_type: 1",
 -                "    if_name: \"wlan0\"",
 -                "    latency_ms: 5678",
 -                "  >",
--                "  time_ms: 400",
 -                ">",
 -                "events <",
 -                "  time_ms: 500",
+-                "  transport: 0",
 -                "  validation_probe_event <",
 -                "    latency_ms: 40730",
 -                "    network_id <",
@@ -11807,6 +11955,8 @@ index 3fc89b9..0000000
 -                "  >",
 -                ">",
 -                "events <",
+-                "  time_ms: 600",
+-                "  transport: 0",
 -                "  apf_statistics <",
 -                "    dropped_ras: 2",
 -                "    duration_ms: 45000",
@@ -11817,9 +11967,10 @@ index 3fc89b9..0000000
 -                "    received_ras: 10",
 -                "    zero_lifetime_ras: 1",
 -                "  >",
--                "  time_ms: 600",
 -                ">",
 -                "events <",
+-                "  time_ms: 700",
+-                "  transport: 0",
 -                "  ra_event <",
 -                "    dnssl_lifetime: -1",
 -                "    prefix_preferred_lifetime: 300",
@@ -11828,8 +11979,8 @@ index 3fc89b9..0000000
 -                "    route_info_lifetime: -1",
 -                "    router_lifetime: 2000",
 -                "  >",
--                "  time_ms: 700",
--                ">");
+-                ">",
+-                "version: 2");
 -
 -        verifySerialization(want, getdump("flush"));
 -    }
@@ -11856,8 +12007,7 @@ index 3fc89b9..0000000
 -        try {
 -            byte[] got = Base64.decode(output, Base64.DEFAULT);
 -            IpConnectivityLogClass.IpConnectivityLog log =
--                    new IpConnectivityLogClass.IpConnectivityLog();
--            MessageNano.mergeFrom(log, got);
+-                    IpConnectivityLogClass.IpConnectivityLog.parseFrom(got);
 -            assertEquals(want, log.toString());
 -        } catch (Exception e) {
 -            fail(e.toString());
@@ -11885,12 +12035,7 @@ index 3fc89b9..0000000
 -    }
 -
 -    static final Comparator<ConnectivityMetricsEvent> EVENT_COMPARATOR =
--        new Comparator<ConnectivityMetricsEvent>() {
--            @Override
--            public int compare(ConnectivityMetricsEvent ev1, ConnectivityMetricsEvent ev2) {
--                return (int) (ev1.timestamp - ev2.timestamp);
--            }
--        };
+-        Comparator.comparingLong((ev) -> ev.timestamp);
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java b/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java
 deleted file mode 100644
@@ -16735,10 +16880,10 @@ index 3da61d6..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java
 deleted file mode 100644
-index 0783afc..0000000
+index 956d83a..0000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java
 +++ /dev/null
-@@ -1,612 +0,0 @@
+@@ -1,619 +0,0 @@
 -/*
 - * Copyright (C) 2015 The Android Open Source Project
 - *
@@ -16757,8 +16902,15 @@ index 0783afc..0000000
 -
 -package com.android.server.devicepolicy;
 -
--import com.android.internal.widget.LockPatternUtils;
+-import static org.mockito.Matchers.anyBoolean;
+-import static org.mockito.Matchers.anyInt;
+-import static org.mockito.Matchers.eq;
+-import static org.mockito.Mockito.mock;
+-import static org.mockito.Mockito.spy;
+-import static org.mockito.Mockito.when;
 -
+-import android.accounts.Account;
+-import android.accounts.AccountManager;
 -import android.app.IActivityManager;
 -import android.app.NotificationManager;
 -import android.app.backup.IBackupManager;
@@ -16785,6 +16937,8 @@ index 0783afc..0000000
 -import android.test.mock.MockContext;
 -import android.view.IWindowManager;
 -
+-import com.android.internal.widget.LockPatternUtils;
+-
 -import org.junit.Assert;
 -import org.mockito.invocation.InvocationOnMock;
 -import org.mockito.stubbing.Answer;
@@ -16792,13 +16946,6 @@ index 0783afc..0000000
 -import java.io.File;
 -import java.util.ArrayList;
 -import java.util.List;
--
--import static org.mockito.Matchers.anyBoolean;
--import static org.mockito.Matchers.anyInt;
--import static org.mockito.Matchers.eq;
--import static org.mockito.Mockito.mock;
--import static org.mockito.Mockito.spy;
--import static org.mockito.Mockito.when;
 -
 -/**
 - * Context used throughout DPMS tests.
@@ -17005,6 +17152,7 @@ index 0783afc..0000000
 -    public final SettingsForMock settings;
 -    public final MockContentResolver contentResolver;
 -    public final TelephonyManager telephonyManager;
+-    public final AccountManager accountManager;
 -
 -    /** Note this is a partial mock, not a real mock. */
 -    public final PackageManager packageManager;
@@ -17039,6 +17187,7 @@ index 0783afc..0000000
 -        wifiManager = mock(WifiManager.class);
 -        settings = mock(SettingsForMock.class);
 -        telephonyManager = mock(TelephonyManager.class);
+-        accountManager = mock(AccountManager.class);
 -
 -        // Package manager is huge, so we use a partial mock instead.
 -        packageManager = spy(context.getPackageManager());
@@ -17101,6 +17250,7 @@ index 0783afc..0000000
 -                    }
 -                }
 -        );
+-        when(accountManager.getAccountsAsUser(anyInt())).thenReturn(new Account[0]);
 -
 -
 -        // Create a data directory.
@@ -17159,6 +17309,8 @@ index 0783afc..0000000
 -                return powerManager;
 -            case Context.WIFI_SERVICE:
 -                return wifiManager;
+-            case Context.ACCOUNT_SERVICE:
+-                return accountManager;
 -        }
 -        throw new UnsupportedOperationException();
 -    }
@@ -26618,10 +26770,10 @@ index ebd3633..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java
 deleted file mode 100644
-index 3cfdc32..0000000
+index cd48f36..0000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java
 +++ /dev/null
-@@ -1,7340 +0,0 @@
+@@ -1,7349 +0,0 @@
 -/*
 - * Copyright (C) 2016 The Android Open Source Project
 - *
@@ -31562,6 +31714,9 @@ index 3cfdc32..0000000
 -            assertEquals(0, mManager.getDynamicShortcuts().size());
 -            assertEquals(0, mManager.getPinnedShortcuts().size());
 -        });
+-        assertFalse(mService.getPackageShortcutForTest(CALLING_PACKAGE_1, USER_0)
+-                .getPackageInfo().isShadow());
+-
 -
 -        installPackage(USER_0, CALLING_PACKAGE_2);
 -        runWithCaller(CALLING_PACKAGE_2, USER_0, () -> {
@@ -31570,6 +31725,8 @@ index 3cfdc32..0000000
 -                    mManager.getPinnedShortcuts()),
 -                    "s1", "s2", "s3");
 -        });
+-        assertFalse(mService.getPackageShortcutForTest(CALLING_PACKAGE_2, USER_0)
+-                .getPackageInfo().isShadow());
 -
 -        installPackage(USER_0, LAUNCHER_1);
 -        runWithCaller(LAUNCHER_1, USER_0, () -> {
@@ -31693,6 +31850,8 @@ index 3cfdc32..0000000
 -                    mLauncherApps.getShortcuts(buildAllQuery(CALLING_PACKAGE_3), HANDLE_USER_0))
 -                    /* empty */);
 -        });
+-        assertFalse(mService.getLauncherShortcutForTest(LAUNCHER_1, USER_0)
+-                .getPackageInfo().isShadow());
 -
 -        runWithCaller(CALLING_PACKAGE_1, USER_0, () -> {
 -            assertEquals(0, mManager.getDynamicShortcuts().size());
@@ -31715,6 +31874,8 @@ index 3cfdc32..0000000
 -                    mLauncherApps.getShortcuts(buildAllQuery(CALLING_PACKAGE_3), HANDLE_USER_0))
 -                    /* empty */);
 -        });
+-        assertFalse(mService.getLauncherShortcutForTest(LAUNCHER_2, USER_0)
+-                .getPackageInfo().isShadow());
 -
 -        installPackage(USER_0, CALLING_PACKAGE_3);
 -        runWithCaller(CALLING_PACKAGE_3, USER_0, () -> {
