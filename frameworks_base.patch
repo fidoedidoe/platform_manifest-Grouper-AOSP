@@ -600,7 +600,7 @@ index c6ab918..d848081 100644
              mService.notifyAll();
          }
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 39e2914..1e95d28 100644
+index b6a9940..11b5832a 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -423,7 +423,7 @@ public class PackageManagerService extends IPackageManager.Stub {

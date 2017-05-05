@@ -52,17 +52,6 @@ index 7e36c5e..aca7a19 100644
  
  include $(BUILD_EXECUTABLE)
 +endif
-diff --git a/camera/cameraserver/main_cameraserver.cpp b/camera/cameraserver/main_cameraserver.cpp
-index f4be468..ea80ad4 100644
---- a/camera/cameraserver/main_cameraserver.cpp
-+++ b/camera/cameraserver/main_cameraserver.cpp
-@@ -31,5 +31,6 @@ int main(int argc __unused, char** argv __unused)
-     ALOGI("ServiceManager: %p", sm.get());
-     CameraService::instantiate();
-     ProcessState::self()->startThreadPool();
-+    IPCThreadState::self()->disableBackgroundScheduling(true);
-     IPCThreadState::self()->joinThreadPool();
- }
 diff --git a/camera/ndk/NdkCaptureRequest.cpp b/camera/ndk/NdkCaptureRequest.cpp
 index 77b9a33..7c37955 100644
 --- a/camera/ndk/NdkCaptureRequest.cpp
@@ -137,7 +126,7 @@ index dc4e5d4..b64d899 100644
  
  void NuPlayer::determineAudioModeChange(const sp<AMessage> &audioFormat) {
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
-index 37fd5a5..337fb2d 100644
+index 37fd5a5..77a2a39 100644
 --- a/media/libstagefright/ACodec.cpp
 +++ b/media/libstagefright/ACodec.cpp
 @@ -804,13 +804,22 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
@@ -163,30 +152,7 @@ index 37fd5a5..337fb2d 100644
                  bufSize = max(sizeof(VideoGrallocMetadata), sizeof(VideoNativeMetadata));
              } else if (portIndex == kPortIndexInput && type == kMetadataBufferTypeCameraSource) {
                  bufSize = max(bufSize, sizeof(VideoNativeMetadata));
-@@ -1052,6 +1061,12 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
-     // 2. try to allocate two (2) additional buffers to reduce starvation from
-     //    the consumer
-     //    plus an extra buffer to account for incorrect minUndequeuedBufs
-+#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
-+    // Some devices don't like to set OMX_IndexParamPortDefinition at this
-+    // point (even with an unmodified def), so skip it if possible.
-+    // This check was present in KitKat.
-+    if (def.nBufferCountActual < def.nBufferCountMin + *minUndequeuedBuffers) {
-+#endif
-     for (OMX_U32 extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
-         OMX_U32 newBufferCount =
-             def.nBufferCountMin + *minUndequeuedBuffers + extraBuffers;
-@@ -1071,6 +1086,9 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
-             return err;
-         }
-     }
-+#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
-+    }
-+#endif
- 
-     err = native_window_set_buffer_count(
-             mNativeWindow.get(), def.nBufferCountActual);
-@@ -1766,6 +1784,14 @@ status_t ACodec::configureCodec(
+@@ -1766,6 +1775,14 @@ status_t ACodec::configureCodec(
              mInputMetadataType = (MetadataBufferType)storeMeta;
          }
  
@@ -201,7 +167,7 @@ index 37fd5a5..337fb2d 100644
          uint32_t usageBits;
          if (mOMX->getParameter(
                  mNode, (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits,
-@@ -4274,7 +4300,9 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+@@ -4274,7 +4291,9 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
  
          h264type.eProfile = static_cast<OMX_VIDEO_AVCPROFILETYPE>(profile);
          h264type.eLevel = static_cast<OMX_VIDEO_AVCLEVELTYPE>(level);
@@ -212,7 +178,7 @@ index 37fd5a5..337fb2d 100644
          h264type.eProfile = OMX_VIDEO_AVCProfileBaseline;
  #if 0   /* DON'T YET DEFAULT TO HIGHEST PROFILE */
          // Use largest supported profile for AVC recording if profile is not specified.
-@@ -4287,6 +4315,7 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+@@ -4287,6 +4306,7 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
          }
  #endif
      }
@@ -220,23 +186,7 @@ index 37fd5a5..337fb2d 100644
  
      ALOGI("setupAVCEncoderParameters with [profile: %s] [level: %s]",
              asString(h264type.eProfile), asString(h264type.eLevel));
-@@ -4762,6 +4791,7 @@ bool ACodec::describeDefaultColorFormat(DescribeColorFormat2Params &params) {
-         fmt != OMX_COLOR_FormatYUV420PackedPlanar &&
-         fmt != OMX_COLOR_FormatYUV420SemiPlanar &&
-         fmt != OMX_COLOR_FormatYUV420PackedSemiPlanar &&
-+        fmt != OMX_TI_COLOR_FormatYUV420PackedSemiPlanar &&
-         fmt != (OMX_COLOR_FORMATTYPE)HAL_PIXEL_FORMAT_YV12) {
-         ALOGW("do not know color format 0x%x = %d", fmt, fmt);
-         return false;
-@@ -4838,6 +4868,7 @@ bool ACodec::describeDefaultColorFormat(DescribeColorFormat2Params &params) {
-         case OMX_COLOR_FormatYUV420SemiPlanar:
-             // FIXME: NV21 for sw-encoder, NV12 for decoder and hw-encoder
-         case OMX_COLOR_FormatYUV420PackedSemiPlanar:
-+        case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
-             // NV12
-             image.mPlane[image.U].mOffset = params.nStride * params.nSliceHeight;
-             image.mPlane[image.U].mColInc = 2;
-@@ -6036,6 +6067,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
+@@ -6036,6 +6056,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
                  status_t err2 = OK;
                  switch (metaType) {
                  case kMetadataBufferTypeInvalid:
@@ -246,7 +196,7 @@ index 37fd5a5..337fb2d 100644
                      break;
  #ifndef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
                  case kMetadataBufferTypeNativeHandleSource:
-@@ -6267,6 +6301,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6267,6 +6290,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                  native_handle_t *handle = NULL;
                  VideoNativeHandleMetadata &nativeMeta =
                      *(VideoNativeHandleMetadata *)info->mData->data();
@@ -257,7 +207,7 @@ index 37fd5a5..337fb2d 100644
                  if (info->mData->size() >= sizeof(nativeMeta)
                          && nativeMeta.eType == kMetadataBufferTypeNativeHandleSource) {
  #ifdef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
-@@ -6276,6 +6314,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6276,6 +6303,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                      handle = (native_handle_t *)nativeMeta.pHandle;
  #endif
                  }
@@ -270,7 +220,7 @@ index 37fd5a5..337fb2d 100644
                  info->mData->meta()->setPointer("handle", handle);
                  info->mData->meta()->setInt32("rangeOffset", rangeOffset);
                  info->mData->meta()->setInt32("rangeLength", rangeLength);
-@@ -6968,10 +7012,12 @@ void ACodec::LoadedState::onCreateInputSurface(
+@@ -6968,10 +7001,12 @@ void ACodec::LoadedState::onCreateInputSurface(
          err = mCodec->mOMX->createInputSurface(
                  mCodec->mNode, kPortIndexInput, dataSpace, &bufferProducer,
                  &mCodec->mInputMetadataType);
@@ -283,7 +233,7 @@ index 37fd5a5..337fb2d 100644
      }
  
      if (err == OK) {
-@@ -7014,10 +7060,12 @@ void ACodec::LoadedState::onSetInputSurface(
+@@ -7014,10 +7049,12 @@ void ACodec::LoadedState::onSetInputSurface(
          err = mCodec->mOMX->setInputSurface(
                  mCodec->mNode, kPortIndexInput, surface->getBufferConsumer(),
                  &mCodec->mInputMetadataType);
@@ -297,7 +247,7 @@ index 37fd5a5..337fb2d 100644
  
      if (err == OK) {
 diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
-index 3848502..07f926c 100644
+index 3848502..1635375 100644
 --- a/media/libstagefright/Android.mk
 +++ b/media/libstagefright/Android.mk
 @@ -102,6 +102,10 @@ LOCAL_SHARED_LIBRARIES := \
@@ -322,17 +272,6 @@ index 3848502..07f926c 100644
  LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
  
  # enable experiments only in userdebug and eng builds
-@@ -131,6 +139,10 @@ ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
- LOCAL_CFLAGS += -DENABLE_STAGEFRIGHT_EXPERIMENTS
- endif
- 
-+ifeq ($(TARGET_BOARD_PLATFORM),omap4)
-+LOCAL_CFLAGS += -DBOARD_CANT_REALLOCATE_OMX_BUFFERS
-+endif
-+
- LOCAL_CLANG := true
- LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow
- 
 diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
 index 893da89..0bc6847 100644
 --- a/media/libstagefright/CameraSource.cpp
@@ -500,22 +439,6 @@ index 15ff569..0e9b4e6 100644
  
      (*buffer)->setObserver(this);
      (*buffer)->add_ref();
-diff --git a/media/libstagefright/avc_utils.cpp b/media/libstagefright/avc_utils.cpp
-index 763381e..e5819ed 100644
---- a/media/libstagefright/avc_utils.cpp
-+++ b/media/libstagefright/avc_utils.cpp
-@@ -479,7 +479,10 @@ bool IsAVCReferenceFrame(const sp<ABuffer> &accessUnit) {
-     const uint8_t *nalStart;
-     size_t nalSize;
-     while (getNextNALUnit(&data, &size, &nalStart, &nalSize, true) == OK) {
--        CHECK_GT(nalSize, 0u);
-+        if (nalSize == 0u) {
-+            ALOGW("skipping empty nal unit from potentially malformed bitstream");
-+            continue;
-+        }
- 
-         unsigned nalType = nalStart[0] & 0x1f;
- 
 diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
 index 8e4d064..66992d7 100644
 --- a/media/libstagefright/foundation/MediaBufferGroup.cpp
@@ -810,45 +733,3 @@ index 266fb03..3c2b98a 100644
  }
  
  status_t CameraClient::setVideoBufferMode(int32_t videoBufferMode) {
-diff --git a/services/soundtrigger/SoundTriggerHwService.cpp b/services/soundtrigger/SoundTriggerHwService.cpp
-index eebc487..74d0c70 100644
---- a/services/soundtrigger/SoundTriggerHwService.cpp
-+++ b/services/soundtrigger/SoundTriggerHwService.cpp
-@@ -278,6 +278,37 @@ void SoundTriggerHwService::sendRecognitionEvent(struct sound_trigger_recognitio
-      if (module == NULL) {
-          return;
-      }
-+    struct sound_trigger_phrase_recognition_event newEvent;
-+    if (event-> type == SOUND_MODEL_TYPE_KEYPHRASE && event->data_size != 0
-+        && event->data_offset != sizeof(struct sound_trigger_phrase_recognition_event)) {
-+        // set some defaults for the phrase if the recognition event won't be parsed properly
-+        // TODO: read defaults from the config
-+
-+        memset(&newEvent, 0, sizeof(struct sound_trigger_phrase_recognition_event));
-+
-+        sp<Model> model = module->getModel(event->model);
-+
-+        newEvent.num_phrases = 1;
-+        newEvent.phrase_extras[0].id = 100;
-+        newEvent.phrase_extras[0].recognition_modes = RECOGNITION_MODE_VOICE_TRIGGER;
-+        newEvent.phrase_extras[0].confidence_level = 100;
-+        newEvent.phrase_extras[0].num_levels = 1;
-+        newEvent.phrase_extras[0].levels[0].level = 100;
-+        newEvent.phrase_extras[0].levels[0].user_id = 100;
-+        newEvent.common.status = event->status;
-+        newEvent.common.type = event->type;
-+        newEvent.common.model = event->model;
-+        newEvent.common.capture_available = event->capture_available;
-+        newEvent.common.capture_session = event->capture_session;
-+        newEvent.common.capture_delay_ms = event->capture_delay_ms;
-+        newEvent.common.capture_preamble_ms = event->capture_preamble_ms;
-+        newEvent.common.trigger_in_data = event->trigger_in_data;
-+        newEvent.common.audio_config = event->audio_config;
-+        newEvent.common.data_size = event->data_size;
-+        newEvent.common.data_offset = sizeof(struct sound_trigger_phrase_recognition_event);
-+
-+         event = &newEvent.common;
-+     }
-      sp<IMemory> eventMemory = prepareRecognitionEvent_l(event);
-      if (eventMemory == 0) {
-          return;
