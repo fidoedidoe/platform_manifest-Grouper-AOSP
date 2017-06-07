@@ -9,7 +9,7 @@
            fetch="https://github.com/millosr/" />
   <remote  name="unlegacy"
            fetch="https://github.com/Unlegacy-Android/" />
-  <default revision="refs/tags/android-7.1.2_r10"
+  <default revision="refs/tags/android-7.1.2_r16"
            remote="aosp"
            sync-j="4" />
 
