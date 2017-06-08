@@ -1,3 +1,15 @@
+diff --git a/core/Makefile b/core/Makefile
+index d8b4ef8..2f962aa 100644
+--- a/core/Makefile
++++ b/core/Makefile
+@@ -247,6 +247,7 @@ endif
+ 			TARGET_CPU_ABI="$(TARGET_CPU_ABI)" \
+ 			TARGET_CPU_ABI2="$(TARGET_CPU_ABI2)" \
+ 			TARGET_AAPT_CHARACTERISTICS="$(TARGET_AAPT_CHARACTERISTICS)" \
++			$(PRODUCT_BUILD_PROP_OVERRIDES) \
+ 	        bash $(BUILDINFO_SH) >> $@
+ 	$(hide) $(foreach file,$(system_prop_file), \
+ 		if [ -f "$(file)" ]; then \
 diff --git a/core/combo/arch/arm/armv7-a-neon.mk b/core/combo/arch/arm/armv7-a-neon.mk
 index 5d5b050..b0e1e25 100644
 --- a/core/combo/arch/arm/armv7-a-neon.mk
@@ -82,6 +94,32 @@ index a612f83..921eb32 100644
  endif
  
  
+diff --git a/core/product.mk b/core/product.mk
+index 332b015..447ebbc 100644
+--- a/core/product.mk
++++ b/core/product.mk
+@@ -73,6 +73,7 @@ endef
+ #
+ 
+ _product_var_list := \
++    PRODUCT_BUILD_PROP_OVERRIDES \
+     PRODUCT_NAME \
+     PRODUCT_MODEL \
+     PRODUCT_LOCALES \
+diff --git a/core/product_config.mk b/core/product_config.mk
+index 6438d51..2204f78 100644
+--- a/core/product_config.mk
++++ b/core/product_config.mk
+@@ -363,6 +363,9 @@ endif
+ PRODUCT_DEFAULT_PROPERTY_OVERRIDES := \
+     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_PROPERTY_OVERRIDES))
+ 
++PRODUCT_BUILD_PROP_OVERRIDES := \
++	$(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BUILD_PROP_OVERRIDES))
++
+ # Should we use the default resources or add any product specific overlays
+ PRODUCT_PACKAGE_OVERLAYS := \
+     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGE_OVERLAYS))
 diff --git a/core/tasks/kernel.mk b/core/tasks/kernel.mk
 new file mode 100644
 index 0000000..ee76dc2

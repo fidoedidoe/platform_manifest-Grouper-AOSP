@@ -12,14 +12,14 @@ index e9dd7b3..ef2bd9d 100644
  
  # Block device access.
 diff --git a/domain.te b/domain.te
-index 45569de..5e705c6 100644
+index 45569de..21c9df2 100644
 --- a/domain.te
 +++ b/domain.te
 @@ -159,6 +159,7 @@ neverallow {
    -dumpstate
    -system_server
    userdebug_or_eng(`-perfprofd')
-+#  userdebug_or_eng(`-procrank')
++  userdebug_or_eng(`-procrank')
  } self:capability sys_ptrace;
  
  # Limit device node creation to these whitelisted domains.

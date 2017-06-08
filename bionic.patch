@@ -197,9 +197,29 @@ index 4a4ca5c..0d592c9 100644
  LOCAL_CFLAGS += -I$(LOCAL_PATH)/../libc/
  
 diff --git a/linker/linker.cpp b/linker/linker.cpp
-index 9dc928e..2a665b5 100644
+index 9dc928e..0ac26c6 100644
 --- a/linker/linker.cpp
 +++ b/linker/linker.cpp
+@@ -560,7 +560,7 @@ static bool realpath_fd(int fd, std::string* realpath) {
+   std::vector<char> buf(PATH_MAX), proc_self_fd(PATH_MAX);
+   __libc_format_buffer(&proc_self_fd[0], proc_self_fd.size(), "/proc/self/fd/%d", fd);
+   if (readlink(&proc_self_fd[0], &buf[0], buf.size()) == -1) {
+-    PRINT("readlink(\"%s\") failed: %s [fd=%d]", &proc_self_fd[0], strerror(errno), fd);
++//    PRINT("readlink(\"%s\") failed: %s [fd=%d]", &proc_self_fd[0], strerror(errno), fd);
+     return false;
+   }
+ 
+@@ -1545,8 +1545,8 @@ static int open_library_in_zipfile(ZipArchiveCache* zip_archive_cache,
+   if (realpath_fd(fd, realpath)) {
+     *realpath += separator;
+   } else {
+-    PRINT("warning: unable to get realpath for the library \"%s\". Will use given path.",
+-          normalized_path.c_str());
++//    PRINT("warning: unable to get realpath for the library \"%s\". Will use given path.",
++//          normalized_path.c_str());
+     *realpath = normalized_path;
+   }
+ 
 @@ -3950,11 +3950,18 @@ bool soinfo::link_image(const soinfo_list_t& global_group, const soinfo_list_t&
  #if !defined(__LP64__)
    if (has_text_relocations) {
