@@ -531,10 +531,10 @@ index 6132a2c..7f0d270 100644
  
  void OMXMaster::addPlugin(const char *libname) {
 diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
-index 43a50ae..2fa9989 100644
+index c3514b3..8c26f94 100644
 --- a/media/libstagefright/omx/OMXNodeInstance.cpp
 +++ b/media/libstagefright/omx/OMXNodeInstance.cpp
-@@ -795,7 +795,11 @@ status_t OMXNodeInstance::useBuffer(
+@@ -801,7 +801,11 @@ status_t OMXNodeInstance::useBuffer(
      // metadata buffers are not connected cross process
      // use a backup buffer instead of the actual buffer
      BufferMeta *buffer_meta;
@@ -546,7 +546,7 @@ index 43a50ae..2fa9989 100644
      OMX_U8 *data = static_cast<OMX_U8 *>(params->pointer());
      // allocate backup buffer
      if (useBackup) {
-@@ -1279,7 +1283,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
+@@ -1297,7 +1301,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
      }
  
      // metadata buffers are not connected cross process; only copy if not meta
@@ -558,7 +558,7 @@ index 43a50ae..2fa9989 100644
  
      BufferMeta *buffer_meta = new BufferMeta(
              params, portIndex,
-@@ -1397,10 +1405,30 @@ status_t OMXNodeInstance::emptyBuffer(
+@@ -1415,10 +1423,30 @@ status_t OMXNodeInstance::emptyBuffer(
      BufferMeta *buffer_meta =
          static_cast<BufferMeta *>(header->pAppPrivate);
  

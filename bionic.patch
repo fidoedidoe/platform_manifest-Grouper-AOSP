@@ -197,7 +197,7 @@ index 4a4ca5c..0d592c9 100644
  LOCAL_CFLAGS += -I$(LOCAL_PATH)/../libc/
  
 diff --git a/linker/linker.cpp b/linker/linker.cpp
-index 9dc928e..0ac26c6 100644
+index a043b85..cd1874f 100644
 --- a/linker/linker.cpp
 +++ b/linker/linker.cpp
 @@ -560,7 +560,7 @@ static bool realpath_fd(int fd, std::string* realpath) {
@@ -220,7 +220,7 @@ index 9dc928e..0ac26c6 100644
      *realpath = normalized_path;
    }
  
-@@ -3950,11 +3950,18 @@ bool soinfo::link_image(const soinfo_list_t& global_group, const soinfo_list_t&
+@@ -3953,11 +3953,18 @@ bool soinfo::link_image(const soinfo_list_t& global_group, const soinfo_list_t&
  #if !defined(__LP64__)
    if (has_text_relocations) {
      // Fail if app is targeting sdk version > 22

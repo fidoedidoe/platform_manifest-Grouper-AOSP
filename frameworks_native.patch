@@ -303,10 +303,10 @@ index f0b0ada..3577a33 100644
              return NO_ERROR;
          }
 diff --git a/libs/gui/Surface.cpp b/libs/gui/Surface.cpp
-index 0838290..0bb142b 100644
+index 5a2ca8d..16ccbc3 100644
 --- a/libs/gui/Surface.cpp
 +++ b/libs/gui/Surface.cpp
-@@ -1260,6 +1260,7 @@ status_t Surface::lock(
+@@ -1266,6 +1266,7 @@ status_t Surface::lock(
          }
  
          // figure out if we can copy the frontbuffer back
@@ -314,7 +314,7 @@ index 0838290..0bb142b 100644
          const sp<GraphicBuffer>& frontBuffer(mPostedBuffer);
          const bool canCopyBack = (frontBuffer != 0 &&
                  backBuffer->width  == frontBuffer->width &&
-@@ -1267,15 +1268,23 @@ status_t Surface::lock(
+@@ -1273,15 +1274,23 @@ status_t Surface::lock(
                  backBuffer->format == frontBuffer->format);
  
          if (canCopyBack) {
@@ -341,7 +341,7 @@ index 0838290..0bb142b 100644
              Mutex::Autolock lock(mMutex);
              for (size_t i=0 ; i<NUM_BUFFER_SLOTS ; i++) {
                  mSlots[i].dirtyRegion.clear();
-@@ -1285,15 +1294,9 @@ status_t Surface::lock(
+@@ -1291,15 +1300,9 @@ status_t Surface::lock(
  
          { // scope for the lock
              Mutex::Autolock lock(mMutex);

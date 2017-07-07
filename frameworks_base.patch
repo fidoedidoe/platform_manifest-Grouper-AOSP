@@ -146,6 +146,21 @@ index 8c5df08..8c2c236 100644
              //Slog.i(TAG, "Setting state in " + mName + "/" + mPackage + ": " + state);
              commitStateTime(now);
              mCurState = state;
+diff --git a/core/java/com/android/internal/os/ZygoteInit.java b/core/java/com/android/internal/os/ZygoteInit.java
+index e4f573b..0d3f50c 100644
+--- a/core/java/com/android/internal/os/ZygoteInit.java
++++ b/core/java/com/android/internal/os/ZygoteInit.java
+@@ -245,8 +245,8 @@ public class ZygoteInit {
+ 
+     private static void preloadOpenGL() {
+         String driverPackageName = SystemProperties.get(PROPERTY_GFX_DRIVER);
+-        if (!SystemProperties.getBoolean(PROPERTY_DISABLE_OPENGL_PRELOADING, false) ||
+-                driverPackageName == null || driverPackageName.isEmpty()) {
++        if (!SystemProperties.getBoolean(PROPERTY_DISABLE_OPENGL_PRELOADING, false) &&
++                (driverPackageName == null || driverPackageName.isEmpty())) {
+             EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
+         }
+     }
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
 index f062b59..574f7c1 100644
 --- a/core/res/res/xml/config_webview_packages.xml
@@ -612,6 +627,65 @@ index b6a9940..11b5832a 100644
  
      /**
       * Whether verification is enabled by default.
+diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+index 889c52a..11585b4 100644
+--- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
++++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+@@ -491,6 +491,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+     boolean mTranslucentDecorEnabled = true;
+     boolean mUseTvRouting;
+ 
++    // Behavior of home wake
++    boolean mHomeWakeScreen;
++
+     int mPointerLocationMode = 0; // guarded by mLock
+ 
+     // The last window we were told about in focusChanged.
+@@ -877,6 +880,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+             resolver.registerContentObserver(Settings.Global.getUriFor(
+                     Settings.Global.POLICY_CONTROL), false, this,
+                     UserHandle.USER_ALL);
++            resolver.registerContentObserver(Settings.System.getUriFor(
++                    Settings.System.HOME_WAKE_SCREEN), false, this,
++                    UserHandle.USER_ALL);
++
+             updateSettings();
+         }
+ 
+@@ -2067,6 +2074,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+                     Settings.Secure.INCALL_BACK_BUTTON_BEHAVIOR,
+                     Settings.Secure.INCALL_BACK_BUTTON_BEHAVIOR_DEFAULT,
+                     UserHandle.USER_CURRENT);
++            mHomeWakeScreen = (Settings.System.getIntForUser(resolver,
++                    Settings.System.HOME_WAKE_SCREEN, 1, UserHandle.USER_CURRENT) == 1);
+ 
+             // Configure wake gesture.
+             boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
+@@ -3881,8 +3890,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+                 awakenDreams();
+             }
+             hideRecentApps(false, true);
+-        } else {
+-            // Otherwise, just launch Home
++        } else if (mScreenOnFully) {
++            // check if screen is fully on before going home
++            // to avoid hardware home button wake going home
+             sendCloseSystemWindows(SYSTEM_DIALOG_REASON_HOME_KEY);
+             startDockOrHome(true /*fromHomeKey*/, awakenFromDreams);
+         }
+@@ -5884,6 +5894,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+                 break;
+             }
+ 
++            case KeyEvent.KEYCODE_HOME:
++                if (down && !interactive && mHomeWakeScreen) {
++                    isWakeKey = true;
++                }
++                break;
++
+             case KeyEvent.KEYCODE_ENDCALL: {
+                 result &= ~ACTION_PASS_TO_USER;
+                 if (down) {
 diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
 index ffbea9f..8dd05b1 100644
 --- a/services/net/java/android/net/dhcp/DhcpClient.java
