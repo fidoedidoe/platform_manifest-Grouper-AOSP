@@ -506,10 +506,10 @@ index e4fbd81..8fc788f 100644
  LOCAL_CFLAGS += -Werror -Wall
  LOCAL_CLANG := true
 diff --git a/media/libstagefright/omx/GraphicBufferSource.cpp b/media/libstagefright/omx/GraphicBufferSource.cpp
-index 0c4056d..da77c48 100644
+index e1bcd28..5f21eac 100644
 --- a/media/libstagefright/omx/GraphicBufferSource.cpp
 +++ b/media/libstagefright/omx/GraphicBufferSource.cpp
-@@ -724,6 +724,8 @@ bool GraphicBufferSource::repeatLatestBuffer_l() {
+@@ -736,6 +736,8 @@ bool GraphicBufferSource::repeatLatestBuffer_l() {
  
  void GraphicBufferSource::setLatestBuffer_l(
          const BufferItem &item, bool dropped) {
@@ -531,7 +531,7 @@ index 6132a2c..7f0d270 100644
  
  void OMXMaster::addPlugin(const char *libname) {
 diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
-index c3514b3..8c26f94 100644
+index e7aaead..8752b4e 100644
 --- a/media/libstagefright/omx/OMXNodeInstance.cpp
 +++ b/media/libstagefright/omx/OMXNodeInstance.cpp
 @@ -801,7 +801,11 @@ status_t OMXNodeInstance::useBuffer(

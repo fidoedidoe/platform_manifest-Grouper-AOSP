@@ -12,18 +12,10 @@ index e9dd7b3..ef2bd9d 100644
  
  # Block device access.
 diff --git a/domain.te b/domain.te
-index 45569de..21c9df2 100644
+index 45569de..5aee09e 100644
 --- a/domain.te
 +++ b/domain.te
-@@ -159,6 +159,7 @@ neverallow {
-   -dumpstate
-   -system_server
-   userdebug_or_eng(`-perfprofd')
-+  userdebug_or_eng(`-procrank')
- } self:capability sys_ptrace;
- 
- # Limit device node creation to these whitelisted domains.
-@@ -267,6 +268,7 @@ neverallow { domain -init -ueventd } device:chr_file { open read write };
+@@ -267,6 +267,7 @@ neverallow { domain -init -ueventd } device:chr_file { open read write };
  # this capability, including device-specific domains.
  neverallow { domain -kernel -init -recovery -vold -zygote -update_engine -otapreopt_chroot } { fs_type -sdcard_type }:filesystem { mount remount relabelfrom relabelto };
  
@@ -31,7 +23,7 @@ index 45569de..21c9df2 100644
  #
  # Assert that, to the extent possible, we're not loading executable content from
  # outside the rootfs or /system partition except for a few whitelisted domains.
-@@ -292,7 +294,9 @@ neverallow domain { cache_file cache_backup_file cache_private_backup_file cache
+@@ -292,7 +293,9 @@ neverallow domain { cache_file cache_backup_file cache_private_backup_file cache
  # Protect most domains from executing arbitrary content from /data.
  neverallow {
    domain
@@ -42,7 +34,7 @@ index 45569de..21c9df2 100644
  } {
    data_file_type
    -dalvikcache_data_file
-@@ -379,6 +383,8 @@ neverallow {
+@@ -379,6 +382,8 @@ neverallow {
    -cppreopts
    -dex2oat
    -otapreopt_slot
@@ -51,7 +43,7 @@ index 45569de..21c9df2 100644
  } dalvikcache_data_file:file no_w_file_perms;
  
  neverallow {
-@@ -390,6 +396,7 @@ neverallow {
+@@ -390,6 +395,7 @@ neverallow {
    -dex2oat
    -zygote
    -otapreopt_slot
@@ -59,7 +51,7 @@ index 45569de..21c9df2 100644
  } dalvikcache_data_file:dir no_w_dir_perms;
  
  # Only system_server should be able to send commands via the zygote socket
-@@ -428,13 +435,13 @@ neverallow { domain userdebug_or_eng(`-dumpstate -shell -su') } su_exec:file no_
+@@ -428,13 +434,13 @@ neverallow { domain userdebug_or_eng(`-dumpstate -shell -su') } su_exec:file no_
  # The only exceptions are for NDK text relocations associated with
  # https://code.google.com/p/android/issues/detail?id=23203
  # which, long term, need to go away.
@@ -80,7 +72,7 @@ index 45569de..21c9df2 100644
  
  # Do not allow making the stack or heap executable.
  # We would also like to minimize execmem but it seems to be
-@@ -443,7 +450,7 @@ neverallow * self:process { execstack execheap };
+@@ -443,7 +449,7 @@ neverallow * self:process { execstack execheap };
  
  # prohibit non-zygote spawned processes from using shared libraries
  # with text relocations. b/20013628 .
@@ -89,7 +81,7 @@ index 45569de..21c9df2 100644
  
  neverallow { domain -init } proc:{ file dir } mounton;
  
-@@ -570,7 +577,7 @@ neverallow * domain:file { execute execute_no_trans entrypoint };
+@@ -570,7 +576,7 @@ neverallow * domain:file { execute execute_no_trans entrypoint };
  # Instead, if access to part of debugfs is desired, it should have a
  # more specific label.
  # TODO: fix system_server and dumpstate
