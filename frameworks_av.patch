@@ -102,6 +102,139 @@ index 3051406..870bb9b 100644
  
      size_t buffers() const { return mBuffers.size(); }
  
+diff --git a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
+index dcf3fa0..07ea818 100644
+--- a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
++++ b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
+@@ -2439,6 +2439,13 @@ int Equalizer_getParameter(EffectContext     *pContext,
+             }
+             break;
+         }
++
++        if (*pValueSize < 1) {
++            status = -EINVAL;
++            android_errorWriteLog(0x534e4554, "37536407");
++            break;
++        }
++
+         name = (char *)pValue;
+         strncpy(name, EqualizerGetPresetName(param2), *pValueSize - 1);
+         name[*pValueSize - 1] = 0;
+diff --git a/media/libmedia/IDataSource.cpp b/media/libmedia/IDataSource.cpp
+index 51c9938..5ad39fe 100644
+--- a/media/libmedia/IDataSource.cpp
++++ b/media/libmedia/IDataSource.cpp
+@@ -54,8 +54,16 @@ struct BpDataSource : public BpInterface<IDataSource> {
+         data.writeInterfaceToken(IDataSource::getInterfaceDescriptor());
+         data.writeInt64(offset);
+         data.writeInt64(size);
+-        remote()->transact(READ_AT, data, &reply);
+-        return reply.readInt64();
++        status_t err = remote()->transact(READ_AT, data, &reply);
++        if (err != OK) {
++            return err;
++        }
++        int64_t value = 0;
++        err = reply.readInt64(&value);
++        if (err != OK) {
++            return err;
++        }
++        return (ssize_t)value;
+     }
+ 
+     virtual status_t getSize(off64_t* size) {
+diff --git a/media/libmediaplayerservice/MediaPlayerService.cpp b/media/libmediaplayerservice/MediaPlayerService.cpp
+index bd16e91..6e689e6 100644
+--- a/media/libmediaplayerservice/MediaPlayerService.cpp
++++ b/media/libmediaplayerservice/MediaPlayerService.cpp
+@@ -82,6 +82,9 @@
+ #include "HTTPBase.h"
+ #include "RemoteDisplay.h"
+ 
++static const int kDumpLockRetries = 50;
++static const int kDumpLockSleepUs = 20000;
++
+ namespace {
+ using android::media::Metadata;
+ using android::status_t;
+@@ -405,12 +408,32 @@ status_t MediaPlayerService::Client::dump(int fd, const Vector<String16>& args)
+     snprintf(buffer, 255, "  pid(%d), connId(%d), status(%d), looping(%s)\n",
+             mPid, mConnId, mStatus, mLoop?"true": "false");
+     result.append(buffer);
++
++    sp<MediaPlayerBase> p;
++    sp<AudioOutput> audioOutput;
++    bool locked = false;
++    for (int i = 0; i < kDumpLockRetries; ++i) {
++        if (mLock.tryLock() == NO_ERROR) {
++            locked = true;
++            break;
++        }
++        usleep(kDumpLockSleepUs);
++    }
++
++    if (locked) {
++        p = mPlayer;
++        audioOutput = mAudioOutput;
++        mLock.unlock();
++    } else {
++        result.append("  lock is taken, no dump from player and audio output\n");
++    }
+     write(fd, result.string(), result.size());
+-    if (mPlayer != NULL) {
+-        mPlayer->dump(fd, args);
++
++    if (p != NULL) {
++        p->dump(fd, args);
+     }
+-    if (mAudioOutput != 0) {
+-        mAudioOutput->dump(fd, args);
++    if (audioOutput != 0) {
++        audioOutput->dump(fd, args);
+     }
+     write(fd, "\n", 1);
+     return NO_ERROR;
+@@ -590,7 +613,10 @@ MediaPlayerService::Client::Client(
+ MediaPlayerService::Client::~Client()
+ {
+     ALOGV("Client(%d) destructor pid = %d", mConnId, mPid);
+-    mAudioOutput.clear();
++    {
++        Mutex::Autolock l(mLock);
++        mAudioOutput.clear();
++    }
+     wp<Client> client(this);
+     disconnect();
+     mService->removeClient(client);
+@@ -609,10 +635,9 @@ void MediaPlayerService::Client::disconnect()
+         Mutex::Autolock l(mLock);
+         p = mPlayer;
+         mClient.clear();
++        mPlayer.clear();
+     }
+ 
+-    mPlayer.clear();
+-
+     // clear the notification to prevent callbacks to dead client
+     // and reset the player. We assume the player will serialize
+     // access to itself if necessary.
+@@ -633,7 +658,7 @@ void MediaPlayerService::Client::disconnect()
+ sp<MediaPlayerBase> MediaPlayerService::Client::createPlayer(player_type playerType)
+ {
+     // determine if we have the right player type
+-    sp<MediaPlayerBase> p = mPlayer;
++    sp<MediaPlayerBase> p = getPlayer();
+     if ((p != NULL) && (p->playerType() != playerType)) {
+         ALOGV("delete player");
+         p.clear();
+@@ -721,6 +746,7 @@ void MediaPlayerService::Client::setDataSource_post(
+     }
+ 
+     if (mStatus == OK) {
++        Mutex::Autolock l(mLock);
+         mPlayer = p;
+     }
+ }
 diff --git a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
 index dc4e5d4..b64d899 100644
 --- a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
@@ -273,10 +406,25 @@ index 3848502..1635375 100644
  
  # enable experiments only in userdebug and eng builds
 diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
-index 893da89..0bc6847 100644
+index 893da89..2152454 100644
 --- a/media/libstagefright/CameraSource.cpp
 +++ b/media/libstagefright/CameraSource.cpp
-@@ -1117,7 +1117,7 @@ void CameraSource::releaseRecordingFrameHandle(native_handle_t* handle) {
+@@ -950,6 +950,14 @@ void CameraSource::releaseRecordingFrame(const sp<IMemory>& frame) {
+ 
+         if (handle != nullptr) {
+             // Frame contains a VideoNativeHandleMetadata. Send the handle back to camera.
++            ssize_t offset;
++            size_t size;
++            sp<IMemoryHeap> heap = frame->getMemory(&offset, &size);
++            if (heap->getHeapID() != mMemoryHeapBase->getHeapID()) {
++                ALOGE("%s: Mismatched heap ID, ignoring release (got %x, expected %x)",
++		     __FUNCTION__, heap->getHeapID(), mMemoryHeapBase->getHeapID());
++                return;
++            }
+             releaseRecordingFrameHandle(handle);
+             mMemoryBases.push_back(frame);
+             mMemoryBaseAvailableCond.signal();
+@@ -1117,7 +1125,7 @@ void CameraSource::releaseRecordingFrameHandle(native_handle_t* handle) {
          int64_t token = IPCThreadState::self()->clearCallingIdentity();
          mCamera->releaseRecordingFrameHandle(handle);
          IPCThreadState::self()->restoreCallingIdentity(token);
@@ -285,7 +433,7 @@ index 893da89..0bc6847 100644
          native_handle_close(handle);
          native_handle_delete(handle);
      }
-@@ -1250,6 +1250,10 @@ void CameraSource::processBufferQueueFrame(BufferItem& buffer) {
+@@ -1250,6 +1258,10 @@ void CameraSource::processBufferQueueFrame(BufferItem& buffer) {
  MetadataBufferType CameraSource::metaDataStoredInVideoBuffers() const {
      ALOGV("metaDataStoredInVideoBuffers");
  
@@ -296,6 +444,193 @@ index 893da89..0bc6847 100644
      // Output buffers will contain metadata if camera sends us buffer in metadata mode or via
      // buffer queue.
      switch (mVideoBufferMode) {
+diff --git a/media/libstagefright/MPEG4Extractor.cpp b/media/libstagefright/MPEG4Extractor.cpp
+index 5441714..2cc43c1 100644
+--- a/media/libstagefright/MPEG4Extractor.cpp
++++ b/media/libstagefright/MPEG4Extractor.cpp
+@@ -72,6 +72,7 @@ public:
+                 Vector<SidxEntry> &sidx,
+                 const Trex *trex,
+                 off64_t firstMoofOffset);
++    virtual status_t init();
+ 
+     virtual status_t start(MetaData *params = NULL);
+     virtual status_t stop();
+@@ -2148,7 +2149,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+             *offset += chunk_size;
+ 
+             if (underQTMetaPath(mPath, 3)) {
+-                parseQTMetaKey(data_offset, chunk_data_size);
++                status_t err = parseQTMetaKey(data_offset, chunk_data_size);
++                if (err != OK) {
++                    return err;
++                }
+             }
+             break;
+         }
+@@ -2307,7 +2311,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+ 
+         case FOURCC('s', 'i', 'd', 'x'):
+         {
+-            parseSegmentIndex(data_offset, chunk_data_size);
++            status_t err = parseSegmentIndex(data_offset, chunk_data_size);
++            if (err != OK) {
++                return err;
++            }
+             *offset += chunk_size;
+             return UNKNOWN_ERROR; // stop parsing after sidx
+         }
+@@ -2349,7 +2356,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+             // check if we're parsing 'ilst' for meta keys
+             // if so, treat type as a number (key-id).
+             if (underQTMetaPath(mPath, 3)) {
+-                parseQTMetaVal(chunk_type, data_offset, chunk_data_size);
++                status_t err = parseQTMetaVal(chunk_type, data_offset, chunk_data_size);
++                if (err != OK) {
++                    return err;
++                }
+             }
+ 
+             *offset += chunk_size;
+@@ -2984,6 +2994,13 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
+         }
+         case FOURCC('y', 'r', 'r', 'c'):
+         {
++            if (size < 6) {
++                delete[] buffer;
++                buffer = NULL;
++                ALOGE("b/62133227");
++                android_errorWriteLog(0x534e4554, "62133227");
++                return ERROR_MALFORMED;
++            }
+             char tmp[5];
+             uint16_t year = U16_AT(&buffer[4]);
+ 
+@@ -3006,6 +3023,8 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
+ 
+         // smallest possible valid UTF-16 string w BOM: 0xfe 0xff 0x00 0x00
+         if (size < 6) {
++            delete[] buffer;
++            buffer = NULL;
+             return ERROR_MALFORMED;
+         }
+ 
+@@ -3174,9 +3193,13 @@ sp<IMediaSource> MPEG4Extractor::getTrack(size_t index) {
+         }
+     }
+ 
+-    return new MPEG4Source(this,
++    sp<MPEG4Source> source =  new MPEG4Source(this,
+             track->meta, mDataSource, track->timescale, track->sampleTable,
+             mSidxEntries, trex, mMoofOffset);
++    if (source->init() != OK) {
++        return NULL;
++    }
++    return source;
+ }
+ 
+ // static
+@@ -3573,6 +3596,7 @@ MPEG4Source::MPEG4Source(
+       mTrex(trex),
+       mFirstMoofOffset(firstMoofOffset),
+       mCurrentMoofOffset(firstMoofOffset),
++      mNextMoofOffset(-1),
+       mCurrentTime(0),
+       mCurrentSampleInfoAllocSize(0),
+       mCurrentSampleInfoSizes(NULL),
+@@ -3637,10 +3661,14 @@ MPEG4Source::MPEG4Source(
+ 
+     CHECK(format->findInt32(kKeyTrackID, &mTrackId));
+ 
++}
++
++status_t MPEG4Source::init() {
+     if (mFirstMoofOffset != 0) {
+         off64_t offset = mFirstMoofOffset;
+-        parseChunk(&offset);
++        return parseChunk(&offset);
+     }
++    return OK;
+ }
+ 
+ MPEG4Source::~MPEG4Source() {
+@@ -3767,13 +3795,35 @@ status_t MPEG4Source::parseChunk(off64_t *offset) {
+ 
+                 while (true) {
+                     if (mDataSource->readAt(*offset, hdr, 8) < 8) {
+-                        return ERROR_END_OF_STREAM;
++                        // no more box to the end of file.
++                        break;
+                     }
+                     chunk_size = ntohl(hdr[0]);
+                     chunk_type = ntohl(hdr[1]);
++                    if (chunk_size == 1) {
++                        // ISO/IEC 14496-12:2012, 8.8.4 Movie Fragment Box, moof is a Box
++                        // which is defined in 4.2 Object Structure.
++                        // When chunk_size==1, 8 bytes follows as "largesize".
++                        if (mDataSource->readAt(*offset + 8, &chunk_size, 8) < 8) {
++                            return ERROR_IO;
++                        }
++                        chunk_size = ntoh64(chunk_size);
++                        if (chunk_size < 16) {
++                            // The smallest valid chunk is 16 bytes long in this case.
++                            return ERROR_MALFORMED;
++                        }
++                    } else if (chunk_size == 0) {
++                        // next box extends to end of file.
++                    } else if (chunk_size < 8) {
++                        // The smallest valid chunk is 8 bytes long in this case.
++                        return ERROR_MALFORMED;
++                    }
++
+                     if (chunk_type == FOURCC('m', 'o', 'o', 'f')) {
+                         mNextMoofOffset = *offset;
+                         break;
++                    } else if (chunk_size == 0) {
++                        break;
+                     }
+                     *offset += chunk_size;
+                 }
+@@ -4651,17 +4701,25 @@ status_t MPEG4Source::fragmentedRead(
+                 totalOffset += se->mSize;
+             }
+             mCurrentMoofOffset = totalOffset;
++            mNextMoofOffset = -1;
+             mCurrentSamples.clear();
+             mCurrentSampleIndex = 0;
+-            parseChunk(&totalOffset);
++            status_t err = parseChunk(&totalOffset);
++            if (err != OK) {
++                return err;
++            }
+             mCurrentTime = totalTime * mTimescale / 1000000ll;
+         } else {
+             // without sidx boxes, we can only seek to 0
+             mCurrentMoofOffset = mFirstMoofOffset;
++            mNextMoofOffset = -1;
+             mCurrentSamples.clear();
+             mCurrentSampleIndex = 0;
+             off64_t tmp = mCurrentMoofOffset;
+-            parseChunk(&tmp);
++            status_t err = parseChunk(&tmp);
++            if (err != OK) {
++                return err;
++            }
+             mCurrentTime = 0;
+         }
+ 
+@@ -4690,7 +4748,10 @@ status_t MPEG4Source::fragmentedRead(
+             mCurrentMoofOffset = nextMoof;
+             mCurrentSamples.clear();
+             mCurrentSampleIndex = 0;
+-            parseChunk(&nextMoof);
++            status_t err = parseChunk(&nextMoof);
++            if (err != OK) {
++                return err;
++            }
+             if (mCurrentSampleIndex >= mCurrentSamples.size()) {
+                 return ERROR_END_OF_STREAM;
+             }
 diff --git a/media/libstagefright/MediaCodecList.cpp b/media/libstagefright/MediaCodecList.cpp
 index 0fb5072..a25c47d 100644
 --- a/media/libstagefright/MediaCodecList.cpp
@@ -439,6 +774,215 @@ index 15ff569..0e9b4e6 100644
  
      (*buffer)->setObserver(this);
      (*buffer)->add_ref();
+diff --git a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp b/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp
+index f00a5d1..44415e2 100644
+--- a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp
++++ b/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp
+@@ -16,6 +16,7 @@
+ 
+ //#define LOG_NDEBUG 0
+ #define LOG_TAG "SoftAACEncoder2"
++#include <log/log.h>
+ #include <utils/Log.h>
+ 
+ #include "SoftAACEncoder2.h"
+@@ -61,6 +62,7 @@ SoftAACEncoder2::SoftAACEncoder2(
+       mSentCodecSpecificData(false),
+       mInputSize(0),
+       mInputFrame(NULL),
++      mAllocatedFrameSize(0),
+       mInputTimeUs(-1ll),
+       mSawInputEOS(false),
+       mSignalledError(false) {
+@@ -565,6 +567,15 @@ void SoftAACEncoder2::onQueueFilled(OMX_U32 /* portIndex */) {
+ 
+             if (mInputFrame == NULL) {
+                 mInputFrame = new int16_t[numBytesPerInputFrame / sizeof(int16_t)];
++                mAllocatedFrameSize = numBytesPerInputFrame;
++            } else if (mAllocatedFrameSize != numBytesPerInputFrame) {
++                ALOGE("b/34621073: changed size from %d to %d",
++                        (int)mAllocatedFrameSize, (int)numBytesPerInputFrame);
++                android_errorWriteLog(0x534e4554,"34621073");
++                delete mInputFrame;
++                mInputFrame = new int16_t[numBytesPerInputFrame / sizeof(int16_t)];
++                mAllocatedFrameSize = numBytesPerInputFrame;
++
+             }
+ 
+             if (mInputSize == 0) {
+@@ -715,6 +726,7 @@ void SoftAACEncoder2::onReset() {
+     delete[] mInputFrame;
+     mInputFrame = NULL;
+     mInputSize = 0;
++    mAllocatedFrameSize = 0;
+ 
+     mSentCodecSpecificData = false;
+     mInputTimeUs = -1ll;
+diff --git a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.h b/media/libstagefright/codecs/aacenc/SoftAACEncoder2.h
+index f1b81e1..123fd25 100644
+--- a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.h
++++ b/media/libstagefright/codecs/aacenc/SoftAACEncoder2.h
+@@ -62,6 +62,7 @@ private:
+     bool mSentCodecSpecificData;
+     size_t mInputSize;
+     int16_t *mInputFrame;
++    size_t mAllocatedFrameSize;
+     int64_t mInputTimeUs;
+ 
+     bool mSawInputEOS;
+diff --git a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp b/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp
+index 5ed037a..7297f40 100644
+--- a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp
++++ b/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp
+@@ -68,6 +68,7 @@ SoftMPEG2::SoftMPEG2(
+             kProfileLevels, ARRAY_SIZE(kProfileLevels),
+             320 /* width */, 240 /* height */, callbacks,
+             appData, component),
++      mCodecCtx(NULL),
+       mMemRecords(NULL),
+       mFlushOutBuffer(NULL),
+       mOmxColorFormat(OMX_COLOR_FormatYUV420Planar),
+@@ -75,25 +76,29 @@ SoftMPEG2::SoftMPEG2(
+       mNewWidth(mWidth),
+       mNewHeight(mHeight),
+       mChangingResolution(false),
++      mSignalledError(false),
+       mStride(mWidth) {
+     initPorts(kNumBuffers, INPUT_BUF_SIZE, kNumBuffers, CODEC_MIME_TYPE);
+ 
+     // If input dump is enabled, then open create an empty file
+     GENERATE_FILE_NAMES();
+     CREATE_DUMP_FILE(mInFile);
+-
+-    CHECK_EQ(initDecoder(), (status_t)OK);
+ }
+ 
+ SoftMPEG2::~SoftMPEG2() {
+-    CHECK_EQ(deInitDecoder(), (status_t)OK);
++    if (OK != deInitDecoder()) {
++        ALOGE("Failed to deinit decoder");
++        notify(OMX_EventError, OMX_ErrorUnsupportedSetting, 0, NULL);
++        mSignalledError = true;
++        return;
++    }
+ }
+ 
+ 
+-static size_t getMinTimestampIdx(OMX_S64 *pNTimeStamp, bool *pIsTimeStampValid) {
++static ssize_t getMinTimestampIdx(OMX_S64 *pNTimeStamp, bool *pIsTimeStampValid) {
+     OMX_S64 minTimeStamp = LLONG_MAX;
+-    int idx = -1;
+-    for (size_t i = 0; i < MAX_TIME_STAMPS; i++) {
++    ssize_t idx = -1;
++    for (ssize_t i = 0; i < MAX_TIME_STAMPS; i++) {
+         if (pIsTimeStampValid[i]) {
+             if (pNTimeStamp[i] < minTimeStamp) {
+                 minTimeStamp = pNTimeStamp[i];
+@@ -204,6 +209,7 @@ status_t SoftMPEG2::resetDecoder() {
+     setNumCores();
+ 
+     mStride = 0;
++    mSignalledError = false;
+ 
+     return OK;
+ }
+@@ -433,6 +439,7 @@ status_t SoftMPEG2::deInitDecoder() {
+ 
+     mInitNeeded = true;
+     mChangingResolution = false;
++    mCodecCtx = NULL;
+ 
+     return OK;
+ }
+@@ -444,10 +451,11 @@ status_t SoftMPEG2::reInitDecoder() {
+ 
+     ret = initDecoder();
+     if (OK != ret) {
+-        ALOGE("Create failure");
++        ALOGE("Failed to initialize decoder");
+         deInitDecoder();
+-        return NO_MEMORY;
++        return ret;
+     }
++    mSignalledError = false;
+     return OK;
+ }
+ 
+@@ -586,10 +594,22 @@ void SoftMPEG2::onPortFlushCompleted(OMX_U32 portIndex) {
+ void SoftMPEG2::onQueueFilled(OMX_U32 portIndex) {
+     UNUSED(portIndex);
+ 
++    if (mSignalledError) {
++        return;
++    }
+     if (mOutputPortSettingsChange != NONE) {
+         return;
+     }
+ 
++    if (NULL == mCodecCtx) {
++        if (OK != initDecoder()) {
++            ALOGE("Failed to initialize decoder");
++            notify(OMX_EventError, OMX_ErrorUnsupportedSetting, 0, NULL);
++            mSignalledError = true;
++            return;
++        }
++    }
++
+     List<BufferInfo *> &inQueue = getPortQueue(kInputPortIndex);
+     List<BufferInfo *> &outQueue = getPortQueue(kOutputPortIndex);
+ 
+@@ -642,7 +662,9 @@ void SoftMPEG2::onQueueFilled(OMX_U32 portIndex) {
+             bool portWillReset = false;
+             handlePortSettingsChange(&portWillReset, mNewWidth, mNewHeight);
+ 
+-            CHECK_EQ(reInitDecoder(), (status_t)OK);
++            if (OK != reInitDecoder()) {
++                ALOGE("Failed to reinitialize decoder");
++            }
+             return;
+         }
+ 
+@@ -715,7 +737,10 @@ void SoftMPEG2::onQueueFilled(OMX_U32 portIndex) {
+                 bool portWillReset = false;
+                 handlePortSettingsChange(&portWillReset, s_dec_op.u4_pic_wd, s_dec_op.u4_pic_ht);
+ 
+-                CHECK_EQ(reInitDecoder(), (status_t)OK);
++                if (OK != reInitDecoder()) {
++                    ALOGE("Failed to reinitialize decoder");
++                    return;
++                }
+ 
+                 if (setDecodeArgs(&s_dec_ip, &s_dec_op, inHeader, outHeader, timeStampIx)) {
+                     ivdec_api_function(mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
+@@ -768,10 +793,15 @@ void SoftMPEG2::onQueueFilled(OMX_U32 portIndex) {
+             }
+ 
+             if (s_dec_op.u4_output_present) {
+-                size_t timeStampIdx;
++                ssize_t timeStampIdx;
+                 outHeader->nFilledLen = (mWidth * mHeight * 3) / 2;
+ 
+                 timeStampIdx = getMinTimestampIdx(mTimeStamps, mTimeStampsValid);
++                if (timeStampIdx < 0) {
++                    ALOGE("b/62872863, Invalid timestamp index!");
++                    android_errorWriteLog(0x534e4554, "62872863");
++                    return;
++                }
+                 outHeader->nTimeStamp = mTimeStamps[timeStampIdx];
+                 mTimeStampsValid[timeStampIdx] = false;
+ 
+diff --git a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.h b/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.h
+index 700ef5f..1285c5b 100644
+--- a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.h
++++ b/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.h
+@@ -106,6 +106,7 @@ private:
+     // codec. So the codec is switching to decode the new resolution.
+     bool mChangingResolution;
+     bool mFlushNeeded;
++    bool mSignalledError;
+     bool mWaitForI;
+     size_t mStride;
+ 
 diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
 index 8e4d064..66992d7 100644
 --- a/media/libstagefright/foundation/MediaBufferGroup.cpp
@@ -488,6 +1032,22 @@ index 7abc019..590146d 100644
      mPrevEstimates.push_back(*bandwidthBps);
      while (mPrevEstimates.size() > 3) {
          mPrevEstimates.erase(mPrevEstimates.begin());
+diff --git a/media/libstagefright/mpeg2ts/ESQueue.cpp b/media/libstagefright/mpeg2ts/ESQueue.cpp
+index 96ca405..7599c13 100644
+--- a/media/libstagefright/mpeg2ts/ESQueue.cpp
++++ b/media/libstagefright/mpeg2ts/ESQueue.cpp
+@@ -716,6 +716,11 @@ sp<ABuffer> ElementaryStreamQueue::dequeueAccessUnitAAC() {
+         bits.skipBits(2);
+ 
+         unsigned aac_frame_length = bits.getBits(13);
++        if (aac_frame_length == 0){
++            ALOGE("b/62673179, Invalid AAC frame length!");
++            android_errorWriteLog(0x534e4554, "62673179");
++            return NULL;
++        }
+ 
+         bits.skipBits(11);  // adts_buffer_fullness
+ 
 diff --git a/media/libstagefright/omx/Android.mk b/media/libstagefright/omx/Android.mk
 index e4fbd81..8fc788f 100644
 --- a/media/libstagefright/omx/Android.mk
@@ -640,6 +1200,89 @@ index fec3a57..a0ef28c 100644
          ALOGE("openRecord() permission denied: recording not allowed");
          lStatus = PERMISSION_DENIED;
          goto Exit;
+diff --git a/services/audioflinger/Effects.cpp b/services/audioflinger/Effects.cpp
+index f908d6d..b588685 100644
+--- a/services/audioflinger/Effects.cpp
++++ b/services/audioflinger/Effects.cpp
+@@ -1309,6 +1309,24 @@ status_t AudioFlinger::EffectHandle::command(uint32_t cmdCode,
+     ALOGVV("command(), cmdCode: %d, mHasControl: %d, mEffect: %p",
+             cmdCode, mHasControl, mEffect.unsafe_get());
+ 
++    // reject commands reserved for internal use by audio framework if coming from outside
++    // of audioserver
++    switch(cmdCode) {
++        case EFFECT_CMD_ENABLE:
++        case EFFECT_CMD_DISABLE:
++        case EFFECT_CMD_SET_PARAM:
++        case EFFECT_CMD_SET_PARAM_DEFERRED:
++        case EFFECT_CMD_SET_PARAM_COMMIT:
++        case EFFECT_CMD_GET_PARAM:
++            break;
++        default:
++            if (cmdCode >= EFFECT_CMD_FIRST_PROPRIETARY) {
++                break;
++            }
++            android_errorWriteLog(0x534e4554, "62019992");
++            return BAD_VALUE;
++    }
++
+     if (cmdCode == EFFECT_CMD_ENABLE) {
+         if (*replySize < sizeof(int)) {
+             android_errorWriteLog(0x534e4554, "32095713");
+diff --git a/services/audioflinger/Tracks.cpp b/services/audioflinger/Tracks.cpp
+index f18b88d..a3f3ea5 100644
+--- a/services/audioflinger/Tracks.cpp
++++ b/services/audioflinger/Tracks.cpp
+@@ -141,9 +141,11 @@ AudioFlinger::ThreadBase::TrackBase::TrackBase(
+             return;
+         }
+     } else {
+-        // this syntax avoids calling the audio_track_cblk_t constructor twice
+-        mCblk = (audio_track_cblk_t *) new uint8_t[size];
+-        // assume mCblk != NULL
++        mCblk = (audio_track_cblk_t *) malloc(size);
++        if (mCblk == NULL) {
++            ALOGE("not enough memory for AudioTrack size=%zu", size);
++            return;
++        }
+     }
+ 
+     // construct the shared structure in-place.
+@@ -235,10 +237,9 @@ AudioFlinger::ThreadBase::TrackBase::~TrackBase()
+     // delete the proxy before deleting the shared memory it refers to, to avoid dangling reference
+     delete mServerProxy;
+     if (mCblk != NULL) {
++        mCblk->~audio_track_cblk_t();   // destroy our shared-structure.
+         if (mClient == 0) {
+-            delete mCblk;
+-        } else {
+-            mCblk->~audio_track_cblk_t();   // destroy our shared-structure.
++            free(mCblk);
+         }
+     }
+     mCblkMemory.clear();    // free the shared memory before releasing the heap it belongs to
+@@ -398,6 +399,21 @@ AudioFlinger::PlaybackThread::Track::Track(
+         mAudioTrackServerProxy = new AudioTrackServerProxy(mCblk, mBuffer, frameCount,
+                 mFrameSize, !isExternalTrack(), sampleRate);
+     } else {
++        // Is the shared buffer of sufficient size?
++        // (frameCount * mFrameSize) is <= SIZE_MAX, checked in TrackBase.
++        if (sharedBuffer->size() < frameCount * mFrameSize) {
++            // Workaround: clear out mCblk to indicate track hasn't been properly created.
++            mCblk->~audio_track_cblk_t();   // destroy our shared-structure.
++            if (mClient == 0) {
++                free(mCblk);
++            }
++            mCblk = NULL;
++
++            mSharedBuffer.clear(); // release shared buffer early
++            android_errorWriteLog(0x534e4554, "38340117");
++            return;
++        }
++
+         mAudioTrackServerProxy = new StaticAudioTrackServerProxy(mCblk, mBuffer, frameCount,
+                 mFrameSize);
+     }
 diff --git a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
 index 3e5bb7d..2ecd6b1 100644
 --- a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp

@@ -1,3 +1,15 @@
+diff --git a/api/system-current.txt b/api/system-current.txt
+index 0fe164a..6b6f7e9 100644
+--- a/api/system-current.txt
++++ b/api/system-current.txt
+@@ -112,6 +112,7 @@ package android {
+     field public static final java.lang.String GRANT_RUNTIME_PERMISSIONS = "android.permission.GRANT_RUNTIME_PERMISSIONS";
+     field public static final java.lang.String HARDWARE_TEST = "android.permission.HARDWARE_TEST";
+     field public static final java.lang.String HDMI_CEC = "android.permission.HDMI_CEC";
++    field public static final java.lang.String HIDE_NON_SYSTEM_OVERLAY_WINDOWS = "android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS";
+     field public static final java.lang.String INJECT_EVENTS = "android.permission.INJECT_EVENTS";
+     field public static final java.lang.String INSTALL_GRANT_RUNTIME_PERMISSIONS = "android.permission.INSTALL_GRANT_RUNTIME_PERMISSIONS";
+     field public static final java.lang.String INSTALL_LOCATION_PROVIDER = "android.permission.INSTALL_LOCATION_PROVIDER";
 diff --git a/core/java/android/accounts/ChooseTypeAndAccountActivity.java b/core/java/android/accounts/ChooseTypeAndAccountActivity.java
 index aed7a36..bf96926 100644
 --- a/core/java/android/accounts/ChooseTypeAndAccountActivity.java
@@ -133,6 +145,52 @@ index a8209af..4766d33 100755
           * I am the lolrus.
           * <p>
           * Nonzero values indicate that the user has a bukkit.
+diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
+index 395f738..169f7e1 100644
+--- a/core/java/android/view/WindowManager.java
++++ b/core/java/android/view/WindowManager.java
+@@ -655,6 +655,25 @@ public interface WindowManager extends ViewManager {
+          */
+         public static final int LAST_SYSTEM_WINDOW      = 2999;
+ 
++        /**
++         * Return true if the window type is an alert window.
++         *
++         * @param type The window type.
++         * @return If the window type is an alert window.
++         * @hide
++         */
++        public static boolean isSystemAlertWindowType(int type) {
++            switch (type) {
++                case TYPE_PHONE:
++                case TYPE_PRIORITY_PHONE:
++                case TYPE_SYSTEM_ALERT:
++                case TYPE_SYSTEM_ERROR:
++                case TYPE_SYSTEM_OVERLAY:
++                    return true;
++            }
++            return false;
++        }
++
+         /** @deprecated this is ignored, this value is set automatically when needed. */
+         @Deprecated
+         public static final int MEMORY_TYPE_NORMAL = 0;
+@@ -1263,6 +1282,15 @@ public interface WindowManager extends ViewManager {
+         public static final int PRIVATE_FLAG_SUSTAINED_PERFORMANCE_MODE = 0x00040000;
+ 
+         /**
++         * Flag to indicate that any window added by an application process that is of type
++         * {@link #TYPE_TOAST} or that requires
++         * {@link android.app.AppOpsManager#OP_SYSTEM_ALERT_WINDOW} permission should be hidden when
++         * this window is visible.
++         * @hide
++         */
++        public static final int PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS = 0x00080000;
++
++        /**
+          * Control flags that are private to the platform.
+          * @hide
+          */
 diff --git a/core/java/com/android/internal/app/procstats/ProcessState.java b/core/java/com/android/internal/app/procstats/ProcessState.java
 index 8c5df08..8c2c236 100644
 --- a/core/java/com/android/internal/app/procstats/ProcessState.java
@@ -161,6 +219,26 @@ index e4f573b..0d3f50c 100644
              EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
          }
      }
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 011884c..a5035ee 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -2154,6 +2154,15 @@
+     <permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW"
+         android:protectionLevel="signature" />
+ 
++    <!-- @SystemApi Allows an application to use
++        {@link android.view.WindowManager.LayoutsParams#PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS}
++        to hide non-system-overlay windows.
++        <p>Not for use by third-party applications.
++        @hide
++    -->
++    <permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS"
++        android:protectionLevel="signature|installer" />
++
+     <!-- @SystemApi Allows an application to manage (create, destroy,
+          Z-order) application tokens in the window manager.
+          <p>Not for use by third-party applications.
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
 index f062b59..574f7c1 100644
 --- a/core/res/res/xml/config_webview_packages.xml
@@ -686,6 +764,226 @@ index 889c52a..11585b4 100644
              case KeyEvent.KEYCODE_ENDCALL: {
                  result &= ~ACTION_PASS_TO_USER;
                  if (down) {
+diff --git a/services/core/java/com/android/server/wm/Session.java b/services/core/java/com/android/server/wm/Session.java
+index 08c0a4b..b5c4202 100644
+--- a/services/core/java/com/android/server/wm/Session.java
++++ b/services/core/java/com/android/server/wm/Session.java
+@@ -16,6 +16,9 @@
+ 
+ package com.android.server.wm;
+ 
++import static android.Manifest.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
++import static android.Manifest.permission.INTERNAL_SYSTEM_WINDOW;
++import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+ import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_DRAG;
+ import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_TASK_POSITIONING;
+ import static com.android.server.wm.WindowManagerDebugConfig.SHOW_LIGHT_TRANSACTIONS;
+@@ -67,6 +70,8 @@ final class Session extends IWindowSession.Stub
+     final int mUid;
+     final int mPid;
+     final String mStringName;
++    final boolean mCanAddInternalSystemWindow;
++    final boolean mCanHideNonSystemOverlayWindows;
+     SurfaceSession mSurfaceSession;
+     int mNumWindow = 0;
+     boolean mClientDead = false;
+@@ -80,6 +85,10 @@ final class Session extends IWindowSession.Stub
+         mInputContext = inputContext;
+         mUid = Binder.getCallingUid();
+         mPid = Binder.getCallingPid();
++        mCanAddInternalSystemWindow = service.mContext.checkCallingOrSelfPermission(
++                INTERNAL_SYSTEM_WINDOW) == PERMISSION_GRANTED;
++        mCanHideNonSystemOverlayWindows = service.mContext.checkCallingOrSelfPermission(
++                HIDE_NON_SYSTEM_OVERLAY_WINDOWS) == PERMISSION_GRANTED;
+         mLastReportedAnimatorScale = service.getCurrentAnimatorScale();
+         StringBuilder sb = new StringBuilder();
+         sb.append("Session{");
+diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
+index ca2610a..0d97059 100644
+--- a/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -490,6 +490,9 @@ public class WindowManagerService extends IWindowManager.Stub
+      */
+     final ArrayList<WindowState> mForceRemoves = new ArrayList<>();
+ 
++    /** List of window currently causing non-system overlay windows to be hidden. */
++    private ArrayList<WindowState> mHidingNonSystemOverlayWindows = new ArrayList<WindowState>();
++
+     /**
+      * Windows that clients are waiting to have drawn.
+      */
+@@ -2129,6 +2132,9 @@ public class WindowManagerService extends IWindowManager.Stub
+                 }
+             }
+ 
++            final boolean hideSystemAlertWindows = !mHidingNonSystemOverlayWindows.isEmpty();
++            win.setForceHideNonSystemOverlayWindowIfNeeded(hideSystemAlertWindows);
++
+             if (type == TYPE_APPLICATION_STARTING && token.appWindowToken != null) {
+                 token.appWindowToken.startingWindow = win;
+                 if (DEBUG_STARTING_WINDOW) Slog.v (TAG_WM, "addWindow: " + token.appWindowToken
+@@ -2576,6 +2582,7 @@ public class WindowManagerService extends IWindowManager.Stub
+ 
+         mPendingRemove.remove(win);
+         mResizingWindows.remove(win);
++        updateNonSystemOverlayWindowsVisibilityIfNeeded(win, false /* surfaceShown */);
+         mWindowsChanged = true;
+         if (DEBUG_WINDOW_MOVEMENT) Slog.v(TAG_WM, "Final remove of window: " + win);
+ 
+@@ -11771,4 +11778,34 @@ public class WindowManagerService extends IWindowManager.Stub
+             }
+         }
+     }
++
++    void updateNonSystemOverlayWindowsVisibilityIfNeeded(WindowState win, boolean surfaceShown) {
++        if (!win.hideNonSystemOverlayWindowsWhenVisible()) {
++            return;
++        }
++        final boolean systemAlertWindowsHidden = !mHidingNonSystemOverlayWindows.isEmpty();
++        if (surfaceShown) {
++            if (!mHidingNonSystemOverlayWindows.contains(win)) {
++                mHidingNonSystemOverlayWindows.add(win);
++            }
++        } else {
++            mHidingNonSystemOverlayWindows.remove(win);
++        }
++
++        final boolean hideSystemAlertWindows = !mHidingNonSystemOverlayWindows.isEmpty();
++
++        if (systemAlertWindowsHidden == hideSystemAlertWindows) {
++            return;
++        }
++
++        final int numDisplays = mDisplayContents.size();
++        for (int displayNdx = 0; displayNdx < numDisplays; ++displayNdx) {
++            final WindowList windows = mDisplayContents.valueAt(displayNdx).getWindowList();
++            final int numWindows = windows.size();
++            for (int winNdx = 0; winNdx < numWindows; ++winNdx) {
++                final WindowState w = windows.get(winNdx);
++                w.setForceHideNonSystemOverlayWindowIfNeeded(hideSystemAlertWindows);
++            }
++        }
++    }
+ }
+diff --git a/services/core/java/com/android/server/wm/WindowState.java b/services/core/java/com/android/server/wm/WindowState.java
+index fbef2c6..228ef1a 100644
+--- a/services/core/java/com/android/server/wm/WindowState.java
++++ b/services/core/java/com/android/server/wm/WindowState.java
+@@ -79,6 +79,7 @@ import static android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+ import static android.view.WindowManager.LayoutParams.LAST_SUB_WINDOW;
+ import static android.view.WindowManager.LayoutParams.MATCH_PARENT;
+ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_COMPATIBLE_WINDOW;
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
+ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_KEYGUARD;
+ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_LAYOUT_CHILD_WINDOW_IN_PARENT_FRAME;
+ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_WILL_NOT_REPLACE_ON_RELAUNCH;
+@@ -91,7 +92,9 @@ import static android.view.WindowManager.LayoutParams.TYPE_DRAWN_APPLICATION;
+ import static android.view.WindowManager.LayoutParams.TYPE_DOCK_DIVIDER;
+ import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD;
+ import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD_DIALOG;
++import static android.view.WindowManager.LayoutParams.TYPE_TOAST;
+ import static android.view.WindowManager.LayoutParams.TYPE_WALLPAPER;
++import static android.view.WindowManager.LayoutParams.isSystemAlertWindowType;
+ import static android.view.WindowManagerPolicy.FINISH_LAYOUT_REDO_WALLPAPER;
+ import static com.android.server.wm.DragResizeMode.DRAG_RESIZE_MODE_DOCKED_DIVIDER;
+ import static com.android.server.wm.DragResizeMode.DRAG_RESIZE_MODE_FREEFORM;
+@@ -141,6 +144,7 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+     final int mAppOp;
+     // UserId and appId of the owner. Don't display windows of non-current user.
+     final int mOwnerUid;
++    final boolean mOwnerCanAddInternalSystemWindow;
+     final IWindowId mWindowId;
+     WindowToken mToken;
+     WindowToken mRootToken;
+@@ -167,6 +171,8 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+     boolean mPolicyVisibilityAfterAnim = true;
+     boolean mAppOpVisibility = true;
+     boolean mPermanentlyHidden; // the window should never be shown again
++    // This is a non-system overlay window that is currently force hidden.
++    private boolean mForceHideNonSystemOverlayWindow;
+     boolean mAppFreezing;
+     boolean mAttachedHidden;    // is our parent window hidden?
+     boolean mWallpaperVisible;  // for wallpaper, what was last vis report?
+@@ -522,6 +528,7 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+         mAppOp = appOp;
+         mToken = token;
+         mOwnerUid = s.mUid;
++        mOwnerCanAddInternalSystemWindow = s.mCanAddInternalSystemWindow;
+         mWindowId = new IWindowId.Stub() {
+             @Override
+             public void registerFocusObserver(IWindowFocusObserver observer) {
+@@ -1882,6 +1889,10 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+             // to handle their windows being removed from under them.
+             return false;
+         }
++        if (mForceHideNonSystemOverlayWindow) {
++            // This is an alert window that is currently force hidden.
++            return false;
++        }
+         if (mPolicyVisibility && mPolicyVisibilityAfterAnim) {
+             // Already showing.
+             return false;
+@@ -1955,6 +1966,22 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+         return true;
+     }
+ 
++    void setForceHideNonSystemOverlayWindowIfNeeded(boolean forceHide) {
++        if (mOwnerCanAddInternalSystemWindow
++                || (!isSystemAlertWindowType(mAttrs.type) && mAttrs.type != TYPE_TOAST)) {
++            return;
++        }
++        if (mForceHideNonSystemOverlayWindow == forceHide) {
++            return;
++        }
++        mForceHideNonSystemOverlayWindow = forceHide;
++        if (forceHide) {
++            hideLw(true /* doAnimation */, true /* requestAnim */);
++        } else {
++            showLw(true /* doAnimation */, true /* requestAnim */);
++        }
++    }
++
+     public void setAppOpVisibilityLw(boolean state) {
+         if (mAppOpVisibility != state) {
+             mAppOpVisibility = state;
+@@ -2755,6 +2782,17 @@ final class WindowState implements WindowManagerPolicy.WindowState {
+         }
+     }
+ 
++    /**
++     * Returns true if any window added by an application process that if of type
++     * {@link android.view.WindowManager.LayoutParams#TYPE_TOAST} or that requires that requires
++     * {@link android.app.AppOpsManager#OP_SYSTEM_ALERT_WINDOW} permission should be hidden when
++     * this window is visible.
++     */
++    boolean hideNonSystemOverlayWindowsWhenVisible() {
++        return (mAttrs.privateFlags & PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS) != 0
++                && mSession.mCanHideNonSystemOverlayWindows;
++    }
++
+     String makeInputChannelName() {
+         return Integer.toHexString(System.identityHashCode(this))
+             + " " + getWindowTag();
+diff --git a/services/core/java/com/android/server/wm/WindowStateAnimator.java b/services/core/java/com/android/server/wm/WindowStateAnimator.java
+index aa8e781..ec3208b 100644
+--- a/services/core/java/com/android/server/wm/WindowStateAnimator.java
++++ b/services/core/java/com/android/server/wm/WindowStateAnimator.java
+@@ -582,6 +582,7 @@ class WindowStateAnimator {
+             //dump();
+             mLastHidden = true;
+             if (mSurfaceController != null) {
++                mService.updateNonSystemOverlayWindowsVisibilityIfNeeded(mWin, false);
+                 mSurfaceController.hideInTransaction(reason);
+             }
+         }
+@@ -1814,6 +1815,7 @@ class WindowStateAnimator {
+         if (!shown)
+             return false;
+ 
++        mService.updateNonSystemOverlayWindowsVisibilityIfNeeded(mWin, true);
+         if (mWin.mTurnOnScreen) {
+             if (DEBUG_VISIBILITY) Slog.v(TAG, "Show surface turning screen on: " + mWin);
+             mWin.mTurnOnScreen = false;
 diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
 index ffbea9f..8dd05b1 100644
 --- a/services/net/java/android/net/dhcp/DhcpClient.java

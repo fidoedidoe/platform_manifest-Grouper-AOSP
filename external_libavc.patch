@@ -1,0 +1,418 @@
+diff --git a/decoder/ih264d_api.c b/decoder/ih264d_api.c
+index 2cde456..7c3f750 100644
+--- a/decoder/ih264d_api.c
++++ b/decoder/ih264d_api.c
+@@ -1623,6 +1623,89 @@ UWORD32 ih264d_map_error(UWORD32 i4_err_status)
+ 
+ }
+ 
++UWORD32 ih264d_get_outbuf_size(WORD32 pic_wd,
++                               UWORD32 pic_ht,
++                               UWORD8 u1_chroma_format,
++                               UWORD32 *p_buf_size)
++{
++    UWORD32 u4_min_num_out_bufs = 0;
++
++    if(u1_chroma_format == IV_YUV_420P)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_420;
++    else if(u1_chroma_format == IV_YUV_422ILE)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_422ILE;
++    else if(u1_chroma_format == IV_RGB_565)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_RGB565;
++    else if((u1_chroma_format == IV_YUV_420SP_UV)
++                    || (u1_chroma_format == IV_YUV_420SP_VU))
++        u4_min_num_out_bufs = MIN_OUT_BUFS_420SP;
++
++    if(u1_chroma_format == IV_YUV_420P)
++    {
++        p_buf_size[0] = (pic_wd * pic_ht);
++        p_buf_size[1] = (pic_wd * pic_ht) >> 2;
++        p_buf_size[2] = (pic_wd * pic_ht) >> 2;
++    }
++    else if(u1_chroma_format == IV_YUV_422ILE)
++    {
++        p_buf_size[0] = (pic_wd * pic_ht) * 2;
++        p_buf_size[1] = p_buf_size[2] = 0;
++    }
++    else if(u1_chroma_format == IV_RGB_565)
++    {
++        p_buf_size[0] = (pic_wd * pic_ht) * 2;
++        p_buf_size[1] = p_buf_size[2] = 0;
++    }
++    else if((u1_chroma_format == IV_YUV_420SP_UV)
++                    || (u1_chroma_format == IV_YUV_420SP_VU))
++    {
++        p_buf_size[0] = (pic_wd * pic_ht);
++        p_buf_size[1] = (pic_wd * pic_ht) >> 1;
++        p_buf_size[2] = 0;
++    }
++
++    return u4_min_num_out_bufs;
++}
++
++WORD32 check_app_out_buf_size(dec_struct_t *ps_dec)
++{
++    UWORD32 au4_min_out_buf_size[IVD_VIDDEC_MAX_IO_BUFFERS];
++    UWORD32 u4_min_num_out_bufs, i;
++    UWORD32 pic_wd, pic_ht;
++
++    if(0 == ps_dec->u4_share_disp_buf)
++    {
++        pic_wd = ps_dec->u2_disp_width;
++        pic_ht = ps_dec->u2_disp_height;
++
++    }
++    else
++    {
++        /* In case of shared mode, do not check validity of ps_dec->ps_out_buffer */
++        return (IV_SUCCESS);
++    }
++
++    if(ps_dec->u4_app_disp_width > pic_wd)
++        pic_wd = ps_dec->u4_app_disp_width;
++
++    u4_min_num_out_bufs = ih264d_get_outbuf_size(pic_wd, pic_ht,
++                                                 ps_dec->u1_chroma_format,
++                                                 &au4_min_out_buf_size[0]);
++
++    if(ps_dec->ps_out_buffer->u4_num_bufs < u4_min_num_out_bufs)
++        return IV_FAIL;
++
++    for(i = 0; i < u4_min_num_out_bufs; i++)
++    {
++        if(ps_dec->ps_out_buffer->u4_min_out_buf_size[i]
++                        < au4_min_out_buf_size[i])
++            return (IV_FAIL);
++    }
++
++    return (IV_SUCCESS);
++}
++
++
+ /*****************************************************************************/
+ /*                                                                           */
+ /*  Function Name :  ih264d_video_decode                                     */
+@@ -1865,6 +1948,13 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+                                       &(ps_dec->s_disp_op));
+         if(0 == ps_dec->s_disp_op.u4_error_code)
+         {
++            /* check output buffer size given by the application */
++            if(check_app_out_buf_size(ps_dec) != IV_SUCCESS)
++            {
++                ps_dec_op->u4_error_code= IVD_DISP_FRM_ZERO_OP_BUF_SIZE;
++                return (IV_FAIL);
++            }
++
+             ps_dec->u4_fmt_conv_cur_row = 0;
+             ps_dec->u4_fmt_conv_num_rows = ps_dec->s_disp_frame_info.u4_y_ht;
+             ih264d_format_convert(ps_dec, &(ps_dec->s_disp_op),
+@@ -2094,7 +2184,8 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+                             || (ret == IVD_MEM_ALLOC_FAILED)
+                             || (ret == ERROR_UNAVAIL_PICBUF_T)
+                             || (ret == ERROR_UNAVAIL_MVBUF_T)
+-                            || (ret == ERROR_INV_SPS_PPS_T))
++                            || (ret == ERROR_INV_SPS_PPS_T)
++                            || (ret == IVD_DISP_FRM_ZERO_OP_BUF_SIZE))
+             {
+                 ps_dec->u4_slice_start_code_found = 0;
+                 break;
+@@ -2843,27 +2934,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+     UWORD16 pic_wd, pic_ht;
+     ivd_ctl_getbufinfo_op_t *ps_ctl_op =
+                     (ivd_ctl_getbufinfo_op_t*)pv_api_op;
++    UWORD32 au4_min_out_buf_size[IVD_VIDDEC_MAX_IO_BUFFERS];
+     UNUSED(pv_api_ip);
++
+     ps_ctl_op->u4_error_code = 0;
+ 
+     ps_dec = (dec_struct_t *)(dec_hdl->pv_codec_handle);
+ 
+     ps_ctl_op->u4_min_num_in_bufs = MIN_IN_BUFS;
+-    if(ps_dec->u1_chroma_format == IV_YUV_420P)
+-        ps_ctl_op->u4_min_num_out_bufs = MIN_OUT_BUFS_420;
+-    else if(ps_dec->u1_chroma_format == IV_YUV_422ILE)
+-        ps_ctl_op->u4_min_num_out_bufs = MIN_OUT_BUFS_422ILE;
+-    else if(ps_dec->u1_chroma_format == IV_RGB_565)
+-        ps_ctl_op->u4_min_num_out_bufs = MIN_OUT_BUFS_RGB565;
+-    else if((ps_dec->u1_chroma_format == IV_YUV_420SP_UV)
+-                    || (ps_dec->u1_chroma_format == IV_YUV_420SP_VU))
+-        ps_ctl_op->u4_min_num_out_bufs = MIN_OUT_BUFS_420SP;
+ 
+-    else
+-    {
+-        //Invalid chroma format; Error code may be updated, verify in testing if needed
+-        return IV_FAIL;
+-    }
+ 
+     ps_ctl_op->u4_num_disp_bufs = 1;
+ 
+@@ -2930,37 +3009,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+                         ps_ctl_op->u4_num_disp_bufs, 32);
+     }
+ 
+-    /*!*/
+-    if(ps_dec->u1_chroma_format == IV_YUV_420P)
+-    {
+-        ps_ctl_op->u4_min_out_buf_size[0] = (pic_wd * pic_ht);
+-        ps_ctl_op->u4_min_out_buf_size[1] = (pic_wd * pic_ht)
+-                        >> 2;
+-        ps_ctl_op->u4_min_out_buf_size[2] = (pic_wd * pic_ht)
+-                        >> 2;
+-    }
+-    else if(ps_dec->u1_chroma_format == IV_YUV_422ILE)
+-    {
+-        ps_ctl_op->u4_min_out_buf_size[0] = (pic_wd * pic_ht)
+-                        * 2;
+-        ps_ctl_op->u4_min_out_buf_size[1] =
+-                        ps_ctl_op->u4_min_out_buf_size[2] = 0;
+-    }
+-    else if(ps_dec->u1_chroma_format == IV_RGB_565)
+-    {
+-        ps_ctl_op->u4_min_out_buf_size[0] = (pic_wd * pic_ht)
+-                        * 2;
+-        ps_ctl_op->u4_min_out_buf_size[1] =
+-                        ps_ctl_op->u4_min_out_buf_size[2] = 0;
+-    }
+-    else if((ps_dec->u1_chroma_format == IV_YUV_420SP_UV)
+-                    || (ps_dec->u1_chroma_format == IV_YUV_420SP_VU))
++    ps_ctl_op->u4_min_num_out_bufs = ih264d_get_outbuf_size(
++                    pic_wd, pic_ht, ps_dec->u1_chroma_format,
++                    &au4_min_out_buf_size[0]);
++
++    for(i = 0; i < ps_ctl_op->u4_min_num_out_bufs; i++)
+     {
+-        ps_ctl_op->u4_min_out_buf_size[0] = (pic_wd * pic_ht);
+-        ps_ctl_op->u4_min_out_buf_size[1] = (pic_wd * pic_ht)
+-                        >> 1;
+-        ps_ctl_op->u4_min_out_buf_size[2] = 0;
++        ps_ctl_op->u4_min_out_buf_size[i] = au4_min_out_buf_size[i];
+     }
++
+     ps_dec->u4_num_disp_bufs_requested = ps_ctl_op->u4_num_disp_bufs;
+ 
+     return IV_SUCCESS;
+diff --git a/decoder/ih264d_parse_bslice.c b/decoder/ih264d_parse_bslice.c
+index 772964a..db64ce9 100644
+--- a/decoder/ih264d_parse_bslice.c
++++ b/decoder/ih264d_parse_bslice.c
+@@ -1531,10 +1531,7 @@ WORD32 ih264d_parse_bslice(dec_struct_t * ps_dec, UWORD16 u2_first_mb_in_slice)
+             }
+ 
+             num_entries = ((2 * num_entries) + 1);
+-            if(BASE_PROFILE_IDC != ps_dec->ps_cur_sps->u1_profile_idc)
+-            {
+-                num_entries *= 2;
+-            }
++            num_entries *= 2;
+ 
+             size = num_entries * sizeof(void *);
+             size += PAD_MAP_IDX_POC * sizeof(void *);
+diff --git a/decoder/ih264d_parse_pslice.c b/decoder/ih264d_parse_pslice.c
+index bcfbe05..d6b0f23 100644
+--- a/decoder/ih264d_parse_pslice.c
++++ b/decoder/ih264d_parse_pslice.c
+@@ -1696,10 +1696,8 @@ WORD32 ih264d_mark_err_slice_skip(dec_struct_t * ps_dec,
+             num_entries = 1;
+         }
+         num_entries = ((2 * num_entries) + 1);
+-        if(BASE_PROFILE_IDC != ps_dec->ps_cur_sps->u1_profile_idc)
+-        {
+-            num_entries *= 2;
+-        }
++        num_entries *= 2;
++
+         size = num_entries * sizeof(void *);
+         size += PAD_MAP_IDX_POC * sizeof(void *);
+ 
+@@ -2063,10 +2061,7 @@ WORD32 ih264d_parse_pslice(dec_struct_t *ps_dec, UWORD16 u2_first_mb_in_slice)
+                 num_entries = 1;
+             }
+             num_entries = ((2 * num_entries) + 1);
+-            if(BASE_PROFILE_IDC != ps_dec->ps_cur_sps->u1_profile_idc)
+-            {
+-                num_entries *= 2;
+-            }
++            num_entries *= 2;
+ 
+             size = num_entries * sizeof(void *);
+             size += PAD_MAP_IDX_POC * sizeof(void *);
+diff --git a/decoder/ih264d_parse_slice.c b/decoder/ih264d_parse_slice.c
+index fad2dff..bdfccb6 100644
+--- a/decoder/ih264d_parse_slice.c
++++ b/decoder/ih264d_parse_slice.c
+@@ -72,6 +72,7 @@
+ #include "ih264d_parse_islice.h"
+ #define RET_LAST_SKIP  0x80000000
+ 
++WORD32 check_app_out_buf_size(dec_struct_t *ps_dec);
+ /*!
+  **************************************************************************
+  * \if Function name : ih264d_form_pred_weight_matrix \endif
+@@ -181,6 +182,10 @@ WORD32 ih264d_start_of_pic(dec_struct_t *ps_dec,
+ 
+     H264_MUTEX_LOCK(&ps_dec->process_disp_mutex);
+ 
++    /* check output buffer size given by the application */
++    if(check_app_out_buf_size(ps_dec) != IV_SUCCESS)
++        return IVD_DISP_FRM_ZERO_OP_BUF_SIZE;
++
+     ps_prev_poc->i4_pic_order_cnt_lsb = ps_cur_poc->i4_pic_order_cnt_lsb;
+     ps_prev_poc->i4_pic_order_cnt_msb = ps_cur_poc->i4_pic_order_cnt_msb;
+     ps_prev_poc->i4_delta_pic_order_cnt_bottom =
+@@ -436,11 +441,23 @@ WORD32 ih264d_start_of_pic(dec_struct_t *ps_dec,
+         ps_dec->au1_pic_buf_ref_flag[cur_pic_buf_id] = 0;
+ 
+         {
+-            /*make first entry of list0 point to cur pic,so that if first Islice is in error, ref pic struct will have valid entries*/
++            /*make first entry of list0 and list1 point to cur pic,
++             *so that if first slice is in error, ref pic struct will have valid entries*/
+             ps_dec->ps_ref_pic_buf_lx[0] = ps_dec->ps_dpb_mgr->ps_init_dpb[0];
++            ps_dec->ps_ref_pic_buf_lx[1] = ps_dec->ps_dpb_mgr->ps_init_dpb[1];
+             *(ps_dec->ps_dpb_mgr->ps_init_dpb[0][0]) = *ps_cur_pic;
+             /* Initialize for field reference as well */
+             *(ps_dec->ps_dpb_mgr->ps_init_dpb[0][MAX_REF_BUFS]) = *ps_cur_pic;
++
++            *(ps_dec->ps_dpb_mgr->ps_mod_dpb[0][0]) = *ps_cur_pic;
++            /* Initialize for field reference as well */
++            *(ps_dec->ps_dpb_mgr->ps_mod_dpb[0][MAX_REF_BUFS]) = *ps_cur_pic;
++            *(ps_dec->ps_dpb_mgr->ps_init_dpb[1][0]) = *ps_cur_pic;
++            /* Initialize for field reference as well */
++            *(ps_dec->ps_dpb_mgr->ps_init_dpb[1][MAX_REF_BUFS]) = *ps_cur_pic;
++            *(ps_dec->ps_dpb_mgr->ps_mod_dpb[1][0]) = *ps_cur_pic;
++            /* Initialize for field reference as well */
++            *(ps_dec->ps_dpb_mgr->ps_mod_dpb[1][MAX_REF_BUFS]) = *ps_cur_pic;
+         }
+ 
+         if(!ps_dec->ps_cur_pic)
+@@ -1785,10 +1802,8 @@ WORD32 ih264d_parse_decode_slice(UWORD8 u1_is_idr_slice,
+             num_entries = 1;
+         }
+         num_entries = ((2 * num_entries) + 1);
+-        if(BASE_PROFILE_IDC != ps_dec->ps_cur_sps->u1_profile_idc)
+-        {
+-            num_entries *= 2;
+-        }
++        num_entries *= 2;
++
+ 
+         size = num_entries * sizeof(void *);
+         size += PAD_MAP_IDX_POC * sizeof(void *);
+diff --git a/decoder/ih264d_process_bslice.c b/decoder/ih264d_process_bslice.c
+index 7784110..42fad03 100644
+--- a/decoder/ih264d_process_bslice.c
++++ b/decoder/ih264d_process_bslice.c
+@@ -1212,7 +1212,8 @@ void ih264d_init_ref_idx_lx_b(dec_struct_t *ps_dec)
+     struct dpb_info_t *ps_next_dpb;
+     WORD32 i_cur_poc, i_max_st_poc, i_min_st_poc, i_ref_poc, i_temp_poc;
+     WORD8 i;
+-    UWORD8 u1_max_lt_index, u1_min_lt_index, u1_lt_index;
++    UWORD8 u1_max_lt_index, u1_min_lt_index;
++    UWORD32 u4_lt_index;
+     UWORD8 u1_field_pic_flag;
+     dec_slice_params_t *ps_cur_slice;
+     UWORD8 u1_L0, u1_L1;
+@@ -1264,9 +1265,9 @@ void ih264d_init_ref_idx_lx_b(dec_struct_t *ps_dec)
+     }
+     for(i = 0; i < ps_dpb_mgr->u1_num_lt_ref_bufs; i++)
+     {
+-        u1_lt_index = ps_next_dpb->u1_lt_idx;
+-        u1_max_lt_index = (UWORD8)(MAX(u1_max_lt_index, u1_lt_index));
+-        u1_min_lt_index = (UWORD8)(MIN(u1_min_lt_index, u1_lt_index));
++        u4_lt_index = ps_next_dpb->u1_lt_idx;
++        u1_max_lt_index = (UWORD8)(MAX(u1_max_lt_index, u4_lt_index));
++        u1_min_lt_index = (UWORD8)(MIN(u1_min_lt_index, u4_lt_index));
+ 
+         /* Chase the next link */
+         ps_next_dpb = ps_next_dpb->ps_prev_long;
+@@ -1333,12 +1334,12 @@ void ih264d_init_ref_idx_lx_b(dec_struct_t *ps_dec)
+     /* Start from ST head */
+ 
+     u1_num_short_term_bufs = u1_L0;
+-    for(u1_lt_index = u1_min_lt_index; u1_lt_index <= u1_max_lt_index; u1_lt_index++)
++    for(u4_lt_index = u1_min_lt_index; u4_lt_index <= u1_max_lt_index; u4_lt_index++)
+     {
+         ps_next_dpb = ps_dpb_mgr->ps_dpb_ht_head;
+         for(i = 0; i < ps_dpb_mgr->u1_num_lt_ref_bufs; i++)
+         {
+-            if(ps_next_dpb->u1_lt_idx == u1_lt_index)
++            if(ps_next_dpb->u1_lt_idx == u4_lt_index)
+             {
+                 ih264d_insert_pic_in_ref_pic_listx(ps_ref_pic_buf_lx,
+                                                    ps_next_dpb->ps_pic_buf);
+@@ -1466,13 +1467,13 @@ void ih264d_init_ref_idx_lx_b(dec_struct_t *ps_dec)
+         /* Start from ST head */
+         u1_num_short_term_bufs = u1_L1;
+ 
+-        for(u1_lt_index = u1_min_lt_index; u1_lt_index <= u1_max_lt_index;
+-                        u1_lt_index++)
++        for(u4_lt_index = u1_min_lt_index; u4_lt_index <= u1_max_lt_index;
++                        u4_lt_index++)
+         {
+             ps_next_dpb = ps_dpb_mgr->ps_dpb_ht_head;
+             for(i = 0; i < ps_dpb_mgr->u1_num_lt_ref_bufs; i++)
+             {
+-                if(ps_next_dpb->u1_lt_idx == u1_lt_index)
++                if(ps_next_dpb->u1_lt_idx == u4_lt_index)
+                 {
+                     ih264d_insert_pic_in_ref_pic_listx(ps_ref_pic_buf_lx,
+                                                        ps_next_dpb->ps_pic_buf);
+diff --git a/decoder/ih264d_process_pslice.c b/decoder/ih264d_process_pslice.c
+index 95ac557..efda5cf 100644
+--- a/decoder/ih264d_process_pslice.c
++++ b/decoder/ih264d_process_pslice.c
+@@ -971,7 +971,8 @@ void ih264d_init_ref_idx_lx_p(dec_struct_t *ps_dec)
+     dpb_manager_t *ps_dpb_mgr;
+     struct dpb_info_t *ps_next_dpb;
+     WORD8 i;
+-    UWORD8 u1_max_lt_index, u1_min_lt_index, u1_lt_index;
++    UWORD8 u1_max_lt_index, u1_min_lt_index;
++    UWORD32 u4_lt_index;
+     UWORD8 u1_field_pic_flag;
+     dec_slice_params_t *ps_cur_slice;
+     UWORD8 u1_L0;
+@@ -1018,9 +1019,9 @@ void ih264d_init_ref_idx_lx_p(dec_struct_t *ps_dec)
+ 
+         for(i = 0; i < ps_dpb_mgr->u1_num_lt_ref_bufs; i++)
+         {
+-            u1_lt_index = ps_next_dpb->u1_lt_idx;
+-            u1_max_lt_index = (UWORD8)(MAX(u1_max_lt_index, u1_lt_index));
+-            u1_min_lt_index = (UWORD8)(MIN(u1_min_lt_index, u1_lt_index));
++            u4_lt_index = ps_next_dpb->u1_lt_idx;
++            u1_max_lt_index = (UWORD8)(MAX(u1_max_lt_index, u4_lt_index));
++            u1_min_lt_index = (UWORD8)(MIN(u1_min_lt_index, u4_lt_index));
+ 
+             /* Chase the next link */
+             ps_next_dpb = ps_next_dpb->ps_prev_long;
+@@ -1065,13 +1066,13 @@ void ih264d_init_ref_idx_lx_p(dec_struct_t *ps_dec)
+     /* Arrange all Long term buffers in ascending order, in LongtermIndex */
+     /* Start from LT head */
+     u1_num_short_term_bufs = u1_L0;
+-    for(u1_lt_index = u1_min_lt_index; u1_lt_index <= u1_max_lt_index;
+-                    u1_lt_index++)
++    for(u4_lt_index = u1_min_lt_index; u4_lt_index <= u1_max_lt_index;
++                    u4_lt_index++)
+     {
+         ps_next_dpb = ps_dpb_mgr->ps_dpb_ht_head;
+         for(i = 0; i < ps_dpb_mgr->u1_num_lt_ref_bufs; i++)
+         {
+-            if(ps_next_dpb->u1_lt_idx == u1_lt_index)
++            if(ps_next_dpb->u1_lt_idx == u4_lt_index)
+             {
+                 ih264d_insert_pic_in_ref_pic_listx(ps_ref_pic_buf_lx,
+                                                    ps_next_dpb->ps_pic_buf);
+diff --git a/decoder/ih264d_utils.c b/decoder/ih264d_utils.c
+index 4f6deca..7d7475d 100644
+--- a/decoder/ih264d_utils.c
++++ b/decoder/ih264d_utils.c
+@@ -1979,10 +1979,7 @@ WORD16 ih264d_allocate_dynamic_bufs(dec_struct_t * ps_dec)
+         num_entries = 1;
+     }
+     num_entries = ((2 * num_entries) + 1);
+-    if(BASE_PROFILE_IDC != ps_dec->ps_cur_sps->u1_profile_idc)
+-    {
+-        num_entries *= 2;
+-    }
++    num_entries *= 2;
+ 
+     size = num_entries * sizeof(void *);
+     size += PAD_MAP_IDX_POC * sizeof(void *);

@@ -1,0 +1,45 @@
+diff --git a/include/hardware/power.h b/include/hardware/power.h
+index bd8216e..968e478 100644
+--- a/include/hardware/power.h
++++ b/include/hardware/power.h
+@@ -65,7 +65,11 @@ typedef enum {
+     POWER_HINT_SUSTAINED_PERFORMANCE = 0x00000006,
+     POWER_HINT_VR_MODE = 0x00000007,
+     POWER_HINT_LAUNCH = 0x00000008,
+-    POWER_HINT_DISABLE_TOUCH = 0x00000009
++    POWER_HINT_DISABLE_TOUCH = 0x00000009,
++    POWER_HINT_CPU_BOOST    = 0x00000010,
++    POWER_HINT_LAUNCH_BOOST = 0x00000011,
++    POWER_HINT_AUDIO        = 0x00000020,
++    POWER_HINT_SET_PROFILE  = 0x00000030
+ } power_hint_t;
+ 
+ typedef enum {
+@@ -257,6 +261,12 @@ typedef struct power_module {
+      *     The data parameter is non-zero when touch could be disabled, and zero
+      *     when touch needs to be re-enabled.
+      *
++     * POWER_HINT_CPU_BOOST
++     *
++     *     An operation is happening where it would be ideal for the CPU to
++     *     be boosted for a specific duration. The data parameter is an
++     *     integer value of the boost duration in microseconds.
++     *
+      * A particular platform may choose to ignore any hint.
+      *
+      * availability: version 0.2
+diff --git a/modules/sensors/multihal.cpp b/modules/sensors/multihal.cpp
+index f38d90d..4acc93e 100644
+--- a/modules/sensors/multihal.cpp
++++ b/modules/sensors/multihal.cpp
+@@ -527,8 +527,8 @@ static void lazy_init_modules() {
+         pthread_mutex_unlock(&init_modules_mutex);
+         return;
+     }
+-    std::vector<std::string> *so_paths = new std::vector<std::string>();
+-    get_so_paths(so_paths);
++    std::vector<std::string> so_paths;
++    get_so_paths(&so_paths);
+ 
+     // dlopen the module files and cache their module symbols in sub_hw_modules
+     sub_hw_modules = new std::vector<hw_module_t *>();

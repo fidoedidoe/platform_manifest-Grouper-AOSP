@@ -1,0 +1,255 @@
+diff --git a/common/ihevc_structs.h b/common/ihevc_structs.h
+index 93d2ad4..baa6375 100644
+--- a/common/ihevc_structs.h
++++ b/common/ihevc_structs.h
+@@ -644,33 +644,33 @@ typedef struct
+      * if 1, , for the highest temporal sub-layers, the temporal distance between the HRD output times
+      * of consecutive pictures in output order is constrained refer to Table E-6
+      */
+-    UWORD8 au1_fixed_pic_rate_general_flag[6];
++    UWORD8 au1_fixed_pic_rate_general_flag[VPS_MAX_SUB_LAYERS];
+ 
+-    UWORD8 au1_fixed_pic_rate_within_cvs_flag[6];
++    UWORD8 au1_fixed_pic_rate_within_cvs_flag[VPS_MAX_SUB_LAYERS];
+ 
+     /**
+      * if 1, , for the highest temporal sub-layers, the temporal distance (in clock ticks) between the
+      * element units that specify HRD output times of consecutive pictures in output order is constrained
+      * refer to Table E-6
+      */
+-    UWORD8 au1_elemental_duration_in_tc_minus1[6];
++    UWORD8 au1_elemental_duration_in_tc_minus1[VPS_MAX_SUB_LAYERS];
+ 
+     /**
+      * specifies the HRD operational mode
+      */
+-    UWORD8 au1_low_delay_hrd_flag[6];
++    UWORD8 au1_low_delay_hrd_flag[VPS_MAX_SUB_LAYERS];
+ 
+     /**
+      * 1 specifies the number of alternative CPB specifications in the
+      * bitstream of the cvs when HighestTid is equal to i
+      */
+-    UWORD8 au1_cpb_cnt_minus1[6];
++    UWORD8 au1_cpb_cnt_minus1[VPS_MAX_SUB_LAYERS];
+ 
+ 
+     /**
+      * VUI level Sub-layer HRD parameters
+      */
+-    sub_lyr_hrd_params_t as_sub_layer_hrd_params[6];
++    sub_lyr_hrd_params_t as_sub_layer_hrd_params[VPS_MAX_SUB_LAYERS];
+ 
+ }hrd_params_t;
+ 
+diff --git a/decoder/ihevcd_decode.c b/decoder/ihevcd_decode.c
+index d656519..87c3bd7 100644
+--- a/decoder/ihevcd_decode.c
++++ b/decoder/ihevcd_decode.c
+@@ -81,6 +81,7 @@
+ #define NUM_FRAMES_LIMIT 0x7FFFFFFF
+ #endif
+ 
++IHEVCD_ERROR_T ihevcd_check_out_buf_size(codec_t *ps_codec);
+ IHEVCD_ERROR_T ihevcd_fmt_conv(codec_t *ps_codec,
+                                process_ctxt_t *ps_proc,
+                                UWORD8 *pu1_y_dst,
+@@ -471,6 +472,10 @@ WORD32 ihevcd_decode(iv_obj_t *ps_codec_obj, void *pv_api_ip, void *pv_api_op)
+                 ihevcd_init_proc_ctxt(ps_proc, 0);
+             }
+ 
++            /* Output buffer check */
++            ret = ihevcd_check_out_buf_size(ps_codec);
++            RETURN_IF((ret != (IHEVCD_ERROR_T)IHEVCD_SUCCESS), ret);
++
+             /* Set remaining number of rows to be processed */
+             ret = ihevcd_fmt_conv(ps_codec, &ps_codec->as_process[prev_proc_idx],
+                                   ps_dec_ip->s_out_buffer.pu1_bufs[0],
+diff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c
+index c0f1564..29a309d 100644
+--- a/decoder/ihevcd_parse_headers.c
++++ b/decoder/ihevcd_parse_headers.c
+@@ -1285,15 +1285,31 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+     {
+ 
+         UEV_PARSE("pic_crop_left_offset", value, ps_bitstrm);
++        if (value >= ps_sps->i2_pic_width_in_luma_samples)
++        {
++            return IHEVCD_INVALID_PARAMETER;
++        }
+         ps_sps->i2_pic_crop_left_offset = value;
+ 
+         UEV_PARSE("pic_crop_right_offset", value, ps_bitstrm);
++        if (value >= ps_sps->i2_pic_width_in_luma_samples)
++        {
++            return IHEVCD_INVALID_PARAMETER;
++        }
+         ps_sps->i2_pic_crop_right_offset = value;
+ 
+         UEV_PARSE("pic_crop_top_offset", value, ps_bitstrm);
++        if (value >= ps_sps->i2_pic_height_in_luma_samples)
++        {
++            return IHEVCD_INVALID_PARAMETER;
++        }
+         ps_sps->i2_pic_crop_top_offset = value;
+ 
+         UEV_PARSE("pic_crop_bottom_offset", value, ps_bitstrm);
++        if (value >= ps_sps->i2_pic_height_in_luma_samples)
++        {
++            return IHEVCD_INVALID_PARAMETER;
++        }
+         ps_sps->i2_pic_crop_bottom_offset = value;
+     }
+     else
+diff --git a/decoder/ihevcd_parse_slice.c b/decoder/ihevcd_parse_slice.c
+index 126b14c..9f92a0d 100644
+--- a/decoder/ihevcd_parse_slice.c
++++ b/decoder/ihevcd_parse_slice.c
+@@ -2708,6 +2708,17 @@ IHEVCD_ERROR_T ihevcd_parse_slice_data(codec_t *ps_codec)
+         {
+             tu_t *ps_tu = ps_codec->s_parse.ps_tu;
+             pu_t *ps_pu = ps_codec->s_parse.ps_pu;
++            WORD32 pu_skip_wd, pu_skip_ht;
++            WORD32 rows_remaining, cols_remaining;
++
++            /* Set pu wd and ht based on whether the ctb is complete or not */
++            rows_remaining = ps_sps->i2_pic_height_in_luma_samples
++                            - (ps_codec->s_parse.i4_ctb_y << ps_sps->i1_log2_ctb_size);
++            pu_skip_ht = MIN(ctb_size, rows_remaining);
++
++            cols_remaining = ps_sps->i2_pic_width_in_luma_samples
++                            - (ps_codec->s_parse.i4_ctb_x << ps_sps->i1_log2_ctb_size);
++            pu_skip_wd = MIN(ctb_size, cols_remaining);
+ 
+             ps_tu->b1_cb_cbf = 0;
+             ps_tu->b1_cr_cbf = 0;
+@@ -2731,8 +2742,8 @@ IHEVCD_ERROR_T ihevcd_parse_slice_data(codec_t *ps_codec)
+             ps_pu->b2_part_idx = 0;
+             ps_pu->b4_pos_x = 0;
+             ps_pu->b4_pos_y = 0;
+-            ps_pu->b4_wd = (ctb_size >> 2) - 1;
+-            ps_pu->b4_ht = (ctb_size >> 2) - 1;
++            ps_pu->b4_wd = (pu_skip_wd >> 2) - 1;
++            ps_pu->b4_ht = (pu_skip_ht >> 2) - 1;
+             ps_pu->b1_intra_flag = 0;
+             ps_pu->b3_part_mode = ps_codec->s_parse.s_cu.i4_part_mode;
+             ps_pu->b1_merge_flag = 1;
+diff --git a/decoder/ihevcd_utils.c b/decoder/ihevcd_utils.c
+index 7d76577..14cdd2b 100755
+--- a/decoder/ihevcd_utils.c
++++ b/decoder/ihevcd_utils.c
+@@ -662,6 +662,103 @@ IHEVCD_ERROR_T ihevcd_mv_buf_mgr_add_bufs(codec_t *ps_codec)
+ *******************************************************************************
+ *
+ * @brief
++*  Output buffer check
++*
++* @par Description:
++*  Check for the number of buffers and buffer sizes of output buffer
++*
++* @param[in] ps_codec
++*  Pointer to codec context
++*
++* @returns  Error from IHEVCD_ERROR_T
++*
++* @remarks
++*
++*
++*******************************************************************************
++*/
++IHEVCD_ERROR_T ihevcd_check_out_buf_size(codec_t *ps_codec)
++{
++    ivd_out_bufdesc_t *ps_out_buffer = ps_codec->ps_out_buffer;
++    UWORD32 au4_min_out_buf_size[IVD_VIDDEC_MAX_IO_BUFFERS];
++    UWORD32 u4_min_num_out_bufs = 0, i;
++    UWORD32 wd, ht;
++
++    if(0 == ps_codec->i4_share_disp_buf)
++    {
++        wd = ps_codec->i4_disp_wd;
++        ht = ps_codec->i4_disp_ht;
++    }
++    else
++    {
++        /* In case of shared mode, do not check validity of ps_codec->ps_out_buffer */
++        return (IHEVCD_ERROR_T)IHEVCD_SUCCESS;
++    }
++
++    if(ps_codec->e_chroma_fmt == IV_YUV_420P)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_420;
++    else if(ps_codec->e_chroma_fmt == IV_YUV_422ILE)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_422ILE;
++    else if(ps_codec->e_chroma_fmt == IV_RGB_565)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_RGB565;
++    else if(ps_codec->e_chroma_fmt == IV_RGBA_8888)
++        u4_min_num_out_bufs = MIN_OUT_BUFS_RGBA8888;
++    else if((ps_codec->e_chroma_fmt == IV_YUV_420SP_UV)
++                    || (ps_codec->e_chroma_fmt == IV_YUV_420SP_VU))
++        u4_min_num_out_bufs = MIN_OUT_BUFS_420SP;
++
++    if(ps_codec->e_chroma_fmt == IV_YUV_420P)
++    {
++        au4_min_out_buf_size[0] = (wd * ht);
++        au4_min_out_buf_size[1] = (wd * ht) >> 2;
++        au4_min_out_buf_size[2] = (wd * ht) >> 2;
++    }
++    else if(ps_codec->e_chroma_fmt == IV_YUV_422ILE)
++    {
++        au4_min_out_buf_size[0] = (wd * ht) * 2;
++        au4_min_out_buf_size[1] =
++                        au4_min_out_buf_size[2] = 0;
++    }
++    else if(ps_codec->e_chroma_fmt == IV_RGB_565)
++    {
++        au4_min_out_buf_size[0] = (wd * ht) * 2;
++        au4_min_out_buf_size[1] =
++                        au4_min_out_buf_size[2] = 0;
++    }
++    else if(ps_codec->e_chroma_fmt == IV_RGBA_8888)
++    {
++        au4_min_out_buf_size[0] = (wd * ht) * 4;
++        au4_min_out_buf_size[1] =
++                        au4_min_out_buf_size[2] = 0;
++    }
++    else if((ps_codec->e_chroma_fmt == IV_YUV_420SP_UV)
++                    || (ps_codec->e_chroma_fmt == IV_YUV_420SP_VU))
++    {
++        au4_min_out_buf_size[0] = (wd * ht);
++        au4_min_out_buf_size[1] = (wd * ht) >> 1;
++        au4_min_out_buf_size[2] = 0;
++    }
++
++    if(ps_out_buffer->u4_num_bufs < u4_min_num_out_bufs)
++    {
++        return (IHEVCD_ERROR_T)IV_FAIL;
++    }
++
++    for (i = 0 ; i < u4_min_num_out_bufs; i++)
++    {
++        if(ps_out_buffer->u4_min_out_buf_size[i] < au4_min_out_buf_size[i])
++        {
++            return (IHEVCD_ERROR_T)IV_FAIL;
++        }
++    }
++
++    return (IHEVCD_ERROR_T)IHEVCD_SUCCESS;
++}
++
++/**
++*******************************************************************************
++*
++* @brief
+ *  Picture level initializations required during parsing
+ *
+ * @par Description:
+@@ -713,6 +810,10 @@ IHEVCD_ERROR_T ihevcd_parse_pic_init(codec_t *ps_codec)
+         ps_codec->s_parse.i4_first_pic_init = 1;
+     }
+ 
++    /* Output buffer check */
++    ret = ihevcd_check_out_buf_size(ps_codec);
++    RETURN_IF((ret != (IHEVCD_ERROR_T)IHEVCD_SUCCESS), ret);
++
+     /* Initialize all the slice headers' slice addresses to zero */
+     {
+         WORD32 slice_idx;

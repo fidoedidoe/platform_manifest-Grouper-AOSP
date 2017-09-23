@@ -1,8 +1,16 @@
 diff --git a/libril/ril.cpp b/libril/ril.cpp
-index d7744c0..05119b1 100644
+index d7744c0..3f78619 100644
 --- a/libril/ril.cpp
 +++ b/libril/ril.cpp
-@@ -3804,6 +3804,7 @@ static void responseSimStatusV5(Parcel &p, void *response) {
+@@ -3698,6 +3698,7 @@ static int responseSSData(Parcel &p, void *response, size_t responselen) {
+     p.writeInt32(p_cur->teleserviceType);
+     p.writeInt32(p_cur->serviceClass);
+     p.writeInt32(p_cur->result);
++    p.writeInt32(-1);
+ 
+     if (isServiceTypeCfQuery(p_cur->serviceType, p_cur->requestType)) {
+         RLOGD("responseSSData CF type, num of Cf elements %d", p_cur->cfData.numValidIndexes);
+@@ -3804,6 +3805,7 @@ static void responseSimStatusV5(Parcel &p, void *response) {
      p.writeInt32(p_cur->universal_pin_state);
      p.writeInt32(p_cur->gsm_umts_subscription_app_index);
      p.writeInt32(p_cur->cdma_subscription_app_index);
@@ -10,7 +18,7 @@ index d7744c0..05119b1 100644
  
      sendSimStatusAppInfo(p, p_cur->num_applications, p_cur->applications);
  }
-@@ -5401,6 +5402,9 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
+@@ -5401,6 +5403,9 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
              p.writeInt32(newState);
              appendPrintBuf("%s {%s}", printBuf,
                  radioStateToString(CALL_ONSTATEREQUEST(soc_id)));

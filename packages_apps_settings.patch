@@ -1,0 +1,45 @@
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index 2ec976d..c155cf7 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -86,6 +86,7 @@
+     <uses-permission android:name="android.permission.PEERS_MAC_ADDRESS"/>
+     <uses-permission android:name="android.permission.MANAGE_NOTIFICATIONS"/>
+     <uses-permission android:name="android.permission.DELETE_PACKAGES"/>
++    <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS" />
+ 
+     <application android:label="@string/settings_label"
+             android:icon="@mipmap/ic_launcher_settings"
+diff --git a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
+index 196a4ab..1f69768 100644
+--- a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
++++ b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
+@@ -39,6 +39,8 @@ import android.view.MenuInflater;
+ import android.view.MenuItem;
+ import android.view.MotionEvent;
+ import android.view.View;
++import android.view.Window;
++import android.view.WindowManager;
+ import android.view.accessibility.AccessibilityManager;
+ import android.widget.ImageView;
+ import android.widget.LinearLayout;
+@@ -55,6 +57,8 @@ import com.android.settingslib.accessibility.AccessibilityUtils;
+ 
+ import java.util.List;
+ 
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
++
+ public class ToggleAccessibilityServicePreferenceFragment
+         extends ToggleFeaturePreferenceFragment implements DialogInterface.OnClickListener {
+ 
+@@ -178,6 +182,10 @@ public class ToggleAccessibilityServicePreferenceFragment
+ 
+                 ad.create();
+                 ad.getButton(AlertDialog.BUTTON_POSITIVE).setOnTouchListener(filterTouchListener);
++                Window window = ad.getWindow();
++                WindowManager.LayoutParams params = window.getAttributes();
++                params.privateFlags |= PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
++                window.setAttributes(params);
+                 return ad;
+             }
+             case DIALOG_ID_DISABLE_WARNING: {
