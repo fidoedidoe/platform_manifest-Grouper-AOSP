@@ -1,0 +1,341 @@
+diff --git a/bta/pan/bta_pan_act.c b/bta/pan/bta_pan_act.c
+index 1995478..b1678d8 100644
+--- a/bta/pan/bta_pan_act.c
++++ b/bta/pan/bta_pan_act.c
+@@ -28,6 +28,8 @@
+ 
+ #include "bta_api.h"
+ #include "bta_sys.h"
++#include <cutils/log.h>
++
+ #include "bt_common.h"
+ #include "pan_api.h"
+ #include "bta_pan_api.h"
+@@ -176,6 +178,14 @@ static void bta_pan_data_buf_ind_cback(UINT16 handle, BD_ADDR src, BD_ADDR dst,
+ 
+     if (sizeof(tBTA_PAN_DATA_PARAMS) > p_buf->offset) {
+         /* offset smaller than data structure in front of actual data */
++        if (sizeof(BT_HDR) + sizeof(tBTA_PAN_DATA_PARAMS) + p_buf->len >
++            PAN_BUF_SIZE) {
++          android_errorWriteLog(0x534e4554, "63146237");
++          APPL_TRACE_ERROR("%s: received buffer length too large: %d", __func__,
++                           p_buf->len);
++          osi_free(p_buf);
++          return;
++        }
+         p_new_buf = (BT_HDR *)osi_malloc(PAN_BUF_SIZE);
+         memcpy((UINT8 *)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
+                (UINT8 *)(p_buf + 1) + p_buf->offset, p_buf->len);
+diff --git a/stack/avdt/avdt_api.c b/stack/avdt/avdt_api.c
+index 98ef5f7..258f424 100644
+--- a/stack/avdt/avdt_api.c
++++ b/stack/avdt/avdt_api.c
+@@ -1208,7 +1208,7 @@ UINT16 AVDT_SendReport(UINT8 handle, AVDT_REPORT_TYPE type,
+         /* build SR - assume fit in one packet */
+         p_tbl = avdt_ad_tc_tbl_by_type(AVDT_CHAN_REPORT, p_scb->p_ccb, p_scb);
+         if (p_tbl->state == AVDT_AD_ST_OPEN) {
+-            BT_HDR *p_pkt = (BT_HDR *)osi_malloc(p_tbl->peer_mtu);
++            BT_HDR* p_pkt = (BT_HDR*)osi_malloc(p_tbl->peer_mtu + sizeof(BT_HDR));
+ 
+             p_pkt->offset = L2CAP_MIN_OFFSET;
+             p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
+diff --git a/stack/bnep/bnep_main.c b/stack/bnep/bnep_main.c
+index 078a72e..9b01472 100644
+--- a/stack/bnep/bnep_main.c
++++ b/stack/bnep/bnep_main.c
+@@ -575,7 +575,8 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+             p_bcb->con_state != BNEP_STATE_CONNECTED &&
+             extension_present && p && rem_len)
+         {
+-            p_bcb->p_pending_data = (BT_HDR *)osi_malloc(rem_len);
++            osi_free(p_bcb->p_pending_data);
++            p_bcb->p_pending_data = (BT_HDR*)osi_malloc(rem_len + sizeof(BT_HDR));
+             memcpy((UINT8 *)(p_bcb->p_pending_data + 1), p, rem_len);
+             p_bcb->p_pending_data->len    = rem_len;
+             p_bcb->p_pending_data->offset = 0;
+diff --git a/stack/bnep/bnep_utils.c b/stack/bnep/bnep_utils.c
+index 13fb189..2250634 100644
+--- a/stack/bnep/bnep_utils.c
++++ b/stack/bnep/bnep_utils.c
+@@ -154,7 +154,7 @@ void bnepu_release_bcb (tBNEP_CONN *p_bcb)
+ 
+     /* Drop any response pointer we may be holding */
+     p_bcb->con_state        = BNEP_STATE_IDLE;
+-    p_bcb->p_pending_data   = NULL;
++    osi_free_and_reset((void**)&p_bcb->p_pending_data);
+ 
+     /* Free transmit queue */
+     while (!fixed_queue_is_empty(p_bcb->xmit_q))
+@@ -762,24 +762,43 @@ void bnep_process_setup_conn_responce (tBNEP_CONN *p_bcb, UINT8 *p_setup)
+ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len, BOOLEAN is_ext)
+ {
+     UINT8       control_type;
+-    BOOLEAN     bad_pkt = FALSE;
+     UINT16      len, ext_len = 0;
+ 
++    if (p == NULL || rem_len == NULL) {
++       if (rem_len != NULL) *rem_len = 0;
++       BNEP_TRACE_DEBUG("%s: invalid packet: p = %p rem_len = %p", __func__, p,
++                        rem_len);
++       return NULL;
++    }
++    UINT16 rem_len_orig = *rem_len;
++
+     if (is_ext)
+     {
++        if (*rem_len < 1) goto bad_packet_length;
+         ext_len = *p++;
+         *rem_len = *rem_len - 1;
+     }
+ 
++    if (*rem_len < 1) goto bad_packet_length;
+     control_type = *p++;
+     *rem_len = *rem_len - 1;
+ 
+-    BNEP_TRACE_EVENT ("BNEP processing control packet rem_len %d, is_ext %d, ctrl_type %d", *rem_len, is_ext, control_type);
++    BNEP_TRACE_EVENT (
++       "%s: BNEP processing control packet rem_len %d, is_ext %d, ctrl_type %d",
++       __func__, *rem_len, is_ext, control_type);
+ 
+     switch (control_type)
+     {
+     case BNEP_CONTROL_COMMAND_NOT_UNDERSTOOD:
+-        BNEP_TRACE_ERROR ("BNEP Received Cmd not understood for ctl pkt type: %d", *p);
++       if (*rem_len < 1) {
++         BNEP_TRACE_ERROR(
++             "%s: Received BNEP_CONTROL_COMMAND_NOT_UNDERSTOOD with bad length",
++             __func__);
++         goto bad_packet_length;
++       }
++       BNEP_TRACE_ERROR(
++           "%s: Received BNEP_CONTROL_COMMAND_NOT_UNDERSTOOD for pkt type: %d",
++           __func__, *p);
+         p++;
+         *rem_len = *rem_len - 1;
+         break;
+@@ -788,9 +807,10 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         len = *p++;
+         if (*rem_len < ((2 * len) + 1))
+         {
+-            bad_pkt = TRUE;
+-            BNEP_TRACE_ERROR ("BNEP Received Setup message with bad length");
+-            break;
++            BNEP_TRACE_ERROR(
++                "%s: Received BNEP_SETUP_CONNECTION_REQUEST_MSG with bad length",
++                __func__);
++            goto bad_packet_length;
+         }
+         if (!is_ext)
+             bnep_process_setup_conn_req (p_bcb, p, (UINT8)len);
+@@ -799,6 +819,12 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         break;
+ 
+     case BNEP_SETUP_CONNECTION_RESPONSE_MSG:
++        if (*rem_len < 2) {
++          BNEP_TRACE_ERROR(
++              "%s: Received BNEP_SETUP_CONNECTION_RESPONSE_MSG with bad length",
++              __func__);
++          goto bad_packet_length;
++        }
+         if (!is_ext)
+             bnep_process_setup_conn_responce (p_bcb, p);
+         p += 2;
+@@ -809,9 +835,10 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         BE_STREAM_TO_UINT16 (len, p);
+         if (*rem_len < (len + 2))
+         {
+-            bad_pkt = TRUE;
+-            BNEP_TRACE_ERROR ("BNEP Received Filter set message with bad length");
+-            break;
++           BNEP_TRACE_ERROR(
++               "%s: Received BNEP_FILTER_NET_TYPE_SET_MSG with bad length",
++               __func__);
++           goto bad_packet_length;
+         }
+         bnepu_process_peer_filter_set (p_bcb, p, len);
+         p += len;
+@@ -819,6 +846,12 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         break;
+ 
+     case BNEP_FILTER_NET_TYPE_RESPONSE_MSG:
++        if (*rem_len < 2) {
++          BNEP_TRACE_ERROR(
++              "%s: Received BNEP_FILTER_NET_TYPE_RESPONSE_MSG with bad length",
++              __func__);
++          goto bad_packet_length;
++        }
+         bnepu_process_peer_filter_rsp (p_bcb, p);
+         p += 2;
+         *rem_len = *rem_len - 2;
+@@ -828,9 +861,10 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         BE_STREAM_TO_UINT16 (len, p);
+         if (*rem_len < (len + 2))
+         {
+-            bad_pkt = TRUE;
+-            BNEP_TRACE_ERROR ("BNEP Received Multicast Filter Set message with bad length");
+-            break;
++           BNEP_TRACE_ERROR (
++               "%s: Received BNEP_FILTER_MULTI_ADDR_SET_MSG with bad length",
++               __func__);
++           goto bad_packet_length;
+         }
+         bnepu_process_peer_multicast_filter_set (p_bcb, p, len);
+         p += len;
+@@ -838,30 +872,38 @@ UINT8 *bnep_process_control_packet (tBNEP_CONN *p_bcb, UINT8 *p, UINT16 *rem_len
+         break;
+ 
+     case BNEP_FILTER_MULTI_ADDR_RESPONSE_MSG:
++        if (*rem_len < 2) {
++          BNEP_TRACE_ERROR(
++              "%s: Received BNEP_FILTER_MULTI_ADDR_RESPONSE_MSG with bad length",
++              __func__);
++          goto bad_packet_length;
++        }
+         bnepu_process_multicast_filter_rsp (p_bcb, p);
+         p += 2;
+         *rem_len = *rem_len - 2;
+         break;
+ 
+     default :
+-        BNEP_TRACE_ERROR ("BNEP - bad ctl pkt type: %d", control_type);
++        BNEP_TRACE_ERROR("%s: BNEP - bad ctl pkt type: %d", __func__,
++                         control_type);
+         bnep_send_command_not_understood (p_bcb, control_type);
+-        if (is_ext)
+-        {
++        if (is_ext && (ext_len > 0)) {
++            if (*rem_len < (ext_len - 1)) {
++               goto bad_packet_length;
++            }
+             p += (ext_len - 1);
+             *rem_len -= (ext_len - 1);
+         }
+         break;
+     }
+ 
+-    if (bad_pkt)
+-    {
+-        BNEP_TRACE_ERROR ("BNEP - bad ctl pkt length: %d", *rem_len);
+-        *rem_len = 0;
+-        return NULL;
+-    }
+-
+     return p;
++
++bad_packet_length:
++  BNEP_TRACE_ERROR("%s: bad control packet length: original=%d remaining=%d",
++                   __func__, rem_len_orig, *rem_len);
++  *rem_len = 0;
++  return NULL;
+ }
+ 
+ 
+diff --git a/stack/l2cap/l2cap_client.c b/stack/l2cap/l2cap_client.c
+index 7e8b3cb..ce58cdc 100644
+--- a/stack/l2cap/l2cap_client.c
++++ b/stack/l2cap/l2cap_client.c
+@@ -370,7 +370,7 @@ static void fragment_packet(l2cap_client_t *client, buffer_t *packet) {
+   assert(packet != NULL);
+ 
+   // TODO(sharvil): eliminate copy into BT_HDR.
+-  BT_HDR *bt_packet = osi_malloc(buffer_length(packet) + L2CAP_MIN_OFFSET);
++  BT_HDR *bt_packet = osi_malloc(buffer_length(packet) + L2CAP_MIN_OFFSET + sizeof(BT_HDR));
+   bt_packet->offset = L2CAP_MIN_OFFSET;
+   bt_packet->len = buffer_length(packet);
+   memcpy(bt_packet->data + bt_packet->offset, buffer_ptr(packet), buffer_length(packet));
+@@ -384,7 +384,7 @@ static void fragment_packet(l2cap_client_t *client, buffer_t *packet) {
+       break;
+     }
+ 
+-    BT_HDR *fragment = osi_malloc(client->remote_mtu + L2CAP_MIN_OFFSET);
++    BT_HDR *fragment = osi_malloc(client->remote_mtu + L2CAP_MIN_OFFSET + sizeof(BT_HDR));
+     fragment->offset = L2CAP_MIN_OFFSET;
+     fragment->len = client->remote_mtu;
+     memcpy(fragment->data + fragment->offset, bt_packet->data + bt_packet->offset, client->remote_mtu);
+diff --git a/stack/mcap/mca_cact.c b/stack/mcap/mca_cact.c
+index 583a342..6694ff7 100644
+--- a/stack/mcap/mca_cact.c
++++ b/stack/mcap/mca_cact.c
+@@ -122,7 +122,7 @@ void mca_ccb_snd_req(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
+         p_ccb->p_tx_req = p_msg;
+         if (!p_ccb->cong)
+         {
+-            BT_HDR *p_pkt = (BT_HDR *)osi_malloc(MCA_CTRL_MTU);
++            BT_HDR *p_pkt = (BT_HDR *)osi_malloc(MCA_CTRL_MTU + sizeof(BT_HDR));
+ 
+             p_pkt->offset = L2CAP_MIN_OFFSET;
+             p = p_start = (UINT8*)(p_pkt + 1) + L2CAP_MIN_OFFSET;
+@@ -164,7 +164,7 @@ void mca_ccb_snd_rsp(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
+     tMCA_CCB_MSG *p_msg = (tMCA_CCB_MSG *)p_data;
+     UINT8   *p, *p_start;
+     BOOLEAN chk_mdl = FALSE;
+-    BT_HDR *p_pkt = (BT_HDR *)osi_malloc(MCA_CTRL_MTU);
++    BT_HDR *p_pkt = (BT_HDR *)osi_malloc(MCA_CTRL_MTU + sizeof(BT_HDR));
+ 
+     MCA_TRACE_DEBUG("%s cong=%d req=%d", __func__, p_ccb->cong, p_msg->op_code);
+     /* assume that API functions verified the parameters */
+@@ -404,7 +404,7 @@ void mca_ccb_hdl_req(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
+ 
+     if (((reject_code != MCA_RSP_SUCCESS) && (evt_data.hdr.op_code != MCA_OP_SYNC_INFO_IND))
+         || send_rsp) {
+-        BT_HDR *p_buf = (BT_HDR *)osi_malloc(MCA_CTRL_MTU);
++        BT_HDR *p_buf = (BT_HDR *)osi_malloc(MCA_CTRL_MTU + sizeof(BT_HDR));
+         p_buf->offset = L2CAP_MIN_OFFSET;
+         p = p_start = (UINT8*)(p_buf + 1) + L2CAP_MIN_OFFSET;
+         *p++ = reject_opcode;
+diff --git a/stack/pan/pan_main.c b/stack/pan/pan_main.c
+index 5c3a367..044469d 100644
+--- a/stack/pan/pan_main.c
++++ b/stack/pan/pan_main.c
+@@ -221,6 +221,38 @@ void pan_conn_ind_cb (UINT16 handle,
+         BNEP_ConnectResp (handle, BNEP_CONN_FAILED_DST_UUID);
+         return;
+     }
++    /* Check for valid interactions between the three PAN profile roles */
++    /*
++     * For reference, see Table 1 in PAN Profile v1.0 spec.
++     * Note: the remote is the initiator.
++     */
++    bool is_valid_interaction = false;
++    switch (remote_uuid->uu.uuid16) {
++      case UUID_SERVCLASS_NAP:
++      case UUID_SERVCLASS_GN:
++         if (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU)
++          is_valid_interaction = true;
++        break;
++      case UUID_SERVCLASS_PANU:
++        is_valid_interaction = true;
++        break;
++    }
++    /*
++     * Explicitly disable connections to the local PANU if the remote is
++     * not PANU.
++     */
++    if ((local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU) &&
++        (remote_uuid->uu.uuid16 != UUID_SERVCLASS_PANU)) {
++      is_valid_interaction = false;
++    }
++    if (!is_valid_interaction) {
++      PAN_TRACE_ERROR(
++          "PAN Connection failed because of invalid PAN profile roles "
++          "interaction: Remote UUID 0x%x Local UUID 0x%x",
++          remote_uuid->uu.uuid16, local_uuid->uu.uuid16);
++      BNEP_ConnectResp(handle, BNEP_CONN_FAILED_SRC_UUID);
++      return;
++    }
+ 
+     /* Requested destination role is */
+     if (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU)
+diff --git a/stack/sdp/sdp_server.c b/stack/sdp/sdp_server.c
+index 627f4cf..5b0bde4 100644
+--- a/stack/sdp/sdp_server.c
++++ b/stack/sdp/sdp_server.c
+@@ -230,7 +230,7 @@ static void process_service_search (tCONN_CB *p_ccb, UINT16 trans_num,
+         }
+         BE_STREAM_TO_UINT16 (cont_offset, p_req);
+ 
+-        if (cont_offset != p_ccb->cont_offset)
++        if (cont_offset != p_ccb->cont_offset || num_rsp_handles < cont_offset)
+         {
+             sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_CONT_STATE,
+                                      SDP_TEXT_BAD_CONT_INX);
