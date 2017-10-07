@@ -1,0 +1,66 @@
+diff --git a/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java b/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
+index 13e9317..7e79e28 100644
+--- a/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
++++ b/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
+@@ -87,7 +87,7 @@ public final class AndroidHardcodedSystemProperties {
+         // Hardcode MessagePattern apostrophe mode to be default. b/27265238
+         { "android.icu.text.MessagePattern.ApostropheMode", null },
+ 
+-        // Hardcode "sun.io.useCanonCaches" to use the default (on). b/28174137
++        // Hardcode "sun.io.useCanonCaches" to use the default (off). b/28174137, b/62301183
+         { "sun.io.useCanonCaches", null },
+         { "sun.io.useCanonPrefixCache", null },
+ 
+@@ -108,4 +108,3 @@ public final class AndroidHardcodedSystemProperties {
+         { "com.sun.security.preserveOldDCEncoding", null },
+     };
+ }
+-
+diff --git a/luni/src/test/java/libcore/java/io/FileTest.java b/luni/src/test/java/libcore/java/io/FileTest.java
+index 5d5317a..04de751 100644
+--- a/luni/src/test/java/libcore/java/io/FileTest.java
++++ b/luni/src/test/java/libcore/java/io/FileTest.java
+@@ -368,4 +368,25 @@ public class FileTest extends junit.framework.TestCase {
+         assertEquals("/foo/bar", new File("/foo/", "/bar/").getPath());
+         assertEquals("/foo/bar", new File("/foo", "/bar//").getPath());
+     }
++
++    // http://b/62301183
++    public void test_canonicalCachesAreOff() throws Exception {
++        File tempDir = createTemporaryDirectory();
++        File f1 = new File(tempDir, "testCannonCachesOff1");
++        f1.createNewFile();
++        File f2  = new File(tempDir, "testCannonCachesOff2");
++        f2.createNewFile();
++        File symlinkFile = new File(tempDir, "symlink");
++
++        // Create a symlink from symlink to f1 and populate canonical path cache
++        assertEquals(0, Runtime.getRuntime().exec("ln -s " + f1.getAbsolutePath() + " " + symlinkFile.getAbsolutePath()).waitFor());
++        assertEquals(symlinkFile.getCanonicalPath(), f1.getCanonicalPath());
++
++        // Remove it and replace it with a symlink to f2 (using java File/Files would flush caches).
++        assertEquals(0, Runtime.getRuntime().exec("rm " + symlinkFile.getAbsolutePath()).waitFor());
++        assertEquals(0, Runtime.getRuntime().exec("ln -s " + f2.getAbsolutePath() + " " + symlinkFile.getAbsolutePath()).waitFor());
++
++        // Did we cache canonical path results? hope not!
++        assertEquals(symlinkFile.getCanonicalPath(), f2.getCanonicalPath());
++    }
+ }
+diff --git a/ojluni/src/main/java/java/io/FileSystem.java b/ojluni/src/main/java/java/io/FileSystem.java
+index aa00fa9..7db1651 100755
+--- a/ojluni/src/main/java/java/io/FileSystem.java
++++ b/ojluni/src/main/java/java/io/FileSystem.java
+@@ -232,8 +232,11 @@ abstract class FileSystem {
+ 
+     // Flags for enabling/disabling performance optimizations for file
+     // name canonicalization
+-    static boolean useCanonCaches      = true;
+-    static boolean useCanonPrefixCache = true;
++    // Android-changed: Disabled caches for security reasons (b/62301183)
++    //static boolean useCanonCaches      = true;
++    //static boolean useCanonPrefixCache = true;
++    static boolean useCanonCaches      = false;
++    static boolean useCanonPrefixCache = false;
+ 
+     private static boolean getBooleanProperty(String prop, boolean defaultVal) {
+         String val = System.getProperty(prop);

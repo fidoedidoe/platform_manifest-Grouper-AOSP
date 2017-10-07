@@ -145,6 +145,19 @@ index a8209af..4766d33 100755
           * I am the lolrus.
           * <p>
           * Nonzero values indicate that the user has a bukkit.
+diff --git a/core/java/android/service/gatekeeper/GateKeeperResponse.java b/core/java/android/service/gatekeeper/GateKeeperResponse.java
+index a512957..6ca6d8a 100644
+--- a/core/java/android/service/gatekeeper/GateKeeperResponse.java
++++ b/core/java/android/service/gatekeeper/GateKeeperResponse.java
+@@ -85,6 +85,8 @@ public final class GateKeeperResponse implements Parcelable {
+             if (mPayload != null) {
+                 dest.writeInt(mPayload.length);
+                 dest.writeByteArray(mPayload);
++            } else {
++                dest.writeInt(0);
+             }
+         }
+     }
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
 index 395f738..169f7e1 100644
 --- a/core/java/android/view/WindowManager.java
@@ -424,6 +437,34 @@ index dd80750..005206f 100644
 +        }
 +    }
  }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java b/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
+index 9d22b4a..7639b3d 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
+@@ -2679,4 +2679,23 @@ public abstract class BaseStatusBar extends SystemUI implements
+             mAssistManager.startAssist(args);
+         }
+     }
++
++    public boolean isCameraAllowedByAdmin() {
++       if (mDevicePolicyManager.getCameraDisabled(null, mCurrentUserId)) {
++           return false;
++       } else if (isKeyguardShowing() && isKeyguardSecure()) {
++           // Check if the admin has disabled the camera specifically for the keyguard
++           return (mDevicePolicyManager.getKeyguardDisabledFeatures(null, mCurrentUserId)
++                   & DevicePolicyManager.KEYGUARD_DISABLE_SECURE_CAMERA) == 0;
++       }
++       return true;
++    }
++
++    public boolean isKeyguardShowing() {
++        if (mStatusBarKeyguardViewManager == null) {
++            Slog.i(TAG, "isKeyguardShowing() called before startKeyguard(), returning true");
++            return true;
++        }
++        return mStatusBarKeyguardViewManager.isShowing();
++    }
+ }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
 index 63d2891..1829e59 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
@@ -437,6 +478,70 @@ index 63d2891..1829e59 100644
              if (mSeekBar.isEnabled()) {
                  return mSeekBar.getProgress();
              } else {
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
+index 4d0e5d3..c674a82 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
+@@ -305,7 +305,10 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
+             return;
+         }
+         ResolveInfo resolved = resolveCameraIntent();
+-        boolean visible = !isCameraDisabledByDpm() && resolved != null
++        boolean isCameraDisabled =
++                (mPhoneStatusBar != null) && !mPhoneStatusBar.isCameraAllowedByAdmin();
++        boolean visible = !isCameraDisabled
++                && resolved != null
+                 && getResources().getBoolean(R.bool.config_keyguardShowCameraAffordance)
+                 && mUserSetupComplete;
+         mCameraImageView.setVisibility(visible ? View.VISIBLE : View.GONE);
+@@ -339,24 +342,6 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
+                 && pm.resolveActivity(PHONE_INTENT, 0) != null;
+     }
+ 
+-    private boolean isCameraDisabledByDpm() {
+-        final DevicePolicyManager dpm =
+-                (DevicePolicyManager) getContext().getSystemService(Context.DEVICE_POLICY_SERVICE);
+-        if (dpm != null && mPhoneStatusBar != null) {
+-            try {
+-                final int userId = ActivityManagerNative.getDefault().getCurrentUser().id;
+-                final int disabledFlags = dpm.getKeyguardDisabledFeatures(null, userId);
+-                final  boolean disabledBecauseKeyguardSecure =
+-                        (disabledFlags & DevicePolicyManager.KEYGUARD_DISABLE_SECURE_CAMERA) != 0
+-                                && mPhoneStatusBar.isKeyguardSecure();
+-                return dpm.getCameraDisabled(null) || disabledBecauseKeyguardSecure;
+-            } catch (RemoteException e) {
+-                Log.e(TAG, "Can't get userId", e);
+-            }
+-        }
+-        return false;
+-    }
+-
+     private void watchForCameraPolicyChanges() {
+         final IntentFilter filter = new IntentFilter();
+         filter.addAction(DevicePolicyManager.ACTION_DEVICE_POLICY_MANAGER_STATE_CHANGED);
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
+index 9c700b4..ca08ab1 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
+@@ -31,6 +31,7 @@ import android.graphics.Paint;
+ import android.graphics.Rect;
+ import android.util.AttributeSet;
+ import android.util.MathUtils;
++import android.util.EventLog;
+ import android.view.MotionEvent;
+ import android.view.VelocityTracker;
+ import android.view.View;
+@@ -2330,6 +2331,10 @@ public class NotificationPanelView extends PanelView implements
+      * @param keyguardIsShowing whether keyguard is being shown
+      */
+     public boolean canCameraGestureBeLaunched(boolean keyguardIsShowing) {
++        if (!mStatusBar.isCameraAllowedByAdmin()) {
++            EventLog.writeEvent(0x534e4554, "63787722", -1, "");
++            return false;
++        }
+         ResolveInfo resolveInfo = mKeyguardBottomArea.resolveCameraIntent();
+         String packageToLaunch = (resolveInfo == null || resolveInfo.activityInfo == null)
+                 ? null : resolveInfo.activityInfo.packageName;
 diff --git a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java b/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
 index 70f2fdc..ba50161 100644
 --- a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java

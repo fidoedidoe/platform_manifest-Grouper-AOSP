@@ -43,7 +43,7 @@ index 93d2ad4..baa6375 100644
  }hrd_params_t;
  
 diff --git a/decoder/ihevcd_decode.c b/decoder/ihevcd_decode.c
-index d656519..87c3bd7 100644
+index d656519..7b82e84 100644
 --- a/decoder/ihevcd_decode.c
 +++ b/decoder/ihevcd_decode.c
 @@ -81,6 +81,7 @@
@@ -65,8 +65,16 @@ index d656519..87c3bd7 100644
              /* Set remaining number of rows to be processed */
              ret = ihevcd_fmt_conv(ps_codec, &ps_codec->as_process[prev_proc_idx],
                                    ps_dec_ip->s_out_buffer.pu1_bufs[0],
+@@ -628,7 +633,6 @@ WORD32 ihevcd_decode(iv_obj_t *ps_codec_obj, void *pv_api_ip, void *pv_api_op)
+ 
+         if(IHEVCD_IGNORE_SLICE == ret)
+         {
+-            ps_codec->s_parse.i4_cur_slice_idx = MAX(0, (ps_codec->s_parse.i4_cur_slice_idx - 1));
+             ps_codec->pu1_inp_bitsbuf += (nal_ofst + nal_len);
+             ps_codec->i4_bytes_remaining -= (nal_ofst + nal_len);
+ 
 diff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c
-index c0f1564..29a309d 100644
+index c0f1564..06f35a3 100644
 --- a/decoder/ihevcd_parse_headers.c
 +++ b/decoder/ihevcd_parse_headers.c
 @@ -1285,15 +1285,31 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
@@ -101,6 +109,26 @@ index c0f1564..29a309d 100644
          ps_sps->i2_pic_crop_bottom_offset = value;
      }
      else
+@@ -1797,6 +1813,19 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
+     BITS_PARSE("tiles_enabled_flag", value, ps_bitstrm, 1);
+     ps_pps->i1_tiles_enabled_flag = value;
+ 
++    /* When tiles are enabled and width or height is >= 4096,
++     * CTB Size should at least be 32. 16x16 CTBs can result
++     * in tile position greater than 255 for 4096,
++     * which decoder does not support.
++     */
++    if((ps_pps->i1_tiles_enabled_flag) &&
++                    (ps_sps->i1_log2_ctb_size == 4) &&
++                    ((ps_sps->i2_pic_width_in_luma_samples >= 4096) ||
++                    (ps_sps->i2_pic_height_in_luma_samples >= 4096)))
++    {
++        return IHEVCD_INVALID_HEADER;
++    }
++
+     BITS_PARSE("entropy_coding_sync_enabled_flag", value, ps_bitstrm, 1);
+     ps_pps->i1_entropy_coding_sync_enabled_flag = value;
+ 
 diff --git a/decoder/ihevcd_parse_slice.c b/decoder/ihevcd_parse_slice.c
 index 126b14c..9f92a0d 100644
 --- a/decoder/ihevcd_parse_slice.c

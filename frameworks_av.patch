@@ -102,6 +102,21 @@ index 3051406..870bb9b 100644
  
      size_t buffers() const { return mBuffers.size(); }
  
+diff --git a/media/libeffects/downmix/EffectDownmix.c b/media/libeffects/downmix/EffectDownmix.c
+index 9823c55..cb4be75 100644
+--- a/media/libeffects/downmix/EffectDownmix.c
++++ b/media/libeffects/downmix/EffectDownmix.c
+@@ -445,6 +445,10 @@ static int Downmix_Command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdS
+             return -EINVAL;
+         }
+         effect_param_t *cmd = (effect_param_t *) pCmdData;
++        if (cmd->psize != sizeof(int32_t)) {
++            android_errorWriteLog(0x534e4554, "63662938");
++            return -EINVAL;
++        }
+         *(int *)pReplyData = Downmix_setParameter(pDownmixer, *(int32_t *)cmd->data,
+                 cmd->vsize, cmd->data + sizeof(int32_t));
+         break;
 diff --git a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
 index dcf3fa0..07ea818 100644
 --- a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
@@ -120,6 +135,94 @@ index dcf3fa0..07ea818 100644
          name = (char *)pValue;
          strncpy(name, EqualizerGetPresetName(param2), *pValueSize - 1);
          name[*pValueSize - 1] = 0;
+diff --git a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp b/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
+index 4dc8b45..19892dd 100644
+--- a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
++++ b/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
+@@ -180,12 +180,13 @@ int  Reverb_init            (ReverbContext *pContext);
+ void Reverb_free            (ReverbContext *pContext);
+ int  Reverb_setConfig       (ReverbContext *pContext, effect_config_t *pConfig);
+ void Reverb_getConfig       (ReverbContext *pContext, effect_config_t *pConfig);
+-int  Reverb_setParameter    (ReverbContext *pContext, void *pParam, void *pValue);
++int  Reverb_setParameter    (ReverbContext *pContext, void *pParam, void *pValue, int vsize);
+ int  Reverb_getParameter    (ReverbContext *pContext,
+                              void          *pParam,
+                              uint32_t      *pValueSize,
+                              void          *pValue);
+ int Reverb_LoadPreset       (ReverbContext   *pContext);
++int Reverb_paramValueSize   (int32_t param);
+ 
+ /* Effect Library Interface Implementation */
+ 
+@@ -1747,12 +1748,13 @@ int Reverb_getParameter(ReverbContext *pContext,
+ //  pContext         - handle to instance data
+ //  pParam           - pointer to parameter
+ //  pValue           - pointer to value
++//  vsize            - value size
+ //
+ // Outputs:
+ //
+ //----------------------------------------------------------------------------
+ 
+-int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
++int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue, int vsize){
+     int status = 0;
+     int16_t level;
+     int16_t ratio;
+@@ -1776,6 +1778,11 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
+         return 0;
+     }
+ 
++    if (vsize < Reverb_paramValueSize(param)) {
++        android_errorWriteLog(0x534e4554, "63526567");
++        return -EINVAL;
++    }
++
+     switch (param){
+         case REVERB_PARAM_PROPERTIES:
+             ALOGV("\tReverb_setParameter() REVERB_PARAM_PROPERTIES");
+@@ -1851,6 +1858,31 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
+     return status;
+ } /* end Reverb_setParameter */
+ 
++
++/**
++ * returns the size in bytes of the value of each environmental reverb parameter
++ */
++int Reverb_paramValueSize(int32_t param) {
++    switch (param) {
++    case REVERB_PARAM_ROOM_LEVEL:
++    case REVERB_PARAM_ROOM_HF_LEVEL:
++    case REVERB_PARAM_REFLECTIONS_LEVEL:
++    case REVERB_PARAM_REVERB_LEVEL:
++        return sizeof(int16_t); // millibel
++    case REVERB_PARAM_DECAY_TIME:
++    case REVERB_PARAM_REFLECTIONS_DELAY:
++    case REVERB_PARAM_REVERB_DELAY:
++        return sizeof(uint32_t); // milliseconds
++    case REVERB_PARAM_DECAY_HF_RATIO:
++    case REVERB_PARAM_DIFFUSION:
++    case REVERB_PARAM_DENSITY:
++        return sizeof(int16_t); // permille
++    case REVERB_PARAM_PROPERTIES:
++        return sizeof(s_reverb_settings); // struct of all reverb properties
++    }
++    return sizeof(int32_t);
++}
++
+ } // namespace
+ } // namespace
+ 
+@@ -2022,7 +2054,8 @@ int Reverb_command(effect_handle_t  self,
+ 
+             *(int *)pReplyData = android::Reverb_setParameter(pContext,
+                                                              (void *)p->data,
+-                                                              p->data + p->psize);
++                                                              p->data + p->psize,
++                                                              p->vsize);
+         } break;
+ 
+         case EFFECT_CMD_ENABLE:
 diff --git a/media/libmedia/IDataSource.cpp b/media/libmedia/IDataSource.cpp
 index 51c9938..5ad39fe 100644
 --- a/media/libmedia/IDataSource.cpp
@@ -445,7 +548,7 @@ index 893da89..2152454 100644
      // buffer queue.
      switch (mVideoBufferMode) {
 diff --git a/media/libstagefright/MPEG4Extractor.cpp b/media/libstagefright/MPEG4Extractor.cpp
-index 5441714..2cc43c1 100644
+index 5441714..4a33e7a 100644
 --- a/media/libstagefright/MPEG4Extractor.cpp
 +++ b/media/libstagefright/MPEG4Extractor.cpp
 @@ -72,6 +72,7 @@ public:
@@ -456,7 +559,46 @@ index 5441714..2cc43c1 100644
  
      virtual status_t start(MetaData *params = NULL);
      virtual status_t stop();
-@@ -2148,7 +2149,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+@@ -935,6 +936,12 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+                 ALOGE("moov: depth %d", depth);
+                 return ERROR_MALFORMED;
+             }
++
++            if (chunk_type == FOURCC('m', 'o', 'o', 'v') && mInitCheck == OK) {
++                ALOGE("duplicate moov");
++                return ERROR_MALFORMED;
++            }
++
+             if (chunk_type == FOURCC('m', 'o', 'o', 'f') && !mMoofFound) {
+                 // store the offset of the first segment
+                 mMoofFound = true;
+@@ -1008,6 +1015,12 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+                 if (!mLastTrack->meta->findInt32(kKeyTrackID, &trackId)) {
+                     mLastTrack->skipTrack = true;
+                 }
++
++                status_t err = verifyTrack(mLastTrack);
++                if (err != OK) {
++                    mLastTrack->skipTrack = true;
++                }
++
+                 if (mLastTrack->skipTrack) {
+                     Track *cur = mFirstTrack;
+ 
+@@ -1025,12 +1038,6 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+ 
+                     return OK;
+                 }
+-
+-                status_t err = verifyTrack(mLastTrack);
+-
+-                if (err != OK) {
+-                    return err;
+-                }
+             } else if (chunk_type == FOURCC('m', 'o', 'o', 'v')) {
+                 mInitCheck = OK;
+ 
+@@ -2148,7 +2155,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
              *offset += chunk_size;
  
              if (underQTMetaPath(mPath, 3)) {
@@ -468,7 +610,7 @@ index 5441714..2cc43c1 100644
              }
              break;
          }
-@@ -2307,7 +2311,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+@@ -2307,7 +2317,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
  
          case FOURCC('s', 'i', 'd', 'x'):
          {
@@ -480,7 +622,7 @@ index 5441714..2cc43c1 100644
              *offset += chunk_size;
              return UNKNOWN_ERROR; // stop parsing after sidx
          }
-@@ -2349,7 +2356,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
+@@ -2349,7 +2362,10 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
              // check if we're parsing 'ilst' for meta keys
              // if so, treat type as a number (key-id).
              if (underQTMetaPath(mPath, 3)) {
@@ -492,7 +634,7 @@ index 5441714..2cc43c1 100644
              }
  
              *offset += chunk_size;
-@@ -2984,6 +2994,13 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
+@@ -2984,6 +3000,13 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
          }
          case FOURCC('y', 'r', 'r', 'c'):
          {
@@ -506,7 +648,7 @@ index 5441714..2cc43c1 100644
              char tmp[5];
              uint16_t year = U16_AT(&buffer[4]);
  
-@@ -3006,6 +3023,8 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
+@@ -3006,6 +3029,8 @@ status_t MPEG4Extractor::parse3GPPMetaData(off64_t offset, size_t size, int dept
  
          // smallest possible valid UTF-16 string w BOM: 0xfe 0xff 0x00 0x00
          if (size < 6) {
@@ -515,7 +657,7 @@ index 5441714..2cc43c1 100644
              return ERROR_MALFORMED;
          }
  
-@@ -3174,9 +3193,13 @@ sp<IMediaSource> MPEG4Extractor::getTrack(size_t index) {
+@@ -3174,9 +3199,13 @@ sp<IMediaSource> MPEG4Extractor::getTrack(size_t index) {
          }
      }
  
@@ -530,7 +672,7 @@ index 5441714..2cc43c1 100644
  }
  
  // static
-@@ -3573,6 +3596,7 @@ MPEG4Source::MPEG4Source(
+@@ -3573,6 +3602,7 @@ MPEG4Source::MPEG4Source(
        mTrex(trex),
        mFirstMoofOffset(firstMoofOffset),
        mCurrentMoofOffset(firstMoofOffset),
@@ -538,7 +680,7 @@ index 5441714..2cc43c1 100644
        mCurrentTime(0),
        mCurrentSampleInfoAllocSize(0),
        mCurrentSampleInfoSizes(NULL),
-@@ -3637,10 +3661,14 @@ MPEG4Source::MPEG4Source(
+@@ -3637,10 +3667,14 @@ MPEG4Source::MPEG4Source(
  
      CHECK(format->findInt32(kKeyTrackID, &mTrackId));
  
@@ -554,7 +696,7 @@ index 5441714..2cc43c1 100644
  }
  
  MPEG4Source::~MPEG4Source() {
-@@ -3767,13 +3795,35 @@ status_t MPEG4Source::parseChunk(off64_t *offset) {
+@@ -3767,13 +3801,35 @@ status_t MPEG4Source::parseChunk(off64_t *offset) {
  
                  while (true) {
                      if (mDataSource->readAt(*offset, hdr, 8) < 8) {
@@ -591,7 +733,7 @@ index 5441714..2cc43c1 100644
                      }
                      *offset += chunk_size;
                  }
-@@ -4651,17 +4701,25 @@ status_t MPEG4Source::fragmentedRead(
+@@ -4651,17 +4707,25 @@ status_t MPEG4Source::fragmentedRead(
                  totalOffset += se->mSize;
              }
              mCurrentMoofOffset = totalOffset;
@@ -619,7 +761,7 @@ index 5441714..2cc43c1 100644
              mCurrentTime = 0;
          }
  
-@@ -4690,7 +4748,10 @@ status_t MPEG4Source::fragmentedRead(
+@@ -4690,7 +4754,10 @@ status_t MPEG4Source::fragmentedRead(
              mCurrentMoofOffset = nextMoof;
              mCurrentSamples.clear();
              mCurrentSampleIndex = 0;
@@ -661,8 +803,23 @@ index a17757a..f1ad5c5 100644
 +}
 +}
  }  // namespace android
+diff --git a/media/libstagefright/OggExtractor.cpp b/media/libstagefright/OggExtractor.cpp
+index ebbe510..752f2fe 100644
+--- a/media/libstagefright/OggExtractor.cpp
++++ b/media/libstagefright/OggExtractor.cpp
+@@ -578,6 +578,10 @@ status_t MyOpusExtractor::readNextPacket(MediaBuffer **out) {
+             }
+             // First two pages are header pages.
+             if (err == ERROR_END_OF_STREAM || mCurrentPage.mPageNo > 2) {
++                if (mBuf != NULL) {
++                    mBuf->release();
++                    mBuf = NULL;
++                }
+                 break;
+             }
+             curGranulePosition = mCurrentPage.mGranulePosition;
 diff --git a/media/libstagefright/SampleTable.cpp b/media/libstagefright/SampleTable.cpp
-index ee5fdf0..fb5305d 100644
+index ee5fdf0..597896b 100644
 --- a/media/libstagefright/SampleTable.cpp
 +++ b/media/libstagefright/SampleTable.cpp
 @@ -517,6 +517,8 @@ status_t SampleTable::setSyncSampleParams(off64_t data_offset, size_t data_size)
@@ -674,6 +831,20 @@ index ee5fdf0..fb5305d 100644
      uint8_t header[8];
      if (mDataSource->readAt(
                  data_offset, header, sizeof(header)) < (ssize_t)sizeof(header)) {
+@@ -561,7 +563,7 @@ status_t SampleTable::setSyncSampleParams(off64_t data_offset, size_t data_size)
+ 
+     if (mDataSource->readAt(data_offset + 8, mSyncSamples,
+             (size_t)allocSize) != (ssize_t)allocSize) {
+-        delete mSyncSamples;
++        delete[] mSyncSamples;
+         mSyncSamples = NULL;
+         return ERROR_IO;
+     }
+@@ -987,4 +989,3 @@ int32_t SampleTable::getCompositionTimeOffset(uint32_t sampleIndex) {
+ }
+ 
+ }  // namespace android
+-
 diff --git a/media/libstagefright/StagefrightMetadataRetriever.cpp b/media/libstagefright/StagefrightMetadataRetriever.cpp
 index be5067d..2fef7ca 100644
 --- a/media/libstagefright/StagefrightMetadataRetriever.cpp
@@ -1016,6 +1187,20 @@ index 8e4d064..66992d7 100644
  void MediaBufferGroup::signalBufferReturned(MediaBuffer *) {
      mCondition.signal();
  }
+diff --git a/media/libstagefright/foundation/base64.cpp b/media/libstagefright/foundation/base64.cpp
+index 7da7db9..cc89064 100644
+--- a/media/libstagefright/foundation/base64.cpp
++++ b/media/libstagefright/foundation/base64.cpp
+@@ -78,8 +78,7 @@ sp<ABuffer> decodeBase64(const AString &s) {
+         accum = (accum << 6) | value;
+ 
+         if (((i + 1) % 4) == 0) {
+-            out[j++] = (accum >> 16);
+-
++            if (j < outLen) { out[j++] = (accum >> 16); }
+             if (j < outLen) { out[j++] = (accum >> 8) & 0xff; }
+             if (j < outLen) { out[j++] = accum & 0xff; }
+ 
 diff --git a/media/libstagefright/httplive/LiveSession.cpp b/media/libstagefright/httplive/LiveSession.cpp
 index 7abc019..590146d 100644
 --- a/media/libstagefright/httplive/LiveSession.cpp
@@ -1149,6 +1334,33 @@ index e7aaead..8752b4e 100644
          header->nOffset = 0;
      } else {
          // rangeLength and rangeOffset must be a subset of the allocated data in the buffer.
+diff --git a/media/libstagefright/omx/SimpleSoftOMXComponent.cpp b/media/libstagefright/omx/SimpleSoftOMXComponent.cpp
+index 7c975f7..76cbbc4 100644
+--- a/media/libstagefright/omx/SimpleSoftOMXComponent.cpp
++++ b/media/libstagefright/omx/SimpleSoftOMXComponent.cpp
+@@ -199,6 +199,13 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::useBuffer(
+     Mutex::Autolock autoLock(mLock);
+     CHECK_LT(portIndex, mPorts.size());
+ 
++    PortInfo *port = &mPorts.editItemAt(portIndex);
++    if (size < port->mDef.nBufferSize) {
++        ALOGE("b/63522430, Buffer size is too small.");
++        android_errorWriteLog(0x534e4554, "63522430");
++        return OMX_ErrorBadParameter;
++    }
++
+     *header = new OMX_BUFFERHEADERTYPE;
+     (*header)->nSize = sizeof(OMX_BUFFERHEADERTYPE);
+     (*header)->nVersion.s.nVersionMajor = 1;
+@@ -221,8 +228,6 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::useBuffer(
+     (*header)->nOutputPortIndex = portIndex;
+     (*header)->nInputPortIndex = portIndex;
+ 
+-    PortInfo *port = &mPorts.editItemAt(portIndex);
+-
+     CHECK(mState == OMX_StateLoaded || port->mDef.bEnabled == OMX_FALSE);
+ 
+     CHECK_LT(port->mBuffers.size(), port->mDef.nBufferCountActual);
 diff --git a/media/mediaserver/Android.mk b/media/mediaserver/Android.mk
 index 1738df8..c2b9c1f 100644
 --- a/media/mediaserver/Android.mk
