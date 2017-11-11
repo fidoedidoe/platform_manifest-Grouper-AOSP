@@ -99,6 +99,21 @@ index 5d0873a..e4c0a47 100644
   * The metadata of the frame data.
   */
  typedef struct camera_frame_metadata {
+diff --git a/include/utils/Unicode.h b/include/utils/Unicode.h
+index cddbab4..b152579 100644
+--- a/include/utils/Unicode.h
++++ b/include/utils/Unicode.h
+@@ -22,6 +22,10 @@
+ 
+ extern "C" {
+ 
++#ifndef SSIZE_MAX
++#define SSIZE_MAX ((size_t)SIZE_MAX/2)
++#endif
++
+ // Standard string functions on char16_t strings.
+ int strcmp16(const char16_t *, const char16_t *);
+ int strncmp16(const char16_t *s1, const char16_t *s2, size_t n);
 diff --git a/init/Android.mk b/init/Android.mk
 index 67541b8..ff343e9 100644
 --- a/init/Android.mk
@@ -181,6 +196,53 @@ index cd2d2e6..81628a1 100644
      am.QueueBuiltinAction(keychord_init_action, "keychord_init");
      am.QueueBuiltinAction(console_init_action, "console_init");
  
+diff --git a/libutils/Unicode.cpp b/libutils/Unicode.cpp
+index ba084f6..22c5b29 100644
+--- a/libutils/Unicode.cpp
++++ b/libutils/Unicode.cpp
+@@ -178,7 +178,15 @@ ssize_t utf32_to_utf8_length(const char32_t *src, size_t src_len)
+     size_t ret = 0;
+     const char32_t *end = src + src_len;
+     while (src < end) {
+-        ret += utf32_codepoint_utf8_length(*src++);
++        size_t char_len = utf32_codepoint_utf8_length(*src++);
++        if (SSIZE_MAX - char_len < ret) {
++            // If this happens, we would overflow the ssize_t type when
++            // returning from this function, so we cannot express how
++            // long this string is in an ssize_t.
++            android_errorWriteLog(0x534e4554, "37723026");
++            return -1;
++        }
++        ret += char_len;
+     }
+     return ret;
+ }
+@@ -438,14 +446,23 @@ ssize_t utf16_to_utf8_length(const char16_t *src, size_t src_len)
+     size_t ret = 0;
+     const char16_t* const end = src + src_len;
+     while (src < end) {
++        size_t char_len;
+         if ((*src & 0xFC00) == 0xD800 && (src + 1) < end
+                 && (*(src + 1) & 0xFC00) == 0xDC00) {
+             // surrogate pairs are always 4 bytes.
+-            ret += 4;
++            char_len = 4;
+             src += 2;
+         } else {
+-            ret += utf32_codepoint_utf8_length((char32_t) *src++);
++            char_len = utf32_codepoint_utf8_length((char32_t)*src++);
++        }
++        if (SSIZE_MAX - char_len < ret) {
++            // If this happens, we would overflow the ssize_t type when
++            // returning from this function, so we cannot express how
++            // long this string is in an ssize_t.
++            android_errorWriteLog(0x534e4554, "37723026");
++            return -1;
+         }
++        ret += char_len;
+     }
+     return ret;
+ }
 diff --git a/rootdir/init.rc b/rootdir/init.rc
 index 7dc9e55..adc062b 100644
 --- a/rootdir/init.rc

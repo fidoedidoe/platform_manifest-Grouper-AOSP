@@ -52,6 +52,17 @@ index 7e36c5e..aca7a19 100644
  
  include $(BUILD_EXECUTABLE)
 +endif
+diff --git a/camera/cameraserver/main_cameraserver.cpp b/camera/cameraserver/main_cameraserver.cpp
+index f4be468..ea80ad4 100644
+--- a/camera/cameraserver/main_cameraserver.cpp
++++ b/camera/cameraserver/main_cameraserver.cpp
+@@ -31,5 +31,6 @@ int main(int argc __unused, char** argv __unused)
+     ALOGI("ServiceManager: %p", sm.get());
+     CameraService::instantiate();
+     ProcessState::self()->startThreadPool();
++    IPCThreadState::self()->disableBackgroundScheduling(true);
+     IPCThreadState::self()->joinThreadPool();
+ }
 diff --git a/camera/ndk/NdkCaptureRequest.cpp b/camera/ndk/NdkCaptureRequest.cpp
 index 77b9a33..7c37955 100644
 --- a/camera/ndk/NdkCaptureRequest.cpp
@@ -118,23 +129,1464 @@ index 9823c55..cb4be75 100644
                  cmd->vsize, cmd->data + sizeof(int32_t));
          break;
 diff --git a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
-index dcf3fa0..07ea818 100644
+index dcf3fa0..b26e74c 100644
 --- a/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
 +++ b/media/libeffects/lvm/wrapper/Bundle/EffectBundle.cpp
-@@ -2439,6 +2439,13 @@ int Equalizer_getParameter(EffectContext     *pContext,
+@@ -16,7 +16,7 @@
+  */
+ 
+ #define LOG_TAG "Bundle"
+-#define ARRAY_SIZE(array) (sizeof array / sizeof array[0])
++#define ARRAY_SIZE(array) (sizeof (array) / sizeof (array)[0])
+ //#define LOG_NDEBUG 0
+ 
+ #include <assert.h>
+@@ -25,28 +25,37 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-#include <cutils/log.h>
++#include <log/log.h>
++
+ #include "EffectBundle.h"
+ #include "math.h"
+ 
+-
+ // effect_handle_t interface implementation for bass boost
+ extern "C" const struct effect_interface_s gLvmEffectInterface;
+ 
++// Turn on VERY_VERY_VERBOSE_LOGGING to log parameter get and set for effects.
++
++//#define VERY_VERY_VERBOSE_LOGGING
++#ifdef VERY_VERY_VERBOSE_LOGGING
++#define ALOGVV ALOGV
++#else
++#define ALOGVV(a...) do { } while (false)
++#endif
++
+ #define LVM_ERROR_CHECK(LvmStatus, callingFunc, calledFunc){\
+-        if (LvmStatus == LVM_NULLADDRESS){\
++        if ((LvmStatus) == LVM_NULLADDRESS){\
+             ALOGV("\tLVM_ERROR : Parameter error - "\
+                     "null pointer returned by %s in %s\n\n\n\n", callingFunc, calledFunc);\
+         }\
+-        if (LvmStatus == LVM_ALIGNMENTERROR){\
++        if ((LvmStatus) == LVM_ALIGNMENTERROR){\
+             ALOGV("\tLVM_ERROR : Parameter error - "\
+                     "bad alignment returned by %s in %s\n\n\n\n", callingFunc, calledFunc);\
+         }\
+-        if (LvmStatus == LVM_INVALIDNUMSAMPLES){\
++        if ((LvmStatus) == LVM_INVALIDNUMSAMPLES){\
+             ALOGV("\tLVM_ERROR : Parameter error - "\
+                     "bad number of samples returned by %s in %s\n\n\n\n", callingFunc, calledFunc);\
+         }\
+-        if (LvmStatus == LVM_OUTOFRANGE){\
++        if ((LvmStatus) == LVM_OUTOFRANGE){\
+             ALOGV("\tLVM_ERROR : Parameter error - "\
+                     "out of range returned by %s in %s\n", callingFunc, calledFunc);\
+         }\
+@@ -138,26 +147,43 @@ int  LvmEffect_disable         (EffectContext *pContext);
+ void LvmEffect_free            (EffectContext *pContext);
+ int  Effect_setConfig          (EffectContext *pContext, effect_config_t *pConfig);
+ void Effect_getConfig          (EffectContext *pContext, effect_config_t *pConfig);
+-int  BassBoost_setParameter    (EffectContext *pContext, void *pParam, void *pValue);
++int  BassBoost_setParameter    (EffectContext *pContext,
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t       valueSize,
++                                void          *pValue);
+ int  BassBoost_getParameter    (EffectContext *pContext,
+-                               void           *pParam,
+-                               uint32_t       *pValueSize,
+-                               void           *pValue);
+-int  Virtualizer_setParameter  (EffectContext *pContext, void *pParam, void *pValue);
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t      *pValueSize,
++                                void          *pValue);
++int  Virtualizer_setParameter  (EffectContext *pContext,
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t       valueSize,
++                                void          *pValue);
+ int  Virtualizer_getParameter  (EffectContext *pContext,
+-                               void           *pParam,
+-                               uint32_t       *pValueSize,
+-                               void           *pValue);
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t      *pValueSize,
++                                void          *pValue);
+ int  Equalizer_setParameter    (EffectContext *pContext,
+-                               void *pParam,
+-                               uint32_t valueSize,
+-                               void *pValue);
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t       valueSize,
++                                void          *pValue);
+ int  Equalizer_getParameter    (EffectContext *pContext,
++                                uint32_t       paramSize,
+                                 void          *pParam,
+                                 uint32_t      *pValueSize,
+                                 void          *pValue);
+-int  Volume_setParameter       (EffectContext *pContext, void *pParam, void *pValue);
++int  Volume_setParameter       (EffectContext *pContext,
++                                uint32_t       paramSize,
++                                void          *pParam,
++                                uint32_t       valueSize,
++                                void          *pValue);
+ int  Volume_getParameter       (EffectContext *pContext,
++                                uint32_t       paramSize,
+                                 void          *pParam,
+                                 uint32_t      *pValueSize,
+                                 void          *pValue);
+@@ -343,8 +369,10 @@ exit:
              }
+             delete pContext;
+         }
+-        *pHandle = (effect_handle_t)NULL;
++        if (pHandle != NULL)
++          *pHandle = (effect_handle_t)NULL;
+     } else {
++      if (pHandle != NULL)
+         *pHandle = (effect_handle_t)pContext;
+     }
+     ALOGV("\tEffectCreate end..\n\n");
+@@ -504,8 +532,6 @@ void LvmGlobalBundle_init(){
+ //----------------------------------------------------------------------------
+ 
+ int LvmBundle_init(EffectContext *pContext){
+-    int status;
+-
+     ALOGV("\tLvmBundle_init start");
+ 
+     pContext->config.inputCfg.accessMode                    = EFFECT_BUFFER_ACCESS_READ;
+@@ -719,7 +745,6 @@ int LvmBundle_process(LVM_INT16        *pIn,
+                       int              frameCount,
+                       EffectContext    *pContext){
+ 
+-    LVM_ControlParams_t     ActiveParams;                           /* Current control Parameters */
+     LVM_ReturnStatus_en     LvmStatus = LVM_SUCCESS;                /* Function call status */
+     LVM_INT16               *pOutTmp;
+ 
+@@ -1043,7 +1068,6 @@ int LvmEffect_disable(EffectContext *pContext){
+ 
+ void LvmEffect_free(EffectContext *pContext){
+     LVM_ReturnStatus_en     LvmStatus=LVM_SUCCESS;         /* Function call status */
+-    LVM_ControlParams_t     params;                        /* Control Parameters */
+     LVM_MemTab_t            MemTab;
+ 
+     /* Free the algorithm memory */
+@@ -2011,61 +2035,54 @@ int32_t VolumeEnableStereoPosition(EffectContext *pContext, uint32_t enabled){
+ //
+ //----------------------------------------------------------------------------
+ 
+-int BassBoost_getParameter(EffectContext     *pContext,
+-                           void              *pParam,
+-                           uint32_t          *pValueSize,
+-                           void              *pValue){
++int BassBoost_getParameter(EffectContext *pContext,
++                           uint32_t       paramSize,
++                           void          *pParam,
++                           uint32_t      *pValueSize,
++                           void          *pValue) {
+     int status = 0;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
+-    int32_t param2;
+-    char *name;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tBassBoost_getParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param){
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
+         case BASSBOOST_PARAM_STRENGTH_SUPPORTED:
+-            if (*pValueSize != sizeof(uint32_t)){
+-                ALOGV("\tLVM_ERROR : BassBoost_getParameter() invalid pValueSize1 %d", *pValueSize);
+-                return -EINVAL;
+-            }
+-            *pValueSize = sizeof(uint32_t);
+-            break;
+-        case BASSBOOST_PARAM_STRENGTH:
+-            if (*pValueSize != sizeof(int16_t)){
+-                ALOGV("\tLVM_ERROR : BassBoost_getParameter() invalid pValueSize2 %d", *pValueSize);
+-                return -EINVAL;
++            if (*pValueSize != sizeof(uint32_t)) {  // legacy: check equality here.
++                ALOGV("%s BASSBOOST_PARAM_STRENGTH_SUPPORTED invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
+             }
+-            *pValueSize = sizeof(int16_t);
+-            break;
++            // no need to set *pValueSize
+ 
+-        default:
+-            ALOGV("\tLVM_ERROR : BassBoost_getParameter() invalid param %d", param);
+-            return -EINVAL;
+-    }
+-
+-    switch (param){
+-        case BASSBOOST_PARAM_STRENGTH_SUPPORTED:
+             *(uint32_t *)pValue = 1;
+-
+-            //ALOGV("\tBassBoost_getParameter() BASSBOOST_PARAM_STRENGTH_SUPPORTED Value is %d",
+-            //        *(uint32_t *)pValue);
++            ALOGVV("%s BASSBOOST_PARAM_STRENGTH_SUPPORTED %u", __func__, *(uint32_t *)pValue);
+             break;
+ 
+         case BASSBOOST_PARAM_STRENGTH:
+-            *(int16_t *)pValue = BassGetStrength(pContext);
++            if (*pValueSize != sizeof(int16_t)) {  // legacy: check equality here.
++                ALOGV("%s BASSBOOST_PARAM_STRENGTH invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            // no need to set *pValueSize
+ 
+-            //ALOGV("\tBassBoost_getParameter() BASSBOOST_PARAM_STRENGTH Value is %d",
+-            //        *(int16_t *)pValue);
++            *(int16_t *)pValue = BassGetStrength(pContext);
++            ALOGVV("%s BASSBOOST_PARAM_STRENGTH %d", __func__, *(int16_t *)pValue);
+             break;
+ 
+         default:
+-            ALOGV("\tLVM_ERROR : BassBoost_getParameter() invalid param %d", param);
++            ALOGV("%s invalid param %d", __func__, params[0]);
+             status = -EINVAL;
+             break;
+     }
+ 
+-    //ALOGV("\tBassBoost_getParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end BassBoost_getParameter */
+ 
+@@ -2084,27 +2101,42 @@ int BassBoost_getParameter(EffectContext     *pContext,
+ //
+ //----------------------------------------------------------------------------
+ 
+-int BassBoost_setParameter (EffectContext *pContext, void *pParam, void *pValue){
++int BassBoost_setParameter(EffectContext *pContext,
++                           uint32_t       paramSize,
++                           void          *pParam,
++                           uint32_t       valueSize,
++                           void          *pValue) {
+     int status = 0;
+-    int16_t strength;
+-    int32_t *pParamTemp = (int32_t *)pParam;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tBassBoost_setParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (*pParamTemp){
+-        case BASSBOOST_PARAM_STRENGTH:
+-            strength = *(int16_t *)pValue;
+-            //ALOGV("\tBassBoost_setParameter() BASSBOOST_PARAM_STRENGTH value is %d", strength);
+-            //ALOGV("\tBassBoost_setParameter() Calling pBassBoost->BassSetStrength");
++    if (paramSize != sizeof(int32_t)) {  // legacy: check equality here.
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
++        case BASSBOOST_PARAM_STRENGTH: {
++            if (valueSize < sizeof(int16_t)) {
++                ALOGV("%s BASSBOOST_PARAM_STRENGTH invalid valueSize: %u", __func__, valueSize);
++                status = -EINVAL;
++                break;
++            }
++
++            const int16_t strength = *(int16_t *)pValue;
++            ALOGVV("%s BASSBOOST_PARAM_STRENGTH %d", __func__, strength);
++            ALOGVV("%s BASSBOOST_PARAM_STRENGTH Calling BassSetStrength", __func__);
+             BassSetStrength(pContext, (int32_t)strength);
+-            //ALOGV("\tBassBoost_setParameter() Called pBassBoost->BassSetStrength");
+-           break;
++            ALOGVV("%s BASSBOOST_PARAM_STRENGTH Called BassSetStrength", __func__);
++        } break;
++
+         default:
+-            ALOGV("\tLVM_ERROR : BassBoost_setParameter() invalid param %d", *pParamTemp);
++            ALOGV("%s invalid param %d", __func__, params[0]);
++            status = -EINVAL;
+             break;
+     }
+ 
+-    //ALOGV("\tBassBoost_setParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end BassBoost_setParameter */
+ 
+@@ -2129,93 +2161,97 @@ int BassBoost_setParameter (EffectContext *pContext, void *pParam, void *pValue)
+ //
+ //----------------------------------------------------------------------------
+ 
+-int Virtualizer_getParameter(EffectContext        *pContext,
+-                             void                 *pParam,
+-                             uint32_t             *pValueSize,
+-                             void                 *pValue){
++int Virtualizer_getParameter(EffectContext *pContext,
++                             uint32_t       paramSize,
++                             void          *pParam,
++                             uint32_t      *pValueSize,
++                             void          *pValue) {
+     int status = 0;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
+-    char *name;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tVirtualizer_getParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param){
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
+         case VIRTUALIZER_PARAM_STRENGTH_SUPPORTED:
+-            if (*pValueSize != sizeof(uint32_t)){
+-                ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid pValueSize %d",*pValueSize);
+-                return -EINVAL;
+-            }
+-            *pValueSize = sizeof(uint32_t);
+-            break;
+-        case VIRTUALIZER_PARAM_STRENGTH:
+-            if (*pValueSize != sizeof(int16_t)){
+-                ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid pValueSize2 %d",*pValueSize);
+-                return -EINVAL;
+-            }
+-            *pValueSize = sizeof(int16_t);
+-            break;
+-        case VIRTUALIZER_PARAM_VIRTUAL_SPEAKER_ANGLES:
+-            // return value size can only be interpreted as relative to input value,
+-            // deferring validity check to below
+-            break;
+-        case VIRTUALIZER_PARAM_VIRTUALIZATION_MODE:
+-            if (*pValueSize != sizeof(uint32_t)){
+-                ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid pValueSize %d",*pValueSize);
+-                return -EINVAL;
++            if (*pValueSize != sizeof(uint32_t)) { // legacy: check equality here.
++                ALOGV("%s VIRTUALIZER_PARAM_STRENGTH_SUPPORTED invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
+             }
+-            *pValueSize = sizeof(uint32_t);
+-            break;
+-        default:
+-            ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid param %d", param);
+-            return -EINVAL;
+-    }
++            // no need to set *pValueSize
+ 
+-    switch (param){
+-        case VIRTUALIZER_PARAM_STRENGTH_SUPPORTED:
+             *(uint32_t *)pValue = 1;
+-
+-            //ALOGV("\tVirtualizer_getParameter() VIRTUALIZER_PARAM_STRENGTH_SUPPORTED Value is %d",
+-            //        *(uint32_t *)pValue);
++            ALOGVV("%s VIRTUALIZER_PARAM_STRENGTH_SUPPORTED %d", __func__, *(uint32_t *)pValue);
+             break;
+ 
+         case VIRTUALIZER_PARAM_STRENGTH:
++            if (*pValueSize != sizeof(int16_t)) { // legacy: check equality here.
++                ALOGV("%s VIRTUALIZER_PARAM_STRENGTH invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            // no need to set *pValueSize
++
+             *(int16_t *)pValue = VirtualizerGetStrength(pContext);
+ 
+-            //ALOGV("\tVirtualizer_getParameter() VIRTUALIZER_PARAM_STRENGTH Value is %d",
+-            //        *(int16_t *)pValue);
++            ALOGVV("%s VIRTUALIZER_PARAM_STRENGTH %d", __func__, *(int16_t *)pValue);
+             break;
+ 
+         case VIRTUALIZER_PARAM_VIRTUAL_SPEAKER_ANGLES: {
+-            const audio_channel_mask_t channelMask = (audio_channel_mask_t) *pParamTemp++;
+-            const audio_devices_t deviceType = (audio_devices_t) *pParamTemp;
+-            uint32_t nbChannels = audio_channel_count_from_out_mask(channelMask);
+-            if (*pValueSize < 3 * nbChannels * sizeof(int32_t)){
+-                ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid pValueSize %d",*pValueSize);
+-                return -EINVAL;
++            if (paramSize < 3 * sizeof(int32_t)) {
++                ALOGV("%s VIRTUALIZER_PARAM_SPEAKER_ANGLES invalid paramSize: %u",
++                        __func__, paramSize);
++                status = -EINVAL;
++                break;
++            }
++
++            const audio_channel_mask_t channelMask = (audio_channel_mask_t) params[1];
++            const audio_devices_t deviceType = (audio_devices_t) params[2];
++            const uint32_t nbChannels = audio_channel_count_from_out_mask(channelMask);
++            const uint32_t valueSizeRequired = 3 * nbChannels * sizeof(int32_t);
++            if (*pValueSize < valueSizeRequired) {
++                ALOGV("%s VIRTUALIZER_PARAM_SPEAKER_ANGLES invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
+             }
++            *pValueSize = valueSizeRequired;
++
+             // verify the configuration is supported
+             status = VirtualizerIsConfigurationSupported(channelMask, deviceType);
+             if (status == 0) {
+-                ALOGV("VIRTUALIZER_PARAM_VIRTUAL_SPEAKER_ANGLES supports mask=0x%x device=0x%x",
+-                        channelMask, deviceType);
++                ALOGV("%s VIRTUALIZER_PARAM_VIRTUAL_SPEAKER_ANGLES mask=0x%x device=0x%x",
++                        __func__, channelMask, deviceType);
+                 // configuration is supported, get the angles
+                 VirtualizerGetSpeakerAngles(channelMask, deviceType, (int32_t *)pValue);
+             }
+-            }
+-            break;
++        } break;
+ 
+         case VIRTUALIZER_PARAM_VIRTUALIZATION_MODE:
+-            *(uint32_t *)pValue  = (uint32_t) VirtualizerGetVirtualizationMode(pContext);
++            if (*pValueSize != sizeof(uint32_t)) { // legacy: check equality here.
++                ALOGV("%s VIRTUALIZER_PARAM_VIRTUALIZATION_MODE invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            // no need to set *pValueSize
++
++            *(uint32_t *)pValue = (uint32_t) VirtualizerGetVirtualizationMode(pContext);
+             break;
+ 
+         default:
+-            ALOGV("\tLVM_ERROR : Virtualizer_getParameter() invalid param %d", param);
++            ALOGV("%s invalid param %d", __func__, params[0]);
+             status = -EINVAL;
+             break;
+     }
+ 
+-    ALOGV("\tVirtualizer_getParameter end returning status=%d", status);
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Virtualizer_getParameter */
+ 
+@@ -2234,37 +2270,57 @@ int Virtualizer_getParameter(EffectContext        *pContext,
+ //
+ //----------------------------------------------------------------------------
+ 
+-int Virtualizer_setParameter (EffectContext *pContext, void *pParam, void *pValue){
++int Virtualizer_setParameter(EffectContext *pContext,
++                             uint32_t       paramSize,
++                             void          *pParam,
++                             uint32_t       valueSize,
++                             void          *pValue) {
+     int status = 0;
+-    int16_t strength;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tVirtualizer_setParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param){
+-        case VIRTUALIZER_PARAM_STRENGTH:
+-            strength = *(int16_t *)pValue;
+-            //ALOGV("\tVirtualizer_setParameter() VIRTUALIZER_PARAM_STRENGTH value is %d", strength);
+-            //ALOGV("\tVirtualizer_setParameter() Calling pVirtualizer->setStrength");
++    if (paramSize != sizeof(int32_t)) { // legacy: check equality here.
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
++        case VIRTUALIZER_PARAM_STRENGTH: {
++            if (valueSize < sizeof(int16_t)) {
++                ALOGV("%s VIRTUALIZER_PARAM_STRENGTH invalid valueSize: %u", __func__, valueSize);
++                status = -EINVAL;
++                break;
++            }
++
++            const int16_t strength = *(int16_t *)pValue;
++            ALOGVV("%s VIRTUALIZER_PARAM_STRENGTH %d", __func__, strength);
++            ALOGVV("%s VIRTUALIZER_PARAM_STRENGTH Calling VirtualizerSetStrength", __func__);
+             VirtualizerSetStrength(pContext, (int32_t)strength);
+-            //ALOGV("\tVirtualizer_setParameter() Called pVirtualizer->setStrength");
+-           break;
++            ALOGVV("%s VIRTUALIZER_PARAM_STRENGTH Called VirtualizerSetStrength", __func__);
++        } break;
+ 
+         case VIRTUALIZER_PARAM_FORCE_VIRTUALIZATION_MODE: {
+-            const audio_devices_t deviceType = *(audio_devices_t *) pValue;
+-            status = VirtualizerForceVirtualizationMode(pContext, deviceType);
+-            //ALOGV("VIRTUALIZER_PARAM_FORCE_VIRTUALIZATION_MODE device=0x%x result=%d",
+-            //        deviceType, status);
++            if (valueSize < sizeof(int32_t)) {
++                ALOGV("%s VIRTUALIZER_PARAM_FORCE_VIRTUALIZATION_MODE invalid valueSize: %u",
++                        __func__, valueSize);
++                android_errorWriteLog(0x534e4554, "64478003");
++                status = -EINVAL;
++                break;
+             }
+-            break;
++
++            const audio_devices_t deviceType = (audio_devices_t)*(int32_t *)pValue;
++            status = VirtualizerForceVirtualizationMode(pContext, deviceType);
++            ALOGVV("%s VIRTUALIZER_PARAM_FORCE_VIRTUALIZATION_MODE device=%#x result=%d",
++                    __func__, deviceType, status);
++        } break;
+ 
+         default:
+-            ALOGV("\tLVM_ERROR : Virtualizer_setParameter() invalid param %d", param);
++            ALOGV("%s invalid param %d", __func__, params[0]);
++            status = -EINVAL;
+             break;
+     }
+ 
+-    //ALOGV("\tVirtualizer_setParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Virtualizer_setParameter */
+ 
+@@ -2288,168 +2344,215 @@ int Virtualizer_setParameter (EffectContext *pContext, void *pParam, void *pValu
+ // Side Effects:
+ //
+ //----------------------------------------------------------------------------
+-int Equalizer_getParameter(EffectContext     *pContext,
+-                           void              *pParam,
+-                           uint32_t          *pValueSize,
+-                           void              *pValue){
++int Equalizer_getParameter(EffectContext *pContext,
++                           uint32_t       paramSize,
++                           void          *pParam,
++                           uint32_t      *pValueSize,
++                           void          *pValue) {
+     int status = 0;
+-    int bMute = 0;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
+-    int32_t param2;
+-    char *name;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tEqualizer_getParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param) {
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
+     case EQ_PARAM_NUM_BANDS:
+-    case EQ_PARAM_CUR_PRESET:
+-    case EQ_PARAM_GET_NUM_OF_PRESETS:
+-    case EQ_PARAM_BAND_LEVEL:
+-    case EQ_PARAM_GET_BAND:
+-        if (*pValueSize < sizeof(int16_t)) {
+-            ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid pValueSize 1  %d", *pValueSize);
+-            return -EINVAL;
++        if (*pValueSize < sizeof(uint16_t)) {
++            ALOGV("%s EQ_PARAM_NUM_BANDS invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
+         }
+-        *pValueSize = sizeof(int16_t);
+-        break;
++        *pValueSize = sizeof(uint16_t);
+ 
+-    case EQ_PARAM_LEVEL_RANGE:
+-        if (*pValueSize < 2 * sizeof(int16_t)) {
+-            ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid pValueSize 2  %d", *pValueSize);
+-            return -EINVAL;
+-        }
+-        *pValueSize = 2 * sizeof(int16_t);
++        *(uint16_t *)pValue = (uint16_t)FIVEBAND_NUMBANDS;
++        ALOGVV("%s EQ_PARAM_NUM_BANDS %u", __func__, *(uint16_t *)pValue);
+         break;
+-    case EQ_PARAM_BAND_FREQ_RANGE:
+-        if (*pValueSize < 2 * sizeof(int32_t)) {
+-            ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid pValueSize 3  %d", *pValueSize);
+-            return -EINVAL;
++
++    case EQ_PARAM_CUR_PRESET:
++        if (*pValueSize < sizeof(uint16_t)) {
++            ALOGV("%s EQ_PARAM_CUR_PRESET invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
+         }
+-        *pValueSize = 2 * sizeof(int32_t);
++        *pValueSize = sizeof(uint16_t);
++
++        *(uint16_t *)pValue = (uint16_t)EqualizerGetPreset(pContext);
++        ALOGVV("%s EQ_PARAM_CUR_PRESET %u", __func__, *(uint16_t *)pValue);
+         break;
+ 
+-    case EQ_PARAM_CENTER_FREQ:
+-        if (*pValueSize < sizeof(int32_t)) {
+-            ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid pValueSize 5  %d", *pValueSize);
+-            return -EINVAL;
++    case EQ_PARAM_GET_NUM_OF_PRESETS:
++        if (*pValueSize < sizeof(uint16_t)) {
++            ALOGV("%s EQ_PARAM_GET_NUM_OF_PRESETS invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
+         }
+-        *pValueSize = sizeof(int32_t);
+-        break;
++        *pValueSize = sizeof(uint16_t);
+ 
+-    case EQ_PARAM_GET_PRESET_NAME:
++        *(uint16_t *)pValue = (uint16_t)EqualizerGetNumPresets();
++        ALOGVV("%s EQ_PARAM_GET_NUM_OF_PRESETS %u", __func__, *(uint16_t *)pValue);
+         break;
+ 
+-    case EQ_PARAM_PROPERTIES:
+-        if (*pValueSize < (2 + FIVEBAND_NUMBANDS) * sizeof(uint16_t)) {
+-            ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid pValueSize 1  %d", *pValueSize);
+-            return -EINVAL;
++    case EQ_PARAM_GET_BAND: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_GET_BAND invalid paramSize: %u", __func__, paramSize);
++            status = -EINVAL;
++            break;
+         }
+-        *pValueSize = (2 + FIVEBAND_NUMBANDS) * sizeof(uint16_t);
+-        break;
++        if (*pValueSize < sizeof(uint16_t)) {
++            ALOGV("%s EQ_PARAM_GET_BAND invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
++        }
++        *pValueSize = sizeof(uint16_t);
+ 
+-    default:
+-        ALOGV("\tLVM_ERROR : Equalizer_getParameter unknown param %d", param);
+-        return -EINVAL;
+-    }
++        const int32_t frequency = params[1];
++        *(uint16_t *)pValue = (uint16_t)EqualizerGetBand(pContext, frequency);
++        ALOGVV("%s EQ_PARAM_GET_BAND frequency %d, band %u",
++                __func__, frequency, *(uint16_t *)pValue);
++    } break;
+ 
+-    switch (param) {
+-    case EQ_PARAM_NUM_BANDS:
+-        *(uint16_t *)pValue = (uint16_t)FIVEBAND_NUMBANDS;
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_NUM_BANDS %d", *(int16_t *)pValue);
+-        break;
++    case EQ_PARAM_BAND_LEVEL: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_BAND_LEVEL invalid paramSize %u", __func__, paramSize);
++            status = -EINVAL;
++            break;
++        }
++        if (*pValueSize < sizeof(int16_t)) {
++            ALOGV("%s EQ_PARAM_BAND_LEVEL invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
++        }
++        *pValueSize = sizeof(int16_t);
++
++        const int32_t band = params[1];
++        if (band < 0 || band >= FIVEBAND_NUMBANDS) {
++            if (band < 0) {
++                android_errorWriteLog(0x534e4554, "32438598");
++                ALOGW("%s EQ_PARAM_BAND_LEVEL invalid band %d", __func__, band);
++            }
++            status = -EINVAL;
++            break;
++        }
++        *(int16_t *)pValue = (int16_t)EqualizerGetBandLevel(pContext, band);
++        ALOGVV("%s EQ_PARAM_BAND_LEVEL band %d, level %d",
++                __func__, band, *(int16_t *)pValue);
++    } break;
+ 
+     case EQ_PARAM_LEVEL_RANGE:
++        if (*pValueSize < 2 * sizeof(int16_t)) {
++            ALOGV("%s EQ_PARAM_LEVEL_RANGE invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
++        }
++        *pValueSize = 2 * sizeof(int16_t);
++
+         *(int16_t *)pValue = -1500;
+         *((int16_t *)pValue + 1) = 1500;
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_LEVEL_RANGE min %d, max %d",
+-        //      *(int16_t *)pValue, *((int16_t *)pValue + 1));
++        ALOGVV("%s EQ_PARAM_LEVEL_RANGE min %d, max %d",
++                __func__, *(int16_t *)pValue, *((int16_t *)pValue + 1));
+         break;
+ 
+-    case EQ_PARAM_BAND_LEVEL:
+-        param2 = *pParamTemp;
+-        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
++    case EQ_PARAM_BAND_FREQ_RANGE: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_BAND_FREQ_RANGE invalid paramSize: %u", __func__, paramSize);
+             status = -EINVAL;
+-            if (param2 < 0) {
+-                android_errorWriteLog(0x534e4554, "32438598");
+-                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_BAND_LEVEL band %d", param2);
+-            }
              break;
          }
-+
-+        if (*pValueSize < 1) {
+-        *(int16_t *)pValue = (int16_t)EqualizerGetBandLevel(pContext, param2);
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_BAND_LEVEL band %d, level %d",
+-        //      param2, *(int32_t *)pValue);
+-        break;
+-
+-    case EQ_PARAM_CENTER_FREQ:
+-        param2 = *pParamTemp;
+-        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
++        if (*pValueSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_BAND_FREQ_RANGE invalid *pValueSize %u", __func__, *pValueSize);
+             status = -EINVAL;
+-            if (param2 < 0) {
+-                android_errorWriteLog(0x534e4554, "32436341");
+-                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_CENTER_FREQ band %d", param2);
+-            }
+             break;
+         }
+-        *(int32_t *)pValue = EqualizerGetCentreFrequency(pContext, param2);
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_CENTER_FREQ band %d, frequency %d",
+-        //      param2, *(int32_t *)pValue);
+-        break;
++        *pValueSize = 2 * sizeof(int32_t);
+ 
+-    case EQ_PARAM_BAND_FREQ_RANGE:
+-        param2 = *pParamTemp;
+-        if (param2 < 0 || param2 >= FIVEBAND_NUMBANDS) {
+-            status = -EINVAL;
+-            if (param2 < 0) {
++        const int32_t band = params[1];
++        if (band < 0 || band >= FIVEBAND_NUMBANDS) {
++            if (band < 0) {
+                 android_errorWriteLog(0x534e4554, "32247948");
+-                ALOGW("\tERROR Equalizer_getParameter() EQ_PARAM_BAND_FREQ_RANGE band %d", param2);
++                ALOGW("%s EQ_PARAM_BAND_FREQ_RANGE invalid band %d",
++                        __func__, band);
+             }
 +            status = -EINVAL;
+             break;
+         }
+-        EqualizerGetBandFreqRange(pContext, param2, (uint32_t *)pValue, ((uint32_t *)pValue + 1));
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_BAND_FREQ_RANGE band %d, min %d, max %d",
+-        //      param2, *(int32_t *)pValue, *((int32_t *)pValue + 1));
+-        break;
++        EqualizerGetBandFreqRange(pContext, band, (uint32_t *)pValue, ((uint32_t *)pValue + 1));
++        ALOGVV("%s EQ_PARAM_BAND_FREQ_RANGE band %d, min %d, max %d",
++                __func__, band, *(int32_t *)pValue, *((int32_t *)pValue + 1));
+ 
+-    case EQ_PARAM_GET_BAND:
+-        param2 = *pParamTemp;
+-        *(uint16_t *)pValue = (uint16_t)EqualizerGetBand(pContext, param2);
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_GET_BAND frequency %d, band %d",
+-        //      param2, *(uint16_t *)pValue);
+-        break;
++    } break;
+ 
+-    case EQ_PARAM_CUR_PRESET:
+-        *(uint16_t *)pValue = (uint16_t)EqualizerGetPreset(pContext);
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_CUR_PRESET %d", *(int32_t *)pValue);
+-        break;
++    case EQ_PARAM_CENTER_FREQ: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_CENTER_FREQ invalid paramSize: %u", __func__, paramSize);
++            status = -EINVAL;
++            break;
++        }
++        if (*pValueSize < sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_CENTER_FREQ invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
++        }
++        *pValueSize = sizeof(int32_t);
+ 
+-    case EQ_PARAM_GET_NUM_OF_PRESETS:
+-        *(uint16_t *)pValue = (uint16_t)EqualizerGetNumPresets();
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_GET_NUM_OF_PRESETS %d", *(int16_t *)pValue);
+-        break;
++        const int32_t band = params[1];
++        if (band < 0 || band >= FIVEBAND_NUMBANDS) {
++            status = -EINVAL;
++            if (band < 0) {
++                android_errorWriteLog(0x534e4554, "32436341");
++                ALOGW("%s EQ_PARAM_CENTER_FREQ invalid band %d", __func__, band);
++            }
++            break;
++        }
++        *(int32_t *)pValue = EqualizerGetCentreFrequency(pContext, band);
++        ALOGVV("%s EQ_PARAM_CENTER_FREQ band %d, frequency %d",
++                __func__, band, *(int32_t *)pValue);
++    } break;
+ 
+-    case EQ_PARAM_GET_PRESET_NAME:
+-        param2 = *pParamTemp;
+-        if ((param2 < 0 && param2 != PRESET_CUSTOM) ||  param2 >= EqualizerGetNumPresets()) {
++    case EQ_PARAM_GET_PRESET_NAME: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_PRESET_NAME invalid paramSize: %u", __func__, paramSize);
+             status = -EINVAL;
+-            if (param2 < 0) {
++            break;
++        }
++        if (*pValueSize < 1) {
 +            android_errorWriteLog(0x534e4554, "37536407");
++            status = -EINVAL;
 +            break;
 +        }
 +
-         name = (char *)pValue;
-         strncpy(name, EqualizerGetPresetName(param2), *pValueSize - 1);
++        const int32_t preset = params[1];
++        if ((preset < 0 && preset != PRESET_CUSTOM) ||  preset >= EqualizerGetNumPresets()) {
++            if (preset < 0) {
+                 android_errorWriteLog(0x534e4554, "32448258");
+-                ALOGE("\tERROR Equalizer_getParameter() EQ_PARAM_GET_PRESET_NAME preset %d",
+-                        param2);
++                ALOGE("%s EQ_PARAM_GET_PRESET_NAME preset %d", __func__, preset);
+             }
++            status = -EINVAL;
+             break;
+         }
+-        name = (char *)pValue;
+-        strncpy(name, EqualizerGetPresetName(param2), *pValueSize - 1);
++
++        char * const name = (char *)pValue;
++        strncpy(name, EqualizerGetPresetName(preset), *pValueSize - 1);
          name[*pValueSize - 1] = 0;
+         *pValueSize = strlen(name) + 1;
+-        //ALOGV("\tEqualizer_getParameter() EQ_PARAM_GET_PRESET_NAME preset %d, name %s len %d",
+-        //      param2, gEqualizerPresets[param2].name, *pValueSize);
+-        break;
++        ALOGVV("%s EQ_PARAM_GET_PRESET_NAME preset %d, name %s len %d",
++                __func__, preset, gEqualizerPresets[preset].name, *pValueSize);
++
++    } break;
+ 
+     case EQ_PARAM_PROPERTIES: {
++        constexpr uint32_t requiredValueSize = (2 + FIVEBAND_NUMBANDS) * sizeof(uint16_t);
++        if (*pValueSize < requiredValueSize) {
++            ALOGV("%s EQ_PARAM_PROPERTIES invalid *pValueSize %u", __func__, *pValueSize);
++            status = -EINVAL;
++            break;
++        }
++        *pValueSize = requiredValueSize;
++
+         int16_t *p = (int16_t *)pValue;
+-        ALOGV("\tEqualizer_getParameter() EQ_PARAM_PROPERTIES");
++        ALOGV("%s EQ_PARAM_PROPERTIES", __func__);
+         p[0] = (int16_t)EqualizerGetPreset(pContext);
+         p[1] = (int16_t)FIVEBAND_NUMBANDS;
+         for (int i = 0; i < FIVEBAND_NUMBANDS; i++) {
+@@ -2458,12 +2561,12 @@ int Equalizer_getParameter(EffectContext     *pContext,
+     } break;
+ 
+     default:
+-        ALOGV("\tLVM_ERROR : Equalizer_getParameter() invalid param %d", param);
++        ALOGV("%s invalid param %d", __func__, params[0]);
+         status = -EINVAL;
+         break;
+     }
+ 
+-    //GV("\tEqualizer_getParameter end\n");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Equalizer_getParameter */
+ 
+@@ -2483,74 +2586,89 @@ int Equalizer_getParameter(EffectContext     *pContext,
+ // Outputs:
+ //
+ //----------------------------------------------------------------------------
+-int Equalizer_setParameter (EffectContext *pContext,
+-                            void *pParam,
+-                            uint32_t valueSize,
+-                            void *pValue) {
++int Equalizer_setParameter(EffectContext *pContext,
++                           uint32_t       paramSize,
++                           void          *pParam,
++                           uint32_t       valueSize,
++                           void          *pValue) {
+     int status = 0;
+-    int32_t preset;
+-    int32_t band;
+-    int32_t level;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
++    int32_t *params = (int32_t *)pParam;
+ 
++    ALOGVV("%s start", __func__);
+ 
+-    //ALOGV("\tEqualizer_setParameter start");
+-    switch (param) {
+-    case EQ_PARAM_CUR_PRESET:
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
++    case EQ_PARAM_CUR_PRESET: {
+         if (valueSize < sizeof(int16_t)) {
+-          status = -EINVAL;
+-          break;
++            ALOGV("%s EQ_PARAM_CUR_PRESET invalid valueSize %u", __func__, valueSize);
++            status = -EINVAL;
++            break;
+         }
+-        preset = (int32_t)(*(uint16_t *)pValue);
++        const int32_t preset = (int32_t)*(uint16_t *)pValue;
+ 
+-        //ALOGV("\tEqualizer_setParameter() EQ_PARAM_CUR_PRESET %d", preset);
+-        if ((preset >= EqualizerGetNumPresets())||(preset < 0)) {
++        ALOGVV("%s EQ_PARAM_CUR_PRESET %d", __func__, preset);
++        if (preset >= EqualizerGetNumPresets() || preset < 0) {
++            ALOGV("%s EQ_PARAM_CUR_PRESET invalid preset %d", __func__, preset);
+             status = -EINVAL;
+             break;
+         }
+         EqualizerSetPreset(pContext, preset);
+-        break;
+-    case EQ_PARAM_BAND_LEVEL:
++    } break;
++
++    case EQ_PARAM_BAND_LEVEL: {
++        if (paramSize < 2 * sizeof(int32_t)) {
++            ALOGV("%s EQ_PARAM_BAND_LEVEL invalid paramSize: %u", __func__, paramSize);
++            status = -EINVAL;
++            break;
++        }
+         if (valueSize < sizeof(int16_t)) {
+-          status = -EINVAL;
+-          break;
++            ALOGV("%s EQ_PARAM_BAND_LEVEL invalid valueSize %u", __func__, valueSize);
++            status = -EINVAL;
++            break;
+         }
+-        band =  *pParamTemp;
+-        level = (int32_t)(*(int16_t *)pValue);
+-        //ALOGV("\tEqualizer_setParameter() EQ_PARAM_BAND_LEVEL band %d, level %d", band, level);
++        const int32_t band =  params[1];
++        const int32_t level = (int32_t)*(int16_t *)pValue;
++        ALOGVV("%s EQ_PARAM_BAND_LEVEL band %d, level %d", __func__, band, level);
+         if (band < 0 || band >= FIVEBAND_NUMBANDS) {
+-            status = -EINVAL;
+             if (band < 0) {
+                 android_errorWriteLog(0x534e4554, "32095626");
+-                ALOGE("\tERROR Equalizer_setParameter() EQ_PARAM_BAND_LEVEL band %d", band);
++                ALOGE("%s EQ_PARAM_BAND_LEVEL invalid band %d", __func__, band);
+             }
++            status = -EINVAL;
+             break;
+         }
+         EqualizerSetBandLevel(pContext, band, level);
+-        break;
++    } break;
++
+     case EQ_PARAM_PROPERTIES: {
+-        //ALOGV("\tEqualizer_setParameter() EQ_PARAM_PROPERTIES");
++        ALOGVV("%s EQ_PARAM_PROPERTIES", __func__);
+         if (valueSize < sizeof(int16_t)) {
+-          status = -EINVAL;
+-          break;
++            ALOGV("%s EQ_PARAM_PROPERTIES invalid valueSize %u", __func__, valueSize);
++            status = -EINVAL;
++            break;
+         }
+         int16_t *p = (int16_t *)pValue;
+         if ((int)p[0] >= EqualizerGetNumPresets()) {
++            ALOGV("%s EQ_PARAM_PROPERTIES invalid preset %d", __func__, (int)p[0]);
+             status = -EINVAL;
+             break;
+         }
+         if (p[0] >= 0) {
+             EqualizerSetPreset(pContext, (int)p[0]);
+         } else {
+-            if (valueSize < (2 + FIVEBAND_NUMBANDS) * sizeof(int16_t)) {
++            constexpr uint32_t valueSizeRequired = (2 + FIVEBAND_NUMBANDS) * sizeof(int16_t);
++            if (valueSize < valueSizeRequired) {
+               android_errorWriteLog(0x534e4554, "37563371");
+-              ALOGE("\tERROR Equalizer_setParameter() EQ_PARAM_PROPERTIES valueSize %d < %d",
+-                    (int)valueSize, (int)((2 + FIVEBAND_NUMBANDS) * sizeof(int16_t)));
++              ALOGE("%s EQ_PARAM_PROPERTIES invalid valueSize %u < %u",
++                      __func__, valueSize, valueSizeRequired);
+               status = -EINVAL;
+               break;
+             }
+             if ((int)p[1] != FIVEBAND_NUMBANDS) {
++                ALOGV("%s EQ_PARAM_PROPERTIES invalid bands %d", __func__, (int)p[1]);
+                 status = -EINVAL;
+                 break;
+             }
+@@ -2559,13 +2677,14 @@ int Equalizer_setParameter (EffectContext *pContext,
+             }
+         }
+     } break;
++
+     default:
+-        ALOGV("\tLVM_ERROR : Equalizer_setParameter() invalid param %d", param);
++        ALOGV("%s invalid param %d", __func__, params[0]);
+         status = -EINVAL;
+         break;
+     }
+ 
+-    //ALOGV("\tEqualizer_setParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Equalizer_setParameter */
+ 
+@@ -2590,81 +2709,92 @@ int Equalizer_setParameter (EffectContext *pContext,
+ //
+ //----------------------------------------------------------------------------
+ 
+-int Volume_getParameter(EffectContext     *pContext,
+-                        void              *pParam,
+-                        uint32_t          *pValueSize,
+-                        void              *pValue){
++int Volume_getParameter(EffectContext *pContext,
++                        uint32_t       paramSize,
++                        void          *pParam,
++                        uint32_t      *pValueSize,
++                        void          *pValue) {
+     int status = 0;
+-    int bMute = 0;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;;
+-    char *name;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tVolume_getParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param){
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
+         case VOLUME_PARAM_LEVEL:
+-        case VOLUME_PARAM_MAXLEVEL:
+-        case VOLUME_PARAM_STEREOPOSITION:
+-            if (*pValueSize != sizeof(int16_t)){
+-                ALOGV("\tLVM_ERROR : Volume_getParameter() invalid pValueSize 1  %d", *pValueSize);
+-                return -EINVAL;
+-            }
+-            *pValueSize = sizeof(int16_t);
+-            break;
+-
+-        case VOLUME_PARAM_MUTE:
+-        case VOLUME_PARAM_ENABLESTEREOPOSITION:
+-            if (*pValueSize < sizeof(int32_t)){
+-                ALOGV("\tLVM_ERROR : Volume_getParameter() invalid pValueSize 2  %d", *pValueSize);
+-                return -EINVAL;
++            if (*pValueSize != sizeof(int16_t)) { // legacy: check equality here.
++                ALOGV("%s VOLUME_PARAM_LEVEL invalid *pValueSize %u", __func__, *pValueSize);
++                status = -EINVAL;
++                break;
+             }
+-            *pValueSize = sizeof(int32_t);
+-            break;
++            // no need to set *pValueSize
+ 
+-        default:
+-            ALOGV("\tLVM_ERROR : Volume_getParameter unknown param %d", param);
+-            return -EINVAL;
+-    }
+-
+-    switch (param){
+-        case VOLUME_PARAM_LEVEL:
+             status = VolumeGetVolumeLevel(pContext, (int16_t *)(pValue));
+-            //ALOGV("\tVolume_getParameter() VOLUME_PARAM_LEVEL Value is %d",
+-            //        *(int16_t *)pValue);
++            ALOGVV("%s VOLUME_PARAM_LEVEL %d", __func__, *(int16_t *)pValue);
+             break;
+ 
+         case VOLUME_PARAM_MAXLEVEL:
++            if (*pValueSize != sizeof(int16_t)) { // legacy: check equality here.
++                ALOGV("%s VOLUME_PARAM_MAXLEVEL invalid *pValueSize %u", __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            // no need to set *pValueSize
++
++            // in millibel
+             *(int16_t *)pValue = 0;
+-            //ALOGV("\tVolume_getParameter() VOLUME_PARAM_MAXLEVEL Value is %d",
+-            //        *(int16_t *)pValue);
++            ALOGVV("%s VOLUME_PARAM_MAXLEVEL %d", __func__, *(int16_t *)pValue);
+             break;
+ 
+         case VOLUME_PARAM_STEREOPOSITION:
++            if (*pValueSize != sizeof(int16_t)) { // legacy: check equality here.
++                ALOGV("%s VOLUME_PARAM_STEREOPOSITION invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            // no need to set *pValueSize
++
+             VolumeGetStereoPosition(pContext, (int16_t *)pValue);
+-            //ALOGV("\tVolume_getParameter() VOLUME_PARAM_STEREOPOSITION Value is %d",
+-            //        *(int16_t *)pValue);
++            ALOGVV("%s VOLUME_PARAM_STEREOPOSITION %d", __func__, *(int16_t *)pValue);
+             break;
+ 
+         case VOLUME_PARAM_MUTE:
++            if (*pValueSize < sizeof(uint32_t)) {
++                ALOGV("%s VOLUME_PARAM_MUTE invalid *pValueSize %u", __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            *pValueSize = sizeof(uint32_t);
++
+             status = VolumeGetMute(pContext, (uint32_t *)pValue);
+-            ALOGV("\tVolume_getParameter() VOLUME_PARAM_MUTE Value is %d",
+-                    *(uint32_t *)pValue);
++            ALOGV("%s VOLUME_PARAM_MUTE %u", __func__, *(uint32_t *)pValue);
+             break;
+ 
+         case VOLUME_PARAM_ENABLESTEREOPOSITION:
++            if (*pValueSize < sizeof(int32_t)) {
++                ALOGV("%s VOLUME_PARAM_ENABLESTEREOPOSITION invalid *pValueSize %u",
++                        __func__, *pValueSize);
++                status = -EINVAL;
++                break;
++            }
++            *pValueSize = sizeof(int32_t);
++
+             *(int32_t *)pValue = pContext->pBundledContext->bStereoPositionEnabled;
+-            //ALOGV("\tVolume_getParameter() VOLUME_PARAM_ENABLESTEREOPOSITION Value is %d",
+-            //        *(uint32_t *)pValue);
++            ALOGVV("%s VOLUME_PARAM_ENABLESTEREOPOSITION %d", __func__, *(int32_t *)pValue);
++
+             break;
+ 
+         default:
+-            ALOGV("\tLVM_ERROR : Volume_getParameter() invalid param %d", param);
++            ALOGV("%s invalid param %d", __func__, params[0]);
+             status = -EINVAL;
+             break;
+     }
+ 
+-    //ALOGV("\tVolume_getParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Volume_getParameter */
+ 
+@@ -2684,55 +2814,87 @@ int Volume_getParameter(EffectContext     *pContext,
+ //
+ //----------------------------------------------------------------------------
+ 
+-int Volume_setParameter (EffectContext *pContext, void *pParam, void *pValue){
+-    int      status = 0;
+-    int16_t  level;
+-    int16_t  position;
+-    uint32_t mute;
+-    uint32_t positionEnabled;
+-    int32_t *pParamTemp = (int32_t *)pParam;
+-    int32_t param = *pParamTemp++;
++int Volume_setParameter(EffectContext *pContext,
++                        uint32_t       paramSize,
++                        void          *pParam,
++                        uint32_t       valueSize,
++                        void          *pValue) {
++    int status = 0;
++    int32_t *params = (int32_t *)pParam;
+ 
+-    //ALOGV("\tVolume_setParameter start");
++    ALOGVV("%s start", __func__);
+ 
+-    switch (param){
+-        case VOLUME_PARAM_LEVEL:
+-            level = *(int16_t *)pValue;
+-            //ALOGV("\tVolume_setParameter() VOLUME_PARAM_LEVEL value is %d", level);
+-            //ALOGV("\tVolume_setParameter() Calling pVolume->setVolumeLevel");
+-            status = VolumeSetVolumeLevel(pContext, (int16_t)level);
+-            //ALOGV("\tVolume_setParameter() Called pVolume->setVolumeLevel");
+-            break;
++    if (paramSize < sizeof(int32_t)) {
++        ALOGV("%s invalid paramSize: %u", __func__, paramSize);
++        return -EINVAL;
++    }
++    switch (params[0]) {
++        case VOLUME_PARAM_LEVEL: {
++            if (valueSize < sizeof(int16_t)) {
++                ALOGV("%s VOLUME_PARAM_LEVEL invalid valueSize %u", __func__, valueSize);
++                status = -EINVAL;
++                break;
++            }
+ 
+-        case VOLUME_PARAM_MUTE:
+-            mute = *(uint32_t *)pValue;
+-            //ALOGV("\tVolume_setParameter() Calling pVolume->setMute, mute is %d", mute);
+-            //ALOGV("\tVolume_setParameter() Calling pVolume->setMute");
++            const int16_t level = *(int16_t *)pValue;
++            ALOGVV("%s VOLUME_PARAM_LEVEL %d", __func__, level);
++            ALOGVV("%s VOLUME_PARAM_LEVEL Calling VolumeSetVolumeLevel", __func__);
++            status = VolumeSetVolumeLevel(pContext, level);
++            ALOGVV("%s VOLUME_PARAM_LEVEL Called VolumeSetVolumeLevel", __func__);
++        } break;
++
++        case VOLUME_PARAM_MUTE: {
++            if (valueSize < sizeof(uint32_t)) {
++                ALOGV("%s VOLUME_PARAM_MUTE invalid valueSize %u", __func__, valueSize);
++                android_errorWriteLog(0x534e4554, "64477217");
++                status = -EINVAL;
++                break;
++            }
++
++            const uint32_t mute = *(uint32_t *)pValue;
++            ALOGVV("%s VOLUME_PARAM_MUTE %d", __func__, mute);
++            ALOGVV("%s VOLUME_PARAM_MUTE Calling VolumeSetMute", __func__);
+             status = VolumeSetMute(pContext, mute);
+-            //ALOGV("\tVolume_setParameter() Called pVolume->setMute");
+-            break;
++            ALOGVV("%s VOLUME_PARAM_MUTE Called VolumeSetMute", __func__);
++        } break;
+ 
+-        case VOLUME_PARAM_ENABLESTEREOPOSITION:
+-            positionEnabled = *(uint32_t *)pValue;
+-            status = VolumeEnableStereoPosition(pContext, positionEnabled);
+-            status = VolumeSetStereoPosition(pContext, pContext->pBundledContext->positionSaved);
+-            //ALOGV("\tVolume_setParameter() VOLUME_PARAM_ENABLESTEREOPOSITION called");
+-            break;
++        case VOLUME_PARAM_ENABLESTEREOPOSITION: {
++            if (valueSize < sizeof(uint32_t)) {
++                ALOGV("%s VOLUME_PARAM_ENABLESTEREOPOSITION invalid valueSize %u",
++                        __func__, valueSize);
++                status = -EINVAL;
++                break;
++            }
+ 
+-        case VOLUME_PARAM_STEREOPOSITION:
+-            position = *(int16_t *)pValue;
+-            //ALOGV("\tVolume_setParameter() VOLUME_PARAM_STEREOPOSITION value is %d", position);
+-            //ALOGV("\tVolume_setParameter() Calling pVolume->VolumeSetStereoPosition");
+-            status = VolumeSetStereoPosition(pContext, (int16_t)position);
+-            //ALOGV("\tVolume_setParameter() Called pVolume->VolumeSetStereoPosition");
+-            break;
++            const uint32_t positionEnabled = *(uint32_t *)pValue;
++            status = VolumeEnableStereoPosition(pContext, positionEnabled)
++                    ?: VolumeSetStereoPosition(pContext, pContext->pBundledContext->positionSaved);
++            ALOGVV("%s VOLUME_PARAM_ENABLESTEREOPOSITION called", __func__);
++        } break;
++
++        case VOLUME_PARAM_STEREOPOSITION: {
++            if (valueSize < sizeof(int16_t)) {
++                ALOGV("%s VOLUME_PARAM_STEREOPOSITION invalid valueSize %u", __func__, valueSize);
++                status = -EINVAL;
++                break;
++            }
++
++            const int16_t position = *(int16_t *)pValue;
++            ALOGVV("%s VOLUME_PARAM_STEREOPOSITION %d", __func__, position);
++            ALOGVV("%s VOLUME_PARAM_STEREOPOSITION Calling VolumeSetStereoPosition",
++                    __func__);
++            status = VolumeSetStereoPosition(pContext, position);
++            ALOGVV("%s VOLUME_PARAM_STEREOPOSITION Called VolumeSetStereoPosition",
++                    __func__);
++        } break;
+ 
+         default:
+-            ALOGV("\tLVM_ERROR : Volume_setParameter() invalid param %d", param);
++            ALOGV("%s invalid param %d", __func__, params[0]);
++            status = -EINVAL;
+             break;
+     }
+ 
+-    //ALOGV("\tVolume_setParameter end");
++    ALOGVV("%s end param: %d, status: %d", __func__, params[0], status);
+     return status;
+ } /* end Volume_setParameter */
+ 
+@@ -2928,11 +3090,8 @@ int Effect_process(effect_handle_t     self,
+                               audio_buffer_t         *inBuffer,
+                               audio_buffer_t         *outBuffer){
+     EffectContext * pContext = (EffectContext *) self;
+-    LVM_ReturnStatus_en     LvmStatus = LVM_SUCCESS;                /* Function call status */
+     int    status = 0;
+     int    processStatus = 0;
+-    LVM_INT16   *in  = (LVM_INT16 *)inBuffer->raw;
+-    LVM_INT16   *out = (LVM_INT16 *)outBuffer->raw;
+ 
+ //ALOGV("\tEffect_process Start : Enabled = %d     Called = %d (%8d %8d %8d)",
+ //pContext->pBundledContext->NumberEffectsEnabled,pContext->pBundledContext->NumberEffectsCalled,
+@@ -3053,6 +3212,13 @@ int Effect_process(effect_handle_t     self,
+     return status;
+ }   /* end Effect_process */
+ 
++// The value offset of an effect parameter is computed by rounding up
++// the parameter size to the next 32 bit alignment.
++static inline uint32_t computeParamVOffset(const effect_param_t *p) {
++    return ((p->psize + sizeof(int32_t) - 1) / sizeof(int32_t)) *
++            sizeof(int32_t);
++}
++
+ /* Effect Control Interface Implementation: Command */
+ int Effect_command(effect_handle_t  self,
+                               uint32_t            cmdCode,
+@@ -3061,7 +3227,6 @@ int Effect_command(effect_handle_t  self,
+                               uint32_t            *replySize,
+                               void                *pReplyData){
+     EffectContext * pContext = (EffectContext *) self;
+-    int retsize;
+ 
+     //ALOGV("\t\nEffect_command start");
+ 
+@@ -3164,8 +3329,7 @@ int Effect_command(effect_handle_t  self,
+                 ALOGV("\tLVM_ERROR : EFFECT_CMD_GET_PARAM: psize too big");
+                 return -EINVAL;
+             }
+-            uint32_t paddedParamSize = ((p->psize + sizeof(int32_t) - 1) / sizeof(int32_t)) *
+-                    sizeof(int32_t);
++            const uint32_t paddedParamSize = computeParamVOffset(p);
+             if ((EFFECT_PARAM_SIZE_MAX - sizeof(effect_param_t) < paddedParamSize) ||
+                 (EFFECT_PARAM_SIZE_MAX - sizeof(effect_param_t) - paddedParamSize <
+                     p->vsize)) {
+@@ -3187,6 +3351,7 @@ int Effect_command(effect_handle_t  self,
+             uint32_t voffset = paddedParamSize;
+             if(pContext->EffectType == LVM_BASS_BOOST){
+                 p->status = android::BassBoost_getParameter(pContext,
++                                                            p->psize,
+                                                             p->data,
+                                                             &p->vsize,
+                                                             p->data + voffset);
+@@ -3199,6 +3364,7 @@ int Effect_command(effect_handle_t  self,
+ 
+             if(pContext->EffectType == LVM_VIRTUALIZER){
+                 p->status = android::Virtualizer_getParameter(pContext,
++                                                              p->psize,
+                                                               (void *)p->data,
+                                                               &p->vsize,
+                                                               p->data + voffset);
+@@ -3213,6 +3379,7 @@ int Effect_command(effect_handle_t  self,
+                 //ALOGV("\tEqualizer_command cmdCode Case: "
+                 //        "EFFECT_CMD_GET_PARAM start");
+                 p->status = android::Equalizer_getParameter(pContext,
++                                                            p->psize,
+                                                             p->data,
+                                                             &p->vsize,
+                                                             p->data + voffset);
+@@ -3227,6 +3394,7 @@ int Effect_command(effect_handle_t  self,
+             if(pContext->EffectType == LVM_VOLUME){
+                 //ALOGV("\tVolume_command cmdCode Case: EFFECT_CMD_GET_PARAM start");
+                 p->status = android::Volume_getParameter(pContext,
++                                                         p->psize,
+                                                          (void *)p->data,
+                                                          &p->vsize,
+                                                          p->data + voffset);
+@@ -3256,13 +3424,9 @@ int Effect_command(effect_handle_t  self,
+                             "EFFECT_CMD_SET_PARAM: ERROR");
+                     return -EINVAL;
+                 }
+-                effect_param_t *p = (effect_param_t *) pCmdData;
+ 
+-                if (p->psize != sizeof(int32_t)){
+-                    ALOGV("\tLVM_ERROR : BassBoost_command cmdCode Case: "
+-                            "EFFECT_CMD_SET_PARAM: ERROR, psize is not sizeof(int32_t)");
+-                    return -EINVAL;
+-                }
++                effect_param_t * const p = (effect_param_t *) pCmdData;
++                const uint32_t voffset = computeParamVOffset(p);
+ 
+                 //ALOGV("\tnBassBoost_command cmdSize is %d\n"
+                 //        "\tsizeof(effect_param_t) is  %d\n"
+@@ -3272,8 +3436,10 @@ int Effect_command(effect_handle_t  self,
+                 //        cmdSize, sizeof(effect_param_t), p->psize, p->vsize );
+ 
+                 *(int *)pReplyData = android::BassBoost_setParameter(pContext,
+-                                                                    (void *)p->data,
+-                                                                    p->data + p->psize);
++                                                                     p->psize,
++                                                                     (void *)p->data,
++                                                                     p->vsize,
++                                                                     p->data + voffset);
+             }
+             if(pContext->EffectType == LVM_VIRTUALIZER){
+               // Warning this log will fail to properly read an int32_t value, assumes int16_t
+@@ -3291,13 +3457,9 @@ int Effect_command(effect_handle_t  self,
+                             "EFFECT_CMD_SET_PARAM: ERROR");
+                     return -EINVAL;
+                 }
+-                effect_param_t *p = (effect_param_t *) pCmdData;
+ 
+-                if (p->psize != sizeof(int32_t)){
+-                    ALOGV("\tLVM_ERROR : Virtualizer_command cmdCode Case: "
+-                            "EFFECT_CMD_SET_PARAM: ERROR, psize is not sizeof(int32_t)");
+-                    return -EINVAL;
+-                }
++                effect_param_t * const p = (effect_param_t *) pCmdData;
++                const uint32_t voffset = computeParamVOffset(p);
+ 
+                 //ALOGV("\tnVirtualizer_command cmdSize is %d\n"
+                 //        "\tsizeof(effect_param_t) is  %d\n"
+@@ -3307,8 +3469,10 @@ int Effect_command(effect_handle_t  self,
+                 //        cmdSize, sizeof(effect_param_t), p->psize, p->vsize );
+ 
+                 *(int *)pReplyData = android::Virtualizer_setParameter(pContext,
+-                                                                      (void *)p->data,
+-                                                                       p->data + p->psize);
++                                                                       p->psize,
++                                                                       (void *)p->data,
++                                                                       p->vsize,
++                                                                       p->data + voffset);
+             }
+             if(pContext->EffectType == LVM_EQUALIZER){
+                //ALOGV("\tEqualizer_command cmdCode Case: "
+@@ -3324,12 +3488,15 @@ int Effect_command(effect_handle_t  self,
+                             "EFFECT_CMD_SET_PARAM: ERROR");
+                     return -EINVAL;
+                 }
+-                effect_param_t *p = (effect_param_t *) pCmdData;
++
++                effect_param_t * const p = (effect_param_t *) pCmdData;
++                const uint32_t voffset = computeParamVOffset(p);
+ 
+                 *(int *)pReplyData = android::Equalizer_setParameter(pContext,
+-                                                                    (void *)p->data,
+-                                                                    p->vsize,
+-                                                                    p->data + p->psize);
++                                                                     p->psize,
++                                                                     (void *)p->data,
++                                                                     p->vsize,
++                                                                     p->data + voffset);
+             }
+             if(pContext->EffectType == LVM_VOLUME){
+                 //ALOGV("\tVolume_command cmdCode Case: EFFECT_CMD_SET_PARAM start");
+@@ -3346,11 +3513,15 @@ int Effect_command(effect_handle_t  self,
+                             "EFFECT_CMD_SET_PARAM: ERROR");
+                     return -EINVAL;
+                 }
+-                effect_param_t *p = (effect_param_t *) pCmdData;
++
++                effect_param_t * const p = (effect_param_t *) pCmdData;
++                const uint32_t voffset = computeParamVOffset(p);
+ 
+                 *(int *)pReplyData = android::Volume_setParameter(pContext,
+-                                                                 (void *)p->data,
+-                                                                 p->data + p->psize);
++                                                                  p->psize,
++                                                                  (void *)p->data,
++                                                                  p->vsize,
++                                                                  p->data + voffset);
+             }
+             //ALOGV("\tEffect_command cmdCode Case: EFFECT_CMD_SET_PARAM end");
+         } break;
+@@ -3461,7 +3632,6 @@ int Effect_command(effect_handle_t  self,
+             int16_t  leftdB, rightdB;
+             int16_t  maxdB, pandB;
+             int32_t  vol_ret[2] = {1<<24,1<<24}; // Apply no volume
+-            int      status = 0;
+             LVM_ControlParams_t     ActiveParams;           /* Current control Parameters */
+             LVM_ReturnStatus_en     LvmStatus=LVM_SUCCESS;  /* Function call status */
+ 
 diff --git a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp b/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
 index 4dc8b45..19892dd 100644
 --- a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
@@ -362,7 +1814,7 @@ index dc4e5d4..b64d899 100644
  
  void NuPlayer::determineAudioModeChange(const sp<AMessage> &audioFormat) {
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
-index 37fd5a5..77a2a39 100644
+index 37fd5a5..337fb2d 100644
 --- a/media/libstagefright/ACodec.cpp
 +++ b/media/libstagefright/ACodec.cpp
 @@ -804,13 +804,22 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
@@ -388,7 +1840,30 @@ index 37fd5a5..77a2a39 100644
                  bufSize = max(sizeof(VideoGrallocMetadata), sizeof(VideoNativeMetadata));
              } else if (portIndex == kPortIndexInput && type == kMetadataBufferTypeCameraSource) {
                  bufSize = max(bufSize, sizeof(VideoNativeMetadata));
-@@ -1766,6 +1775,14 @@ status_t ACodec::configureCodec(
+@@ -1052,6 +1061,12 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
+     // 2. try to allocate two (2) additional buffers to reduce starvation from
+     //    the consumer
+     //    plus an extra buffer to account for incorrect minUndequeuedBufs
++#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
++    // Some devices don't like to set OMX_IndexParamPortDefinition at this
++    // point (even with an unmodified def), so skip it if possible.
++    // This check was present in KitKat.
++    if (def.nBufferCountActual < def.nBufferCountMin + *minUndequeuedBuffers) {
++#endif
+     for (OMX_U32 extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
+         OMX_U32 newBufferCount =
+             def.nBufferCountMin + *minUndequeuedBuffers + extraBuffers;
+@@ -1071,6 +1086,9 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
+             return err;
+         }
+     }
++#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
++    }
++#endif
+ 
+     err = native_window_set_buffer_count(
+             mNativeWindow.get(), def.nBufferCountActual);
+@@ -1766,6 +1784,14 @@ status_t ACodec::configureCodec(
              mInputMetadataType = (MetadataBufferType)storeMeta;
          }
  
@@ -403,7 +1878,7 @@ index 37fd5a5..77a2a39 100644
          uint32_t usageBits;
          if (mOMX->getParameter(
                  mNode, (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits,
-@@ -4274,7 +4291,9 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+@@ -4274,7 +4300,9 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
  
          h264type.eProfile = static_cast<OMX_VIDEO_AVCPROFILETYPE>(profile);
          h264type.eLevel = static_cast<OMX_VIDEO_AVCLEVELTYPE>(level);
@@ -414,7 +1889,7 @@ index 37fd5a5..77a2a39 100644
          h264type.eProfile = OMX_VIDEO_AVCProfileBaseline;
  #if 0   /* DON'T YET DEFAULT TO HIGHEST PROFILE */
          // Use largest supported profile for AVC recording if profile is not specified.
-@@ -4287,6 +4306,7 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+@@ -4287,6 +4315,7 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
          }
  #endif
      }
@@ -422,7 +1897,23 @@ index 37fd5a5..77a2a39 100644
  
      ALOGI("setupAVCEncoderParameters with [profile: %s] [level: %s]",
              asString(h264type.eProfile), asString(h264type.eLevel));
-@@ -6036,6 +6056,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
+@@ -4762,6 +4791,7 @@ bool ACodec::describeDefaultColorFormat(DescribeColorFormat2Params &params) {
+         fmt != OMX_COLOR_FormatYUV420PackedPlanar &&
+         fmt != OMX_COLOR_FormatYUV420SemiPlanar &&
+         fmt != OMX_COLOR_FormatYUV420PackedSemiPlanar &&
++        fmt != OMX_TI_COLOR_FormatYUV420PackedSemiPlanar &&
+         fmt != (OMX_COLOR_FORMATTYPE)HAL_PIXEL_FORMAT_YV12) {
+         ALOGW("do not know color format 0x%x = %d", fmt, fmt);
+         return false;
+@@ -4838,6 +4868,7 @@ bool ACodec::describeDefaultColorFormat(DescribeColorFormat2Params &params) {
+         case OMX_COLOR_FormatYUV420SemiPlanar:
+             // FIXME: NV21 for sw-encoder, NV12 for decoder and hw-encoder
+         case OMX_COLOR_FormatYUV420PackedSemiPlanar:
++        case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
+             // NV12
+             image.mPlane[image.U].mOffset = params.nStride * params.nSliceHeight;
+             image.mPlane[image.U].mColInc = 2;
+@@ -6036,6 +6067,9 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
                  status_t err2 = OK;
                  switch (metaType) {
                  case kMetadataBufferTypeInvalid:
@@ -432,7 +1923,7 @@ index 37fd5a5..77a2a39 100644
                      break;
  #ifndef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
                  case kMetadataBufferTypeNativeHandleSource:
-@@ -6267,6 +6290,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6267,6 +6301,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                  native_handle_t *handle = NULL;
                  VideoNativeHandleMetadata &nativeMeta =
                      *(VideoNativeHandleMetadata *)info->mData->data();
@@ -443,7 +1934,7 @@ index 37fd5a5..77a2a39 100644
                  if (info->mData->size() >= sizeof(nativeMeta)
                          && nativeMeta.eType == kMetadataBufferTypeNativeHandleSource) {
  #ifdef OMX_ANDROID_COMPILE_AS_32BIT_ON_64BIT_PLATFORMS
-@@ -6276,6 +6303,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
+@@ -6276,6 +6314,12 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                      handle = (native_handle_t *)nativeMeta.pHandle;
  #endif
                  }
@@ -456,7 +1947,7 @@ index 37fd5a5..77a2a39 100644
                  info->mData->meta()->setPointer("handle", handle);
                  info->mData->meta()->setInt32("rangeOffset", rangeOffset);
                  info->mData->meta()->setInt32("rangeLength", rangeLength);
-@@ -6968,10 +7001,12 @@ void ACodec::LoadedState::onCreateInputSurface(
+@@ -6968,10 +7012,12 @@ void ACodec::LoadedState::onCreateInputSurface(
          err = mCodec->mOMX->createInputSurface(
                  mCodec->mNode, kPortIndexInput, dataSpace, &bufferProducer,
                  &mCodec->mInputMetadataType);
@@ -469,7 +1960,7 @@ index 37fd5a5..77a2a39 100644
      }
  
      if (err == OK) {
-@@ -7014,10 +7049,12 @@ void ACodec::LoadedState::onSetInputSurface(
+@@ -7014,10 +7060,12 @@ void ACodec::LoadedState::onSetInputSurface(
          err = mCodec->mOMX->setInputSurface(
                  mCodec->mNode, kPortIndexInput, surface->getBufferConsumer(),
                  &mCodec->mInputMetadataType);
@@ -483,7 +1974,7 @@ index 37fd5a5..77a2a39 100644
  
      if (err == OK) {
 diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
-index 3848502..1635375 100644
+index 3848502..07f926c 100644
 --- a/media/libstagefright/Android.mk
 +++ b/media/libstagefright/Android.mk
 @@ -102,6 +102,10 @@ LOCAL_SHARED_LIBRARIES := \
@@ -508,6 +1999,17 @@ index 3848502..1635375 100644
  LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
  
  # enable experiments only in userdebug and eng builds
+@@ -131,6 +139,10 @@ ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
+ LOCAL_CFLAGS += -DENABLE_STAGEFRIGHT_EXPERIMENTS
+ endif
+ 
++ifeq ($(TARGET_BOARD_PLATFORM),omap4)
++LOCAL_CFLAGS += -DBOARD_CANT_REALLOCATE_OMX_BUFFERS
++endif
++
+ LOCAL_CLANG := true
+ LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow
+ 
 diff --git a/media/libstagefright/CameraSource.cpp b/media/libstagefright/CameraSource.cpp
 index 893da89..2152454 100644
 --- a/media/libstagefright/CameraSource.cpp
@@ -882,7 +2384,7 @@ index be5067d..2fef7ca 100644
          int64_t durationUs;
          if (trackMeta->findInt64(kKeyDuration, &durationUs)) {
 diff --git a/media/libstagefright/SurfaceMediaSource.cpp b/media/libstagefright/SurfaceMediaSource.cpp
-index 15ff569..0e9b4e6 100644
+index 15ff569..547267c 100644
 --- a/media/libstagefright/SurfaceMediaSource.cpp
 +++ b/media/libstagefright/SurfaceMediaSource.cpp
 @@ -129,7 +129,11 @@ status_t SurfaceMediaSource::setFrameRate(int32_t fps)
@@ -945,6 +2447,48 @@ index 15ff569..0e9b4e6 100644
  
      (*buffer)->setObserver(this);
      (*buffer)->add_ref();
+@@ -388,9 +425,12 @@ void SurfaceMediaSource::signalBufferReturned(MediaBuffer *buffer) {
+     Mutex::Autolock lock(mMutex);
+ 
+     buffer_handle_t bufferHandle = getMediaBufferHandle(buffer);
++    ANativeWindowBuffer* curNativeHandle = NULL;
+ 
+     for (size_t i = 0; i < mCurrentBuffers.size(); i++) {
+-        if (mCurrentBuffers[i]->handle == bufferHandle) {
++        curNativeHandle = mCurrentBuffers[i]->getNativeBuffer();
++        if ((mCurrentBuffers[i]->handle == bufferHandle) ||
++            ((buffer_handle_t)curNativeHandle == bufferHandle)) {
+             mCurrentBuffers.removeAt(i);
+             foundBuffer = true;
+             break;
+@@ -406,7 +446,10 @@ void SurfaceMediaSource::signalBufferReturned(MediaBuffer *buffer) {
+             continue;
+         }
+ 
+-        if (bufferHandle == mSlots[id].mGraphicBuffer->handle) {
++        curNativeHandle = mSlots[id].mGraphicBuffer->getNativeBuffer();
++
++        if ((bufferHandle == mSlots[id].mGraphicBuffer->handle) ||
++            (bufferHandle == (buffer_handle_t)curNativeHandle)) {
+             ALOGV("Slot %d returned, matches handle = %p", id,
+                     mSlots[id].mGraphicBuffer->handle);
+ 
+diff --git a/media/libstagefright/avc_utils.cpp b/media/libstagefright/avc_utils.cpp
+index 763381e..e5819ed 100644
+--- a/media/libstagefright/avc_utils.cpp
++++ b/media/libstagefright/avc_utils.cpp
+@@ -479,7 +479,10 @@ bool IsAVCReferenceFrame(const sp<ABuffer> &accessUnit) {
+     const uint8_t *nalStart;
+     size_t nalSize;
+     while (getNextNALUnit(&data, &size, &nalStart, &nalSize, true) == OK) {
+-        CHECK_GT(nalSize, 0u);
++        if (nalSize == 0u) {
++            ALOGW("skipping empty nal unit from potentially malformed bitstream");
++            continue;
++        }
+ 
+         unsigned nalType = nalStart[0] & 0x1f;
+ 
 diff --git a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp b/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp
 index f00a5d1..44415e2 100644
 --- a/media/libstagefright/codecs/aacenc/SoftAACEncoder2.cpp
@@ -1217,6 +2761,315 @@ index 7abc019..590146d 100644
      mPrevEstimates.push_back(*bandwidthBps);
      while (mPrevEstimates.size() > 3) {
          mPrevEstimates.erase(mPrevEstimates.begin());
+diff --git a/media/libstagefright/include/OMXNodeInstance.h b/media/libstagefright/include/OMXNodeInstance.h
+index 94cf15a..dd396e8 100644
+--- a/media/libstagefright/include/OMXNodeInstance.h
++++ b/media/libstagefright/include/OMXNodeInstance.h
+@@ -175,7 +175,7 @@ private:
+     KeyedVector<OMX::buffer_id, OMX_BUFFERHEADERTYPE *> mBufferIDToBufferHeader;
+     KeyedVector<OMX_BUFFERHEADERTYPE *, OMX::buffer_id> mBufferHeaderToBufferID;
+ 
+-    // metadata and secure buffer type tracking
++    // metadata and secure buffer types and graphic buffer mode tracking
+     MetadataBufferType mMetadataType[2];
+     enum SecureBufferType {
+         kSecureBufferTypeUnknown,
+@@ -183,6 +183,7 @@ private:
+         kSecureBufferTypeNativeHandle,
+     };
+     SecureBufferType mSecureBufferType[2];
++    bool mGraphicBufferEnabled[2];
+ 
+     // For debug support
+     char *mName;
+diff --git a/media/libstagefright/include/OMXNodeInstance.h.orig b/media/libstagefright/include/OMXNodeInstance.h.orig
+new file mode 100644
+index 0000000..f65a409
+--- /dev/null
++++ b/media/libstagefright/include/OMXNodeInstance.h.orig
+@@ -0,0 +1,282 @@
++/*
++ * Copyright (C) 2009 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef OMX_NODE_INSTANCE_H_
++
++#define OMX_NODE_INSTANCE_H_
++
++#include "OMX.h"
++
++#include <utils/RefBase.h>
++#include <utils/SortedVector.h>
++#include <utils/threads.h>
++
++namespace android {
++
++class IOMXObserver;
++struct OMXMaster;
++class GraphicBufferSource;
++
++struct OMXNodeInstance {
++    OMXNodeInstance(
++            OMX *owner, const sp<IOMXObserver> &observer, const char *name);
++
++    void setHandle(OMX::node_id node_id, OMX_HANDLETYPE handle);
++
++    OMX *owner();
++    sp<IOMXObserver> observer();
++    OMX::node_id nodeID();
++
++    status_t freeNode(OMXMaster *master);
++
++    status_t sendCommand(OMX_COMMANDTYPE cmd, OMX_S32 param);
++    status_t getParameter(OMX_INDEXTYPE index, void *params, size_t size);
++
++    status_t setParameter(
++            OMX_INDEXTYPE index, const void *params, size_t size);
++
++    status_t getConfig(OMX_INDEXTYPE index, void *params, size_t size);
++    status_t setConfig(OMX_INDEXTYPE index, const void *params, size_t size);
++
++    status_t getState(OMX_STATETYPE* state);
++
++    status_t enableNativeBuffers(OMX_U32 portIndex, OMX_BOOL graphic, OMX_BOOL enable);
++
++    status_t getGraphicBufferUsage(OMX_U32 portIndex, OMX_U32* usage);
++
++    status_t storeMetaDataInBuffers(
++            OMX_U32 portIndex, OMX_BOOL enable, MetadataBufferType *type);
++
++    status_t prepareForAdaptivePlayback(
++            OMX_U32 portIndex, OMX_BOOL enable,
++            OMX_U32 maxFrameWidth, OMX_U32 maxFrameHeight);
++
++    status_t configureVideoTunnelMode(
++            OMX_U32 portIndex, OMX_BOOL tunneled,
++            OMX_U32 audioHwSync, native_handle_t **sidebandHandle);
++
++    status_t useBuffer(
++            OMX_U32 portIndex, const sp<IMemory> &params,
++            OMX::buffer_id *buffer, OMX_U32 allottedSize);
++
++    status_t useGraphicBuffer(
++            OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
++            OMX::buffer_id *buffer);
++
++    status_t updateGraphicBufferInMeta(
++            OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
++            OMX::buffer_id buffer);
++
++    status_t updateNativeHandleInMeta(
++            OMX_U32 portIndex, const sp<NativeHandle> &nativeHandle,
++            OMX::buffer_id buffer);
++
++    status_t createInputSurface(
++            OMX_U32 portIndex, android_dataspace dataSpace,
++            sp<IGraphicBufferProducer> *bufferProducer,
++            MetadataBufferType *type);
++
++    static status_t createPersistentInputSurface(
++            sp<IGraphicBufferProducer> *bufferProducer,
++            sp<IGraphicBufferConsumer> *bufferConsumer);
++
++    status_t setInputSurface(
++            OMX_U32 portIndex, const sp<IGraphicBufferConsumer> &bufferConsumer,
++            MetadataBufferType *type);
++
++    status_t signalEndOfInputStream();
++
++    void signalEvent(OMX_EVENTTYPE event, OMX_U32 arg1, OMX_U32 arg2);
++
++    status_t allocateSecureBuffer(
++            OMX_U32 portIndex, size_t size, OMX::buffer_id *buffer,
++            void **buffer_data, sp<NativeHandle> *native_handle);
++
++    status_t allocateBufferWithBackup(
++            OMX_U32 portIndex, const sp<IMemory> &params,
++            OMX::buffer_id *buffer, OMX_U32 allottedSize);
++
++    status_t freeBuffer(OMX_U32 portIndex, OMX::buffer_id buffer);
++
++    status_t fillBuffer(OMX::buffer_id buffer, int fenceFd);
++
++    status_t emptyBuffer(
++            OMX::buffer_id buffer,
++            OMX_U32 rangeOffset, OMX_U32 rangeLength,
++            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd);
++
++    status_t emptyGraphicBuffer(
++            OMX_BUFFERHEADERTYPE *header, const sp<GraphicBuffer> &buffer,
++            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd);
++
++    status_t getExtensionIndex(
++            const char *parameterName, OMX_INDEXTYPE *index);
++
++    status_t setInternalOption(
++            OMX_U32 portIndex,
++            IOMX::InternalOptionType type,
++            const void *data,
++            size_t size);
++
++    bool isSecure() const {
++        return mIsSecure;
++    }
++
++    // handles messages and removes them from the list
++    void onMessages(std::list<omx_message> &messages);
++    void onMessage(const omx_message &msg);
++    void onObserverDied(OMXMaster *master);
++    void onGetHandleFailed();
++    void onEvent(OMX_EVENTTYPE event, OMX_U32 arg1, OMX_U32 arg2);
++
++    static OMX_CALLBACKTYPE kCallbacks;
++
++private:
++    Mutex mLock;
++
++    OMX *mOwner;
++    OMX::node_id mNodeID;
++    OMX_HANDLETYPE mHandle;
++    sp<IOMXObserver> mObserver;
++    bool mDying;
++    bool mSailed;  // configuration is set (no more meta-mode changes)
++    bool mQueriedProhibitedExtensions;
++    SortedVector<OMX_INDEXTYPE> mProhibitedExtensions;
++    bool mIsSecure;
++
++    // Lock only covers mGraphicBufferSource.  We can't always use mLock
++    // because of rare instances where we'd end up locking it recursively.
++    Mutex mGraphicBufferSourceLock;
++    // Access this through getGraphicBufferSource().
++    sp<GraphicBufferSource> mGraphicBufferSource;
++
++
++    struct ActiveBuffer {
++        OMX_U32 mPortIndex;
++        OMX::buffer_id mID;
++    };
++    Vector<ActiveBuffer> mActiveBuffers;
++    // for buffer ptr to buffer id translation
++    Mutex mBufferIDLock;
++    uint32_t mBufferIDCount;
++    KeyedVector<OMX::buffer_id, OMX_BUFFERHEADERTYPE *> mBufferIDToBufferHeader;
++    KeyedVector<OMX_BUFFERHEADERTYPE *, OMX::buffer_id> mBufferHeaderToBufferID;
++
++<<<<<<< HEAD
++    // metadata and secure buffer type tracking
++=======
++    bool mLegacyAdaptiveExperiment;
++    IOMX::PortMode mPortMode[2];
++    // metadata and secure buffer types and graphic buffer mode tracking
++>>>>>>> f630233... Track graphic buffer mode in OMXNodeInstance
++    MetadataBufferType mMetadataType[2];
++    enum SecureBufferType {
++        kSecureBufferTypeUnknown,
++        kSecureBufferTypeOpaque,
++        kSecureBufferTypeNativeHandle,
++    };
++    SecureBufferType mSecureBufferType[2];
++    bool mGraphicBufferEnabled[2];
++
++    // For debug support
++    char *mName;
++    int DEBUG;
++    size_t mNumPortBuffers[2];  // modified under mLock, read outside for debug
++    Mutex mDebugLock;
++    // following are modified and read under mDebugLock
++    int DEBUG_BUMP;
++    SortedVector<OMX_BUFFERHEADERTYPE *> mInputBuffersWithCodec, mOutputBuffersWithCodec;
++    size_t mDebugLevelBumpPendingBuffers[2];
++    void bumpDebugLevel_l(size_t numInputBuffers, size_t numOutputBuffers);
++    void unbumpDebugLevel_l(size_t portIndex);
++
++    ~OMXNodeInstance();
++
++    void addActiveBuffer(OMX_U32 portIndex, OMX::buffer_id id);
++    void removeActiveBuffer(OMX_U32 portIndex, OMX::buffer_id id);
++    void freeActiveBuffers();
++
++    // For buffer id management
++    OMX::buffer_id makeBufferID(OMX_BUFFERHEADERTYPE *bufferHeader);
++    OMX_BUFFERHEADERTYPE *findBufferHeader(OMX::buffer_id buffer, OMX_U32 portIndex);
++    OMX::buffer_id findBufferID(OMX_BUFFERHEADERTYPE *bufferHeader);
++    void invalidateBufferID(OMX::buffer_id buffer);
++
++    bool isProhibitedIndex_l(OMX_INDEXTYPE index);
++
++    status_t useGraphicBuffer2_l(
++            OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
++            OMX::buffer_id *buffer);
++    static OMX_ERRORTYPE OnEvent(
++            OMX_IN OMX_HANDLETYPE hComponent,
++            OMX_IN OMX_PTR pAppData,
++            OMX_IN OMX_EVENTTYPE eEvent,
++            OMX_IN OMX_U32 nData1,
++            OMX_IN OMX_U32 nData2,
++            OMX_IN OMX_PTR pEventData);
++
++    static OMX_ERRORTYPE OnEmptyBufferDone(
++            OMX_IN OMX_HANDLETYPE hComponent,
++            OMX_IN OMX_PTR pAppData,
++            OMX_IN OMX_BUFFERHEADERTYPE *pBuffer);
++
++    static OMX_ERRORTYPE OnFillBufferDone(
++            OMX_IN OMX_HANDLETYPE hComponent,
++            OMX_IN OMX_PTR pAppData,
++            OMX_IN OMX_BUFFERHEADERTYPE *pBuffer);
++
++    status_t storeMetaDataInBuffers_l(
++            OMX_U32 portIndex, OMX_BOOL enable, MetadataBufferType *type);
++
++    // Stores fence into buffer if it is ANWBuffer type and has enough space.
++    // otherwise, waits for the fence to signal.  Takes ownership of |fenceFd|.
++    status_t storeFenceInMeta_l(
++            OMX_BUFFERHEADERTYPE *header, int fenceFd, OMX_U32 portIndex);
++
++    // Retrieves the fence from buffer if ANWBuffer type and has enough space. Otherwise, returns -1
++    int retrieveFenceFromMeta_l(
++            OMX_BUFFERHEADERTYPE *header, OMX_U32 portIndex);
++
++    status_t emptyBuffer_l(
++            OMX_BUFFERHEADERTYPE *header,
++            OMX_U32 flags, OMX_TICKS timestamp, intptr_t debugAddr, int fenceFd);
++
++    // Updates the graphic buffer handle in the metadata buffer for |buffer| and |header| to
++    // |graphicBuffer|'s handle. If |updateCodecBuffer| is true, the update will happen in
++    // the actual codec buffer (use this if not using emptyBuffer (with no _l) later to
++    // pass the buffer to the codec, as only emptyBuffer copies the backup buffer to the codec
++    // buffer.)
++    status_t updateGraphicBufferInMeta_l(
++            OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
++            OMX::buffer_id buffer, OMX_BUFFERHEADERTYPE *header, bool updateCodecBuffer);
++
++    status_t createGraphicBufferSource(
++            OMX_U32 portIndex, sp<IGraphicBufferConsumer> consumer /* nullable */,
++            MetadataBufferType *type);
++    sp<GraphicBufferSource> getGraphicBufferSource();
++    void setGraphicBufferSource(const sp<GraphicBufferSource>& bufferSource);
++
++    // Handles |msg|, and may modify it. Returns true iff completely handled it and
++    // |msg| does not need to be sent to the event listener.
++    bool handleMessage(omx_message &msg);
++
++    OMXNodeInstance(const OMXNodeInstance &);
++    OMXNodeInstance &operator=(const OMXNodeInstance &);
++};
++
++}  // namespace android
++
++#endif  // OMX_NODE_INSTANCE_H_
 diff --git a/media/libstagefright/mpeg2ts/ESQueue.cpp b/media/libstagefright/mpeg2ts/ESQueue.cpp
 index 96ca405..7599c13 100644
 --- a/media/libstagefright/mpeg2ts/ESQueue.cpp
@@ -1276,10 +3129,32 @@ index 6132a2c..7f0d270 100644
  
  void OMXMaster::addPlugin(const char *libname) {
 diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
-index e7aaead..8752b4e 100644
+index e7aaead..a0a746e 100644
 --- a/media/libstagefright/omx/OMXNodeInstance.cpp
 +++ b/media/libstagefright/omx/OMXNodeInstance.cpp
-@@ -801,7 +801,11 @@ status_t OMXNodeInstance::useBuffer(
+@@ -226,6 +226,8 @@ OMXNodeInstance::OMXNodeInstance(
+     mMetadataType[1] = kMetadataBufferTypeInvalid;
+     mSecureBufferType[0] = kSecureBufferTypeUnknown;
+     mSecureBufferType[1] = kSecureBufferTypeUnknown;
++    mGraphicBufferEnabled[0] = false;
++    mGraphicBufferEnabled[1] = false;
+     mIsSecure = AString(name).endsWith(".secure");
+ }
+ 
+@@ -562,6 +564,12 @@ status_t OMXNodeInstance::enableNativeBuffers(
+             } else if (mSecureBufferType[portIndex] == kSecureBufferTypeUnknown) {
+                 mSecureBufferType[portIndex] = kSecureBufferTypeOpaque;
+             }
++        } else {
++            if (err == OMX_ErrorNone) {
++                mGraphicBufferEnabled[portIndex] = enable;
++            } else if (enable) {
++                mGraphicBufferEnabled[portIndex] = false;
++            }
+         }
+     } else {
+         CLOG_ERROR_IF(enable, getExtensionIndex, err, "%s", name);
+@@ -801,7 +809,11 @@ status_t OMXNodeInstance::useBuffer(
      // metadata buffers are not connected cross process
      // use a backup buffer instead of the actual buffer
      BufferMeta *buffer_meta;
@@ -1291,7 +3166,7 @@ index e7aaead..8752b4e 100644
      OMX_U8 *data = static_cast<OMX_U8 *>(params->pointer());
      // allocate backup buffer
      if (useBackup) {
-@@ -1297,7 +1301,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
+@@ -1297,7 +1309,11 @@ status_t OMXNodeInstance::allocateBufferWithBackup(
      }
  
      // metadata buffers are not connected cross process; only copy if not meta
@@ -1303,7 +3178,7 @@ index e7aaead..8752b4e 100644
  
      BufferMeta *buffer_meta = new BufferMeta(
              params, portIndex,
-@@ -1415,10 +1423,30 @@ status_t OMXNodeInstance::emptyBuffer(
+@@ -1415,10 +1431,30 @@ status_t OMXNodeInstance::emptyBuffer(
      BufferMeta *buffer_meta =
          static_cast<BufferMeta *>(header->pAppPrivate);
  
@@ -1334,6 +3209,2143 @@ index e7aaead..8752b4e 100644
          header->nOffset = 0;
      } else {
          // rangeLength and rangeOffset must be a subset of the allocated data in the buffer.
+diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp.orig b/media/libstagefright/omx/OMXNodeInstance.cpp.orig
+new file mode 100644
+index 0000000..968cc1b
+--- /dev/null
++++ b/media/libstagefright/omx/OMXNodeInstance.cpp.orig
+@@ -0,0 +1,2131 @@
++/*
++ * Copyright (C) 2009 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++//#define LOG_NDEBUG 0
++#define LOG_TAG "OMXNodeInstance"
++#include <utils/Log.h>
++
++#include <inttypes.h>
++
++#include "../include/OMXNodeInstance.h"
++#include "OMXMaster.h"
++#include "OMXUtils.h"
++#include "GraphicBufferSource.h"
++
++#include <OMX_Component.h>
++#include <OMX_IndexExt.h>
++#include <OMX_AsString.h>
++
++#include <binder/IMemory.h>
++#include <cutils/properties.h>
++#include <gui/BufferQueue.h>
++#include <HardwareAPI.h>
++#include <media/stagefright/foundation/ADebug.h>
++#include <media/stagefright/foundation/ABuffer.h>
++#include <media/stagefright/MediaErrors.h>
++#include <utils/misc.h>
++#include <utils/NativeHandle.h>
++
++static const OMX_U32 kPortIndexInput = 0;
++static const OMX_U32 kPortIndexOutput = 1;
++
++#define CLOGW(fmt, ...) ALOGW("[%x:%s] " fmt, mNodeID, mName, ##__VA_ARGS__)
++
++#define CLOG_ERROR_IF(cond, fn, err, fmt, ...) \
++    ALOGE_IF(cond, #fn "(%x:%s, " fmt ") ERROR: %s(%#x)", \
++    mNodeID, mName, ##__VA_ARGS__, asString(err), err)
++#define CLOG_ERROR(fn, err, fmt, ...) CLOG_ERROR_IF(true, fn, err, fmt, ##__VA_ARGS__)
++#define CLOG_IF_ERROR(fn, err, fmt, ...) \
++    CLOG_ERROR_IF((err) != OMX_ErrorNone, fn, err, fmt, ##__VA_ARGS__)
++
++#define CLOGI_(level, fn, fmt, ...) \
++    ALOGI_IF(DEBUG >= (level), #fn "(%x:%s, " fmt ")", mNodeID, mName, ##__VA_ARGS__)
++#define CLOGD_(level, fn, fmt, ...) \
++    ALOGD_IF(DEBUG >= (level), #fn "(%x:%s, " fmt ")", mNodeID, mName, ##__VA_ARGS__)
++
++#define CLOG_LIFE(fn, fmt, ...)     CLOGI_(ADebug::kDebugLifeCycle,     fn, fmt, ##__VA_ARGS__)
++#define CLOG_STATE(fn, fmt, ...)    CLOGI_(ADebug::kDebugState,         fn, fmt, ##__VA_ARGS__)
++#define CLOG_CONFIG(fn, fmt, ...)   CLOGI_(ADebug::kDebugConfig,        fn, fmt, ##__VA_ARGS__)
++#define CLOG_INTERNAL(fn, fmt, ...) CLOGD_(ADebug::kDebugInternalState, fn, fmt, ##__VA_ARGS__)
++
++#define CLOG_DEBUG_IF(cond, fn, fmt, ...) \
++    ALOGD_IF(cond, #fn "(%x, " fmt ")", mNodeID, ##__VA_ARGS__)
++
++#define CLOG_BUFFER(fn, fmt, ...) \
++    CLOG_DEBUG_IF(DEBUG >= ADebug::kDebugAll, fn, fmt, ##__VA_ARGS__)
++#define CLOG_BUMPED_BUFFER(fn, fmt, ...) \
++    CLOG_DEBUG_IF(DEBUG_BUMP >= ADebug::kDebugAll, fn, fmt, ##__VA_ARGS__)
++
++/* buffer formatting */
++#define BUFFER_FMT(port, fmt, ...) "%s:%u " fmt, portString(port), (port), ##__VA_ARGS__
++#define NEW_BUFFER_FMT(buffer_id, port, fmt, ...) \
++    BUFFER_FMT(port, fmt ") (#%zu => %#x", ##__VA_ARGS__, mActiveBuffers.size(), (buffer_id))
++
++#define SIMPLE_BUFFER(port, size, data) BUFFER_FMT(port, "%zu@%p", (size), (data))
++#define SIMPLE_NEW_BUFFER(buffer_id, port, size, data) \
++    NEW_BUFFER_FMT(buffer_id, port, "%zu@%p", (size), (data))
++
++#define EMPTY_BUFFER(addr, header, fenceFd) "%#x [%u@%p fc=%d]", \
++    (addr), (header)->nAllocLen, (header)->pBuffer, (fenceFd)
++#define FULL_BUFFER(addr, header, fenceFd) "%#" PRIxPTR " [%u@%p (%u..+%u) f=%x ts=%lld fc=%d]", \
++    (intptr_t)(addr), (header)->nAllocLen, (header)->pBuffer, \
++    (header)->nOffset, (header)->nFilledLen, (header)->nFlags, (header)->nTimeStamp, (fenceFd)
++
++#define WITH_STATS_WRAPPER(fmt, ...) fmt " { IN=%zu/%zu OUT=%zu/%zu }", ##__VA_ARGS__, \
++    mInputBuffersWithCodec.size(), mNumPortBuffers[kPortIndexInput], \
++    mOutputBuffersWithCodec.size(), mNumPortBuffers[kPortIndexOutput]
++// TRICKY: this is needed so formatting macros expand before substitution
++#define WITH_STATS(fmt, ...) WITH_STATS_WRAPPER(fmt, ##__VA_ARGS__)
++
++namespace android {
++
++struct BufferMeta {
++    BufferMeta(
++            const sp<IMemory> &mem, OMX_U32 portIndex, bool copyToOmx,
++            bool copyFromOmx, OMX_U8 *backup)
++        : mMem(mem),
++          mCopyFromOmx(copyFromOmx),
++          mCopyToOmx(copyToOmx),
++          mPortIndex(portIndex),
++          mBackup(backup) {
++    }
++
++    BufferMeta(size_t size, OMX_U32 portIndex)
++        : mSize(size),
++          mCopyFromOmx(false),
++          mCopyToOmx(false),
++          mPortIndex(portIndex),
++          mBackup(NULL) {
++    }
++
++    BufferMeta(const sp<GraphicBuffer> &graphicBuffer, OMX_U32 portIndex)
++        : mGraphicBuffer(graphicBuffer),
++          mCopyFromOmx(false),
++          mCopyToOmx(false),
++          mPortIndex(portIndex),
++          mBackup(NULL) {
++    }
++
++    void CopyFromOMX(const OMX_BUFFERHEADERTYPE *header) {
++        if (!mCopyFromOmx) {
++            return;
++        }
++
++        // check component returns proper range
++        sp<ABuffer> codec = getBuffer(header, false /* backup */, true /* limit */);
++
++        memcpy((OMX_U8 *)mMem->pointer() + header->nOffset, codec->data(), codec->size());
++    }
++
++    void CopyToOMX(const OMX_BUFFERHEADERTYPE *header) {
++        if (!mCopyToOmx) {
++            return;
++        }
++
++        memcpy(header->pBuffer + header->nOffset,
++                (const OMX_U8 *)mMem->pointer() + header->nOffset,
++                header->nFilledLen);
++    }
++
++    // return either the codec or the backup buffer
++    sp<ABuffer> getBuffer(const OMX_BUFFERHEADERTYPE *header, bool backup, bool limit) {
++        sp<ABuffer> buf;
++        if (backup && mMem != NULL) {
++            buf = new ABuffer(mMem->pointer(), mMem->size());
++        } else {
++            buf = new ABuffer(header->pBuffer, header->nAllocLen);
++        }
++        if (limit) {
++            if (header->nOffset + header->nFilledLen > header->nOffset
++                    && header->nOffset + header->nFilledLen <= header->nAllocLen) {
++                buf->setRange(header->nOffset, header->nFilledLen);
++            } else {
++                buf->setRange(0, 0);
++            }
++        }
++        return buf;
++    }
++
++    void setGraphicBuffer(const sp<GraphicBuffer> &graphicBuffer) {
++        mGraphicBuffer = graphicBuffer;
++    }
++
++    void setNativeHandle(const sp<NativeHandle> &nativeHandle) {
++        mNativeHandle = nativeHandle;
++    }
++
++    OMX_U32 getPortIndex() {
++        return mPortIndex;
++    }
++
++    ~BufferMeta() {
++        delete[] mBackup;
++    }
++
++private:
++    sp<GraphicBuffer> mGraphicBuffer;
++    sp<NativeHandle> mNativeHandle;
++    sp<IMemory> mMem;
++    size_t mSize;
++    bool mCopyFromOmx;
++    bool mCopyToOmx;
++    OMX_U32 mPortIndex;
++    OMX_U8 *mBackup;
++
++    BufferMeta(const BufferMeta &);
++    BufferMeta &operator=(const BufferMeta &);
++};
++
++// static
++OMX_CALLBACKTYPE OMXNodeInstance::kCallbacks = {
++    &OnEvent, &OnEmptyBufferDone, &OnFillBufferDone
++};
++
++static inline const char *portString(OMX_U32 portIndex) {
++    switch (portIndex) {
++        case kPortIndexInput:  return "Input";
++        case kPortIndexOutput: return "Output";
++        case ~0U:              return "All";
++        default:               return "port";
++    }
++}
++
++OMXNodeInstance::OMXNodeInstance(
++        OMX *owner, const sp<IOMXObserver> &observer, const char *name)
++    : mOwner(owner),
++      mNodeID(0),
++      mHandle(NULL),
++      mObserver(observer),
++      mDying(false),
++      mSailed(false),
++      mQueriedProhibitedExtensions(false),
++      mBufferIDCount(0)
++{
++    mName = ADebug::GetDebugName(name);
++    DEBUG = ADebug::GetDebugLevelFromProperty(name, "debug.stagefright.omx-debug");
++    ALOGV("debug level for %s is %d", name, DEBUG);
++    DEBUG_BUMP = DEBUG;
++    mNumPortBuffers[0] = 0;
++    mNumPortBuffers[1] = 0;
++    mDebugLevelBumpPendingBuffers[0] = 0;
++    mDebugLevelBumpPendingBuffers[1] = 0;
++    mMetadataType[0] = kMetadataBufferTypeInvalid;
++    mMetadataType[1] = kMetadataBufferTypeInvalid;
++    mSecureBufferType[0] = kSecureBufferTypeUnknown;
++    mSecureBufferType[1] = kSecureBufferTypeUnknown;
++    mGraphicBufferEnabled[0] = false;
++    mGraphicBufferEnabled[1] = false;
++    mIsSecure = AString(name).endsWith(".secure");
++}
++
++OMXNodeInstance::~OMXNodeInstance() {
++    free(mName);
++    CHECK(mHandle == NULL);
++}
++
++void OMXNodeInstance::setHandle(OMX::node_id node_id, OMX_HANDLETYPE handle) {
++    mNodeID = node_id;
++    CLOG_LIFE(allocateNode, "handle=%p", handle);
++    CHECK(mHandle == NULL);
++    mHandle = handle;
++}
++
++sp<GraphicBufferSource> OMXNodeInstance::getGraphicBufferSource() {
++    Mutex::Autolock autoLock(mGraphicBufferSourceLock);
++    return mGraphicBufferSource;
++}
++
++void OMXNodeInstance::setGraphicBufferSource(
++        const sp<GraphicBufferSource>& bufferSource) {
++    Mutex::Autolock autoLock(mGraphicBufferSourceLock);
++    CLOG_INTERNAL(setGraphicBufferSource, "%p", bufferSource.get());
++    mGraphicBufferSource = bufferSource;
++}
++
++OMX *OMXNodeInstance::owner() {
++    return mOwner;
++}
++
++sp<IOMXObserver> OMXNodeInstance::observer() {
++    return mObserver;
++}
++
++OMX::node_id OMXNodeInstance::nodeID() {
++    return mNodeID;
++}
++
++status_t OMXNodeInstance::freeNode(OMXMaster *master) {
++    CLOG_LIFE(freeNode, "handle=%p", mHandle);
++    static int32_t kMaxNumIterations = 10;
++
++    // exit if we have already freed the node
++    if (mHandle == NULL) {
++        return OK;
++    }
++
++    // Transition the node from its current state all the way down
++    // to "Loaded".
++    // This ensures that all active buffers are properly freed even
++    // for components that don't do this themselves on a call to
++    // "FreeHandle".
++
++    // The code below may trigger some more events to be dispatched
++    // by the OMX component - we want to ignore them as our client
++    // does not expect them.
++    mDying = true;
++
++    OMX_STATETYPE state;
++    CHECK_EQ(OMX_GetState(mHandle, &state), OMX_ErrorNone);
++    switch (state) {
++        case OMX_StateExecuting:
++        {
++            ALOGV("forcing Executing->Idle");
++            sendCommand(OMX_CommandStateSet, OMX_StateIdle);
++            OMX_ERRORTYPE err;
++            int32_t iteration = 0;
++            while ((err = OMX_GetState(mHandle, &state)) == OMX_ErrorNone
++                    && state != OMX_StateIdle
++                    && state != OMX_StateInvalid) {
++                if (++iteration > kMaxNumIterations) {
++                    CLOGW("failed to enter Idle state (now %s(%d), aborting.",
++                            asString(state), state);
++                    state = OMX_StateInvalid;
++                    break;
++                }
++
++                usleep(100000);
++            }
++            CHECK_EQ(err, OMX_ErrorNone);
++
++            if (state == OMX_StateInvalid) {
++                break;
++            }
++
++            // fall through
++        }
++
++        case OMX_StateIdle:
++        {
++            ALOGV("forcing Idle->Loaded");
++            sendCommand(OMX_CommandStateSet, OMX_StateLoaded);
++
++            freeActiveBuffers();
++
++            OMX_ERRORTYPE err;
++            int32_t iteration = 0;
++            while ((err = OMX_GetState(mHandle, &state)) == OMX_ErrorNone
++                    && state != OMX_StateLoaded
++                    && state != OMX_StateInvalid) {
++                if (++iteration > kMaxNumIterations) {
++                    CLOGW("failed to enter Loaded state (now %s(%d), aborting.",
++                            asString(state), state);
++                    state = OMX_StateInvalid;
++                    break;
++                }
++
++                ALOGV("waiting for Loaded state...");
++                usleep(100000);
++            }
++            CHECK_EQ(err, OMX_ErrorNone);
++
++            // fall through
++        }
++
++        case OMX_StateLoaded:
++        case OMX_StateInvalid:
++            break;
++
++        default:
++            LOG_ALWAYS_FATAL("unknown state %s(%#x).", asString(state), state);
++            break;
++    }
++
++    ALOGV("[%x:%s] calling destroyComponentInstance", mNodeID, mName);
++    OMX_ERRORTYPE err = master->destroyComponentInstance(
++            static_cast<OMX_COMPONENTTYPE *>(mHandle));
++
++    mHandle = NULL;
++    CLOG_IF_ERROR(freeNode, err, "");
++    free(mName);
++    mName = NULL;
++
++    mOwner->invalidateNodeID(mNodeID);
++    mNodeID = 0;
++
++    ALOGV("OMXNodeInstance going away.");
++    delete this;
++
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::sendCommand(
++        OMX_COMMANDTYPE cmd, OMX_S32 param) {
++    if (cmd == OMX_CommandStateSet) {
++        // There are no configurations past first StateSet command.
++        mSailed = true;
++    }
++    const sp<GraphicBufferSource> bufferSource(getGraphicBufferSource());
++    if (bufferSource != NULL && cmd == OMX_CommandStateSet) {
++        if (param == OMX_StateIdle) {
++            // Initiating transition from Executing -> Idle
++            // ACodec is waiting for all buffers to be returned, do NOT
++            // submit any more buffers to the codec.
++            bufferSource->omxIdle();
++        } else if (param == OMX_StateLoaded) {
++            // Initiating transition from Idle/Executing -> Loaded
++            // Buffers are about to be freed.
++            bufferSource->omxLoaded();
++            setGraphicBufferSource(NULL);
++        }
++
++        // fall through
++    }
++
++    Mutex::Autolock autoLock(mLock);
++
++    // bump internal-state debug level for 2 input and output frames past a command
++    {
++        Mutex::Autolock _l(mDebugLock);
++        bumpDebugLevel_l(2 /* numInputBuffers */, 2 /* numOutputBuffers */);
++    }
++
++    const char *paramString =
++        cmd == OMX_CommandStateSet ? asString((OMX_STATETYPE)param) : portString(param);
++    CLOG_STATE(sendCommand, "%s(%d), %s(%d)", asString(cmd), cmd, paramString, param);
++    OMX_ERRORTYPE err = OMX_SendCommand(mHandle, cmd, param, NULL);
++    CLOG_IF_ERROR(sendCommand, err, "%s(%d), %s(%d)", asString(cmd), cmd, paramString, param);
++    return StatusFromOMXError(err);
++}
++
++bool OMXNodeInstance::isProhibitedIndex_l(OMX_INDEXTYPE index) {
++    // these extensions can only be used from OMXNodeInstance, not by clients directly.
++    static const char *restricted_extensions[] = {
++        "OMX.google.android.index.storeMetaDataInBuffers",
++        "OMX.google.android.index.storeANWBufferInMetadata",
++        "OMX.google.android.index.prepareForAdaptivePlayback",
++        "OMX.google.android.index.configureVideoTunnelMode",
++        "OMX.google.android.index.useAndroidNativeBuffer2",
++        "OMX.google.android.index.useAndroidNativeBuffer",
++        "OMX.google.android.index.enableAndroidNativeBuffers",
++        "OMX.google.android.index.allocateNativeHandle",
++        "OMX.google.android.index.getAndroidNativeBufferUsage",
++    };
++
++    if ((index > OMX_IndexComponentStartUnused && index <= OMX_IndexParamStandardComponentRole)
++            || (index > OMX_IndexPortStartUnused && index <= OMX_IndexParamCompBufferSupplier)
++            || (index > OMX_IndexAudioStartUnused && index <= OMX_IndexConfigAudioChannelVolume)
++            || (index > OMX_IndexVideoStartUnused && index <= OMX_IndexConfigVideoNalSize)
++            || (index > OMX_IndexCommonStartUnused
++                    && index <= OMX_IndexConfigCommonTransitionEffect)
++            || (index > (OMX_INDEXTYPE)OMX_IndexExtAudioStartUnused
++                    && index <= (OMX_INDEXTYPE)OMX_IndexParamAudioProfileQuerySupported)
++            || (index > (OMX_INDEXTYPE)OMX_IndexExtVideoStartUnused
++                    && index <= (OMX_INDEXTYPE)OMX_IndexConfigAndroidVideoTemporalLayering)
++            || (index > (OMX_INDEXTYPE)OMX_IndexExtOtherStartUnused
++                    && index <= (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits)) {
++        return false;
++    }
++
++    if (!mQueriedProhibitedExtensions) {
++        for (size_t i = 0; i < NELEM(restricted_extensions); ++i) {
++            OMX_INDEXTYPE ext;
++            if (OMX_GetExtensionIndex(mHandle, (OMX_STRING)restricted_extensions[i], &ext) == OMX_ErrorNone) {
++                mProhibitedExtensions.add(ext);
++            }
++        }
++        mQueriedProhibitedExtensions = true;
++    }
++
++    return mProhibitedExtensions.indexOf(index) >= 0;
++}
++
++status_t OMXNodeInstance::getParameter(
++        OMX_INDEXTYPE index, void *params, size_t /* size */) {
++    Mutex::Autolock autoLock(mLock);
++
++    if (isProhibitedIndex_l(index)) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return BAD_INDEX;
++    }
++
++    OMX_ERRORTYPE err = OMX_GetParameter(mHandle, index, params);
++    OMX_INDEXEXTTYPE extIndex = (OMX_INDEXEXTTYPE)index;
++    // some errors are expected for getParameter
++    if (err != OMX_ErrorNoMore) {
++        CLOG_IF_ERROR(getParameter, err, "%s(%#x)", asString(extIndex), index);
++    }
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::setParameter(
++        OMX_INDEXTYPE index, const void *params, size_t size) {
++    Mutex::Autolock autoLock(mLock);
++    OMX_INDEXEXTTYPE extIndex = (OMX_INDEXEXTTYPE)index;
++    CLOG_CONFIG(setParameter, "%s(%#x), %zu@%p)", asString(extIndex), index, size, params);
++
++    if (isProhibitedIndex_l(index)) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return BAD_INDEX;
++    }
++
++    OMX_ERRORTYPE err = OMX_SetParameter(
++            mHandle, index, const_cast<void *>(params));
++    CLOG_IF_ERROR(setParameter, err, "%s(%#x)", asString(extIndex), index);
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::getConfig(
++        OMX_INDEXTYPE index, void *params, size_t /* size */) {
++    Mutex::Autolock autoLock(mLock);
++
++    if (isProhibitedIndex_l(index)) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return BAD_INDEX;
++    }
++
++    OMX_ERRORTYPE err = OMX_GetConfig(mHandle, index, params);
++    OMX_INDEXEXTTYPE extIndex = (OMX_INDEXEXTTYPE)index;
++    // some errors are expected for getConfig
++    if (err != OMX_ErrorNoMore) {
++        CLOG_IF_ERROR(getConfig, err, "%s(%#x)", asString(extIndex), index);
++    }
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::setConfig(
++        OMX_INDEXTYPE index, const void *params, size_t size) {
++    Mutex::Autolock autoLock(mLock);
++    OMX_INDEXEXTTYPE extIndex = (OMX_INDEXEXTTYPE)index;
++    CLOG_CONFIG(setConfig, "%s(%#x), %zu@%p)", asString(extIndex), index, size, params);
++
++    if (isProhibitedIndex_l(index)) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return BAD_INDEX;
++    }
++
++    OMX_ERRORTYPE err = OMX_SetConfig(
++            mHandle, index, const_cast<void *>(params));
++    CLOG_IF_ERROR(setConfig, err, "%s(%#x)", asString(extIndex), index);
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::getState(OMX_STATETYPE* state) {
++    Mutex::Autolock autoLock(mLock);
++
++    OMX_ERRORTYPE err = OMX_GetState(mHandle, state);
++    CLOG_IF_ERROR(getState, err, "");
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::enableNativeBuffers(
++        OMX_U32 portIndex, OMX_BOOL graphic, OMX_BOOL enable) {
++    if (portIndex >= NELEM(mSecureBufferType)) {
++        ALOGE("b/31385713, portIndex(%u)", portIndex);
++        android_errorWriteLog(0x534e4554, "31385713");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autoLock(mLock);
++    CLOG_CONFIG(enableNativeBuffers, "%s:%u%s, %d", portString(portIndex), portIndex,
++                graphic ? ", graphic" : "", enable);
++    OMX_STRING name = const_cast<OMX_STRING>(
++            graphic ? "OMX.google.android.index.enableAndroidNativeBuffers"
++                    : "OMX.google.android.index.allocateNativeHandle");
++
++    OMX_INDEXTYPE index;
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(mHandle, name, &index);
++
++    if (err == OMX_ErrorNone) {
++        EnableAndroidNativeBuffersParams params;
++        InitOMXParams(&params);
++        params.nPortIndex = portIndex;
++        params.enable = enable;
++
++        err = OMX_SetParameter(mHandle, index, &params);
++        CLOG_IF_ERROR(setParameter, err, "%s(%#x): %s:%u en=%d", name, index,
++                      portString(portIndex), portIndex, enable);
++        if (!graphic) {
++            if (err == OMX_ErrorNone) {
++                mSecureBufferType[portIndex] =
++                    enable ? kSecureBufferTypeNativeHandle : kSecureBufferTypeOpaque;
++            } else if (mSecureBufferType[portIndex] == kSecureBufferTypeUnknown) {
++                mSecureBufferType[portIndex] = kSecureBufferTypeOpaque;
++            }
++        } else {
++            if (err == OMX_ErrorNone) {
++                mGraphicBufferEnabled[portIndex] = enable;
++            } else if (enable) {
++                mGraphicBufferEnabled[portIndex] = false;
++            }
++        }
++    } else {
++        CLOG_ERROR_IF(enable, getExtensionIndex, err, "%s", name);
++        if (!graphic) {
++            // Extension not supported, check for manual override with system property
++            // This is a temporary workaround until partners support the OMX extension
++            char value[PROPERTY_VALUE_MAX];
++            if (property_get("media.mediadrmservice.enable", value, NULL)
++                && (!strcmp("1", value) || !strcasecmp("true", value))) {
++                CLOG_CONFIG(enableNativeBuffers, "system property override: using native-handles");
++                mSecureBufferType[portIndex] = kSecureBufferTypeNativeHandle;
++            } else if (mSecureBufferType[portIndex] == kSecureBufferTypeUnknown) {
++                mSecureBufferType[portIndex] = kSecureBufferTypeOpaque;
++            }
++            err = OMX_ErrorNone;
++        }
++    }
++
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::getGraphicBufferUsage(
++        OMX_U32 portIndex, OMX_U32* usage) {
++    Mutex::Autolock autoLock(mLock);
++
++    OMX_INDEXTYPE index;
++    OMX_STRING name = const_cast<OMX_STRING>(
++            "OMX.google.android.index.getAndroidNativeBufferUsage");
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(mHandle, name, &index);
++
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(getExtensionIndex, err, "%s", name);
++        return StatusFromOMXError(err);
++    }
++
++    GetAndroidNativeBufferUsageParams params;
++    InitOMXParams(&params);
++    params.nPortIndex = portIndex;
++
++    err = OMX_GetParameter(mHandle, index, &params);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(getParameter, err, "%s(%#x): %s:%u", name, index,
++                portString(portIndex), portIndex);
++        return StatusFromOMXError(err);
++    }
++
++    *usage = params.nUsage;
++
++    return OK;
++}
++
++status_t OMXNodeInstance::storeMetaDataInBuffers(
++        OMX_U32 portIndex, OMX_BOOL enable, MetadataBufferType *type) {
++    Mutex::Autolock autolock(mLock);
++    CLOG_CONFIG(storeMetaDataInBuffers, "%s:%u en:%d", portString(portIndex), portIndex, enable);
++    return storeMetaDataInBuffers_l(portIndex, enable, type);
++}
++
++status_t OMXNodeInstance::storeMetaDataInBuffers_l(
++        OMX_U32 portIndex, OMX_BOOL enable, MetadataBufferType *type) {
++    if (mSailed) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return INVALID_OPERATION;
++    }
++    if (portIndex != kPortIndexInput && portIndex != kPortIndexOutput) {
++        android_errorWriteLog(0x534e4554, "26324358");
++        if (type != NULL) {
++            *type = kMetadataBufferTypeInvalid;
++        }
++        return BAD_VALUE;
++    }
++
++    OMX_INDEXTYPE index;
++    OMX_STRING name = const_cast<OMX_STRING>(
++            "OMX.google.android.index.storeMetaDataInBuffers");
++
++    OMX_STRING nativeBufferName = const_cast<OMX_STRING>(
++            "OMX.google.android.index.storeANWBufferInMetadata");
++    MetadataBufferType negotiatedType;
++    MetadataBufferType requestedType = type != NULL ? *type : kMetadataBufferTypeANWBuffer;
++
++    StoreMetaDataInBuffersParams params;
++    InitOMXParams(&params);
++    params.nPortIndex = portIndex;
++    params.bStoreMetaData = enable;
++
++    OMX_ERRORTYPE err =
++        requestedType == kMetadataBufferTypeANWBuffer
++                ? OMX_GetExtensionIndex(mHandle, nativeBufferName, &index)
++                : OMX_ErrorUnsupportedIndex;
++    OMX_ERRORTYPE xerr = err;
++    if (err == OMX_ErrorNone) {
++        err = OMX_SetParameter(mHandle, index, &params);
++        if (err == OMX_ErrorNone) {
++            name = nativeBufferName; // set name for debugging
++            negotiatedType = requestedType;
++        }
++    }
++    if (err != OMX_ErrorNone) {
++        err = OMX_GetExtensionIndex(mHandle, name, &index);
++        xerr = err;
++        if (err == OMX_ErrorNone) {
++            negotiatedType =
++                requestedType == kMetadataBufferTypeANWBuffer
++                        ? kMetadataBufferTypeGrallocSource : requestedType;
++            err = OMX_SetParameter(mHandle, index, &params);
++        }
++    }
++
++    // don't log loud error if component does not support metadata mode on the output
++    if (err != OMX_ErrorNone) {
++        if (err == OMX_ErrorUnsupportedIndex && portIndex == kPortIndexOutput) {
++            CLOGW("component does not support metadata mode; using fallback");
++        } else if (xerr != OMX_ErrorNone) {
++            CLOG_ERROR(getExtensionIndex, xerr, "%s", name);
++        } else {
++            CLOG_ERROR(setParameter, err, "%s(%#x): %s:%u en=%d type=%d", name, index,
++                    portString(portIndex), portIndex, enable, negotiatedType);
++        }
++        negotiatedType = mMetadataType[portIndex];
++    } else {
++        if (!enable) {
++            negotiatedType = kMetadataBufferTypeInvalid;
++        }
++        mMetadataType[portIndex] = negotiatedType;
++    }
++    CLOG_CONFIG(storeMetaDataInBuffers, "%s:%u %srequested %s:%d negotiated %s:%d",
++            portString(portIndex), portIndex, enable ? "" : "UN",
++            asString(requestedType), requestedType, asString(negotiatedType), negotiatedType);
++
++    if (type != NULL) {
++        *type = negotiatedType;
++    }
++
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::prepareForAdaptivePlayback(
++        OMX_U32 portIndex, OMX_BOOL enable, OMX_U32 maxFrameWidth,
++        OMX_U32 maxFrameHeight) {
++    Mutex::Autolock autolock(mLock);
++    if (mSailed) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return INVALID_OPERATION;
++    }
++    CLOG_CONFIG(prepareForAdaptivePlayback, "%s:%u en=%d max=%ux%u",
++            portString(portIndex), portIndex, enable, maxFrameWidth, maxFrameHeight);
++
++    OMX_INDEXTYPE index;
++    OMX_STRING name = const_cast<OMX_STRING>(
++            "OMX.google.android.index.prepareForAdaptivePlayback");
++
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(mHandle, name, &index);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR_IF(enable, getExtensionIndex, err, "%s", name);
++        return StatusFromOMXError(err);
++    }
++
++    PrepareForAdaptivePlaybackParams params;
++    InitOMXParams(&params);
++    params.nPortIndex = portIndex;
++    params.bEnable = enable;
++    params.nMaxFrameWidth = maxFrameWidth;
++    params.nMaxFrameHeight = maxFrameHeight;
++
++    err = OMX_SetParameter(mHandle, index, &params);
++    CLOG_IF_ERROR(setParameter, err, "%s(%#x): %s:%u en=%d max=%ux%u", name, index,
++            portString(portIndex), portIndex, enable, maxFrameWidth, maxFrameHeight);
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::configureVideoTunnelMode(
++        OMX_U32 portIndex, OMX_BOOL tunneled, OMX_U32 audioHwSync,
++        native_handle_t **sidebandHandle) {
++    Mutex::Autolock autolock(mLock);
++    if (mSailed) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return INVALID_OPERATION;
++    }
++    CLOG_CONFIG(configureVideoTunnelMode, "%s:%u tun=%d sync=%u",
++            portString(portIndex), portIndex, tunneled, audioHwSync);
++
++    OMX_INDEXTYPE index;
++    OMX_STRING name = const_cast<OMX_STRING>(
++            "OMX.google.android.index.configureVideoTunnelMode");
++
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(mHandle, name, &index);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR_IF(tunneled, getExtensionIndex, err, "%s", name);
++        return StatusFromOMXError(err);
++    }
++
++    ConfigureVideoTunnelModeParams tunnelParams;
++    InitOMXParams(&tunnelParams);
++    tunnelParams.nPortIndex = portIndex;
++    tunnelParams.bTunneled = tunneled;
++    tunnelParams.nAudioHwSync = audioHwSync;
++    err = OMX_SetParameter(mHandle, index, &tunnelParams);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(setParameter, err, "%s(%#x): %s:%u tun=%d sync=%u", name, index,
++                portString(portIndex), portIndex, tunneled, audioHwSync);
++        return StatusFromOMXError(err);
++    }
++
++    err = OMX_GetParameter(mHandle, index, &tunnelParams);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(getParameter, err, "%s(%#x): %s:%u tun=%d sync=%u", name, index,
++                portString(portIndex), portIndex, tunneled, audioHwSync);
++        return StatusFromOMXError(err);
++    }
++    if (sidebandHandle) {
++        *sidebandHandle = (native_handle_t*)tunnelParams.pSidebandWindow;
++    }
++
++    return OK;
++}
++
++status_t OMXNodeInstance::useBuffer(
++        OMX_U32 portIndex, const sp<IMemory> &params,
++        OMX::buffer_id *buffer, OMX_U32 allottedSize) {
++    if (params == NULL || buffer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autoLock(mLock);
++    if (allottedSize > params->size() || portIndex >= NELEM(mNumPortBuffers)) {
++        return BAD_VALUE;
++    }
++
++    if (!mSailed) {
++        ALOGE("b/35467458");
++        android_errorWriteLog(0x534e4554, "35467458");
++        return BAD_VALUE;
++    }
++
++<<<<<<< HEAD
++    // metadata buffers are not connected cross process
++    // use a backup buffer instead of the actual buffer
++    BufferMeta *buffer_meta;
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    bool useBackup = false;
++#else
++    bool useBackup = mMetadataType[portIndex] != kMetadataBufferTypeInvalid;
++#endif
++    OMX_U8 *data = static_cast<OMX_U8 *>(params->pointer());
++    // allocate backup buffer
++    if (useBackup) {
++        data = new (std::nothrow) OMX_U8[allottedSize];
++        if (data == NULL) {
++            return NO_MEMORY;
++=======
++    switch (omxBuffer.mBufferType) {
++        case OMXBuffer::kBufferTypePreset:
++            return useBuffer_l(portIndex, NULL, NULL, buffer);
++
++        case OMXBuffer::kBufferTypeSharedMem:
++            return useBuffer_l(portIndex, omxBuffer.mMem, NULL, buffer);
++
++        case OMXBuffer::kBufferTypeANWBuffer:
++            return useGraphicBuffer_l(portIndex, omxBuffer.mGraphicBuffer, buffer);
++
++        case OMXBuffer::kBufferTypeHidlMemory: {
++                sp<IHidlMemory> hidlMemory = mapMemory(omxBuffer.mHidlMemory);
++                return useBuffer_l(portIndex, NULL, hidlMemory, buffer);
++            }
++        default:
++            break;
++    }
++
++    return BAD_VALUE;
++}
++
++status_t OMXNodeInstance::useBuffer_l(
++        OMX_U32 portIndex, const sp<IMemory> &params,
++        const sp<IHidlMemory> &hParams, IOMX::buffer_id *buffer) {
++
++    BufferMeta *buffer_meta;
++    OMX_BUFFERHEADERTYPE *header;
++    OMX_ERRORTYPE err = OMX_ErrorNone;
++    bool isMetadata = mMetadataType[portIndex] != kMetadataBufferTypeInvalid;
++
++    if (!isMetadata && mGraphicBufferEnabled[portIndex]) {
++        ALOGE("b/62948670");
++        android_errorWriteLog(0x534e4554, "62948670");
++        return INVALID_OPERATION;
++    }
++
++    size_t paramsSize;
++    void* paramsPointer;
++    if (params != NULL && hParams != NULL) {
++        return BAD_VALUE;
++    }
++    if (params != NULL) {
++        paramsPointer = params->pointer();
++        paramsSize = params->size();
++    } else if (hParams != NULL) {
++        paramsPointer = hParams->getPointer();
++        paramsSize = hParams->getSize();
++    } else {
++        paramsPointer = nullptr;
++    }
++
++    OMX_U32 allottedSize;
++    if (isMetadata) {
++        if (mMetadataType[portIndex] == kMetadataBufferTypeGrallocSource) {
++            allottedSize = sizeof(VideoGrallocMetadata);
++        } else if (mMetadataType[portIndex] == kMetadataBufferTypeANWBuffer) {
++            allottedSize = sizeof(VideoNativeMetadata);
++        } else if (mMetadataType[portIndex] == kMetadataBufferTypeNativeHandleSource) {
++            allottedSize = sizeof(VideoNativeHandleMetadata);
++        } else {
++            return BAD_VALUE;
++>>>>>>> f630233... Track graphic buffer mode in OMXNodeInstance
++        }
++        memset(data, 0, allottedSize);
++
++        buffer_meta = new BufferMeta(
++                params, portIndex, false /* copyToOmx */, false /* copyFromOmx */, data);
++    } else {
++        buffer_meta = new BufferMeta(
++                params, portIndex, false /* copyToOmx */, false /* copyFromOmx */, NULL);
++    }
++
++    OMX_BUFFERHEADERTYPE *header;
++
++    OMX_ERRORTYPE err = OMX_UseBuffer(
++            mHandle, &header, portIndex, buffer_meta,
++            allottedSize, data);
++
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(useBuffer, err, SIMPLE_BUFFER(
++                portIndex, (size_t)allottedSize, data));
++
++        delete buffer_meta;
++        buffer_meta = NULL;
++
++        *buffer = 0;
++
++        return StatusFromOMXError(err);
++    }
++
++    CHECK_EQ(header->pAppPrivate, buffer_meta);
++
++    *buffer = makeBufferID(header);
++
++    addActiveBuffer(portIndex, *buffer);
++
++    sp<GraphicBufferSource> bufferSource(getGraphicBufferSource());
++    if (bufferSource != NULL && portIndex == kPortIndexInput) {
++        bufferSource->addCodecBuffer(header);
++    }
++
++    CLOG_BUFFER(useBuffer, NEW_BUFFER_FMT(
++            *buffer, portIndex, "%u(%zu)@%p", allottedSize, params->size(), params->pointer()));
++    return OK;
++}
++
++status_t OMXNodeInstance::useGraphicBuffer2_l(
++        OMX_U32 portIndex, const sp<GraphicBuffer>& graphicBuffer,
++        OMX::buffer_id *buffer) {
++    if (graphicBuffer == NULL || buffer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    // port definition
++    OMX_PARAM_PORTDEFINITIONTYPE def;
++    InitOMXParams(&def);
++    def.nPortIndex = portIndex;
++    OMX_ERRORTYPE err = OMX_GetParameter(mHandle, OMX_IndexParamPortDefinition, &def);
++    if (err != OMX_ErrorNone) {
++        OMX_INDEXTYPE index = OMX_IndexParamPortDefinition;
++        CLOG_ERROR(getParameter, err, "%s(%#x): %s:%u",
++                asString(index), index, portString(portIndex), portIndex);
++        return UNKNOWN_ERROR;
++    }
++
++    BufferMeta *bufferMeta = new BufferMeta(graphicBuffer, portIndex);
++
++    OMX_BUFFERHEADERTYPE *header = NULL;
++    OMX_U8* bufferHandle = const_cast<OMX_U8*>(
++            reinterpret_cast<const OMX_U8*>(graphicBuffer->handle));
++
++    err = OMX_UseBuffer(
++            mHandle,
++            &header,
++            portIndex,
++            bufferMeta,
++            def.nBufferSize,
++            bufferHandle);
++
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(useBuffer, err, BUFFER_FMT(portIndex, "%u@%p", def.nBufferSize, bufferHandle));
++        delete bufferMeta;
++        bufferMeta = NULL;
++        *buffer = 0;
++        return StatusFromOMXError(err);
++    }
++
++    CHECK_EQ(header->pBuffer, bufferHandle);
++    CHECK_EQ(header->pAppPrivate, bufferMeta);
++
++    *buffer = makeBufferID(header);
++
++    addActiveBuffer(portIndex, *buffer);
++    CLOG_BUFFER(useGraphicBuffer2, NEW_BUFFER_FMT(
++            *buffer, portIndex, "%u@%p", def.nBufferSize, bufferHandle));
++    return OK;
++}
++
++// XXX: This function is here for backwards compatibility.  Once the OMX
++// implementations have been updated this can be removed and useGraphicBuffer2
++// can be renamed to useGraphicBuffer.
++status_t OMXNodeInstance::useGraphicBuffer(
++        OMX_U32 portIndex, const sp<GraphicBuffer>& graphicBuffer,
++        OMX::buffer_id *buffer) {
++    if (graphicBuffer == NULL || buffer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++    Mutex::Autolock autoLock(mLock);
++
++    if (!mGraphicBufferEnabled[portIndex]) {
++        // Report error if this is not in graphic buffer mode.
++        ALOGE("b/62948670");
++        android_errorWriteLog(0x534e4554, "62948670");
++        return INVALID_OPERATION;
++    }
++
++    // See if the newer version of the extension is present.
++    OMX_INDEXTYPE index;
++    if (OMX_GetExtensionIndex(
++            mHandle,
++            const_cast<OMX_STRING>("OMX.google.android.index.useAndroidNativeBuffer2"),
++            &index) == OMX_ErrorNone) {
++        return useGraphicBuffer2_l(portIndex, graphicBuffer, buffer);
++    }
++
++    OMX_STRING name = const_cast<OMX_STRING>(
++        "OMX.google.android.index.useAndroidNativeBuffer");
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(mHandle, name, &index);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(getExtensionIndex, err, "%s", name);
++        return StatusFromOMXError(err);
++    }
++
++    BufferMeta *bufferMeta = new BufferMeta(graphicBuffer, portIndex);
++
++    OMX_BUFFERHEADERTYPE *header;
++
++    OMX_VERSIONTYPE ver;
++    ver.s.nVersionMajor = 1;
++    ver.s.nVersionMinor = 0;
++    ver.s.nRevision = 0;
++    ver.s.nStep = 0;
++    UseAndroidNativeBufferParams params = {
++        sizeof(UseAndroidNativeBufferParams), ver, portIndex, bufferMeta,
++        &header, graphicBuffer,
++    };
++
++    err = OMX_SetParameter(mHandle, index, &params);
++
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(setParameter, err, "%s(%#x): %s:%u meta=%p GB=%p", name, index,
++                portString(portIndex), portIndex, bufferMeta, graphicBuffer->handle);
++
++        delete bufferMeta;
++        bufferMeta = NULL;
++
++        *buffer = 0;
++
++        return StatusFromOMXError(err);
++    }
++
++    CHECK_EQ(header->pAppPrivate, bufferMeta);
++
++    *buffer = makeBufferID(header);
++
++    addActiveBuffer(portIndex, *buffer);
++    CLOG_BUFFER(useGraphicBuffer, NEW_BUFFER_FMT(
++            *buffer, portIndex, "GB=%p", graphicBuffer->handle));
++    return OK;
++}
++
++status_t OMXNodeInstance::updateGraphicBufferInMeta_l(
++        OMX_U32 portIndex, const sp<GraphicBuffer>& graphicBuffer,
++        OMX::buffer_id buffer, OMX_BUFFERHEADERTYPE *header, bool updateCodecBuffer) {
++    // No need to check |graphicBuffer| since NULL is valid for it as below.
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    if (portIndex != kPortIndexInput && portIndex != kPortIndexOutput) {
++        return BAD_VALUE;
++    }
++
++    BufferMeta *bufferMeta = (BufferMeta *)(header->pAppPrivate);
++    sp<ABuffer> data = bufferMeta->getBuffer(
++            header, !updateCodecBuffer /* backup */, false /* limit */);
++    bufferMeta->setGraphicBuffer(graphicBuffer);
++    MetadataBufferType metaType = mMetadataType[portIndex];
++    // we use gralloc source only in the codec buffers
++    if (metaType == kMetadataBufferTypeGrallocSource && !updateCodecBuffer) {
++        metaType = kMetadataBufferTypeANWBuffer;
++    }
++    if (metaType == kMetadataBufferTypeGrallocSource
++            && data->capacity() >= sizeof(VideoGrallocMetadata)) {
++        VideoGrallocMetadata &metadata = *(VideoGrallocMetadata *)(data->data());
++        metadata.eType = kMetadataBufferTypeGrallocSource;
++        metadata.pHandle = graphicBuffer == NULL ? NULL : graphicBuffer->handle;
++    } else if (metaType == kMetadataBufferTypeANWBuffer
++            && data->capacity() >= sizeof(VideoNativeMetadata)) {
++        VideoNativeMetadata &metadata = *(VideoNativeMetadata *)(data->data());
++        metadata.eType = kMetadataBufferTypeANWBuffer;
++        metadata.pBuffer = graphicBuffer == NULL ? NULL : graphicBuffer->getNativeBuffer();
++        metadata.nFenceFd = -1;
++    } else {
++        CLOG_ERROR(updateGraphicBufferInMeta, BAD_VALUE, "%s:%u, %#x bad type (%d) or size (%u)",
++            portString(portIndex), portIndex, buffer, mMetadataType[portIndex], header->nAllocLen);
++        return BAD_VALUE;
++    }
++
++    CLOG_BUFFER(updateGraphicBufferInMeta, "%s:%u, %#x := %p",
++            portString(portIndex), portIndex, buffer,
++            graphicBuffer == NULL ? NULL : graphicBuffer->handle);
++    return OK;
++}
++
++status_t OMXNodeInstance::updateGraphicBufferInMeta(
++        OMX_U32 portIndex, const sp<GraphicBuffer>& graphicBuffer,
++        OMX::buffer_id buffer) {
++    Mutex::Autolock autoLock(mLock);
++    OMX_BUFFERHEADERTYPE *header = findBufferHeader(buffer, portIndex);
++    // update backup buffer for input, codec buffer for output
++    return updateGraphicBufferInMeta_l(
++            portIndex, graphicBuffer, buffer, header,
++            true /* updateCodecBuffer */);
++}
++
++status_t OMXNodeInstance::updateNativeHandleInMeta(
++        OMX_U32 portIndex, const sp<NativeHandle>& nativeHandle, OMX::buffer_id buffer) {
++    Mutex::Autolock autoLock(mLock);
++    OMX_BUFFERHEADERTYPE *header = findBufferHeader(buffer, portIndex);
++    // No need to check |nativeHandle| since NULL is valid for it as below.
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    if (portIndex != kPortIndexInput && portIndex != kPortIndexOutput) {
++        return BAD_VALUE;
++    }
++
++    BufferMeta *bufferMeta = (BufferMeta *)(header->pAppPrivate);
++    // update backup buffer
++    sp<ABuffer> data = bufferMeta->getBuffer(
++            header, false /* backup */, false /* limit */);
++    bufferMeta->setNativeHandle(nativeHandle);
++    if (mMetadataType[portIndex] == kMetadataBufferTypeNativeHandleSource
++            && data->capacity() >= sizeof(VideoNativeHandleMetadata)) {
++        VideoNativeHandleMetadata &metadata = *(VideoNativeHandleMetadata *)(data->data());
++        metadata.eType = mMetadataType[portIndex];
++        metadata.pHandle =
++            nativeHandle == NULL ? NULL : const_cast<native_handle*>(nativeHandle->handle());
++    } else {
++        CLOG_ERROR(updateNativeHandleInMeta, BAD_VALUE, "%s:%u, %#x bad type (%d) or size (%zu)",
++            portString(portIndex), portIndex, buffer, mMetadataType[portIndex], data->capacity());
++        return BAD_VALUE;
++    }
++
++    CLOG_BUFFER(updateNativeHandleInMeta, "%s:%u, %#x := %p",
++            portString(portIndex), portIndex, buffer,
++            nativeHandle == NULL ? NULL : nativeHandle->handle());
++    return OK;
++}
++
++status_t OMXNodeInstance::createGraphicBufferSource(
++        OMX_U32 portIndex, sp<IGraphicBufferConsumer> bufferConsumer, MetadataBufferType *type) {
++    status_t err;
++
++    // only allow graphic source on input port, when there are no allocated buffers yet
++    if (portIndex != kPortIndexInput) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return BAD_VALUE;
++    } else if (mNumPortBuffers[portIndex] > 0) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return INVALID_OPERATION;
++    }
++
++    const sp<GraphicBufferSource> surfaceCheck = getGraphicBufferSource();
++    if (surfaceCheck != NULL) {
++        if (portIndex < NELEM(mMetadataType) && type != NULL) {
++            *type = mMetadataType[portIndex];
++        }
++        return ALREADY_EXISTS;
++    }
++
++    // Input buffers will hold meta-data (ANativeWindowBuffer references).
++    if (type != NULL) {
++        *type = kMetadataBufferTypeANWBuffer;
++    }
++    err = storeMetaDataInBuffers_l(portIndex, OMX_TRUE, type);
++    if (err != OK) {
++        return err;
++    }
++
++    // Retrieve the width and height of the graphic buffer, set when the
++    // codec was configured.
++    OMX_PARAM_PORTDEFINITIONTYPE def;
++    InitOMXParams(&def);
++    def.nPortIndex = portIndex;
++    OMX_ERRORTYPE oerr = OMX_GetParameter(
++            mHandle, OMX_IndexParamPortDefinition, &def);
++    if (oerr != OMX_ErrorNone) {
++        OMX_INDEXTYPE index = OMX_IndexParamPortDefinition;
++        CLOG_ERROR(getParameter, oerr, "%s(%#x): %s:%u",
++                asString(index), index, portString(portIndex), portIndex);
++        return UNKNOWN_ERROR;
++    }
++
++    if (def.format.video.eColorFormat != OMX_COLOR_FormatAndroidOpaque) {
++        CLOGW("createInputSurface requires COLOR_FormatSurface "
++                "(AndroidOpaque) color format instead of %s(%#x)",
++                asString(def.format.video.eColorFormat), def.format.video.eColorFormat);
++        return INVALID_OPERATION;
++    }
++
++    uint32_t usageBits;
++    oerr = OMX_GetParameter(
++            mHandle, (OMX_INDEXTYPE)OMX_IndexParamConsumerUsageBits, &usageBits);
++    if (oerr != OMX_ErrorNone) {
++        usageBits = 0;
++    }
++
++    sp<GraphicBufferSource> bufferSource = new GraphicBufferSource(this,
++            def.format.video.nFrameWidth,
++            def.format.video.nFrameHeight,
++            def.nBufferCountActual,
++            usageBits,
++            bufferConsumer);
++
++    if ((err = bufferSource->init()) != OK) {
++        return err;
++    }
++    setGraphicBufferSource(bufferSource);
++
++    return OK;
++}
++
++status_t OMXNodeInstance::createInputSurface(
++        OMX_U32 portIndex, android_dataspace dataSpace,
++        sp<IGraphicBufferProducer> *bufferProducer, MetadataBufferType *type) {
++    if (bufferProducer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autolock(mLock);
++    status_t err = createGraphicBufferSource(portIndex, NULL /* bufferConsumer */, type);
++
++    if (err != OK) {
++        return err;
++    }
++
++    mGraphicBufferSource->setDefaultDataSpace(dataSpace);
++
++    *bufferProducer = mGraphicBufferSource->getIGraphicBufferProducer();
++    return OK;
++}
++
++//static
++status_t OMXNodeInstance::createPersistentInputSurface(
++        sp<IGraphicBufferProducer> *bufferProducer,
++        sp<IGraphicBufferConsumer> *bufferConsumer) {
++    if (bufferProducer == NULL || bufferConsumer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++    String8 name("GraphicBufferSource");
++
++    sp<IGraphicBufferProducer> producer;
++    sp<IGraphicBufferConsumer> consumer;
++    BufferQueue::createBufferQueue(&producer, &consumer);
++    consumer->setConsumerName(name);
++    consumer->setConsumerUsageBits(GRALLOC_USAGE_HW_VIDEO_ENCODER);
++
++    sp<BufferQueue::ProxyConsumerListener> proxy =
++        new BufferQueue::ProxyConsumerListener(NULL);
++    status_t err = consumer->consumerConnect(proxy, false);
++    if (err != NO_ERROR) {
++        ALOGE("Error connecting to BufferQueue: %s (%d)",
++                strerror(-err), err);
++        return err;
++    }
++
++    *bufferProducer = producer;
++    *bufferConsumer = consumer;
++
++    return OK;
++}
++
++status_t OMXNodeInstance::setInputSurface(
++        OMX_U32 portIndex, const sp<IGraphicBufferConsumer> &bufferConsumer,
++        MetadataBufferType *type) {
++    Mutex::Autolock autolock(mLock);
++    return createGraphicBufferSource(portIndex, bufferConsumer, type);
++}
++
++void OMXNodeInstance::signalEvent(OMX_EVENTTYPE event, OMX_U32 arg1, OMX_U32 arg2) {
++    mOwner->OnEvent(mNodeID, event, arg1, arg2, NULL);
++}
++
++status_t OMXNodeInstance::signalEndOfInputStream() {
++    // For non-Surface input, the MediaCodec should convert the call to a
++    // pair of requests (dequeue input buffer, queue input buffer with EOS
++    // flag set).  Seems easier than doing the equivalent from here.
++    sp<GraphicBufferSource> bufferSource(getGraphicBufferSource());
++    if (bufferSource == NULL) {
++        CLOGW("signalEndOfInputStream can only be used with Surface input");
++        return INVALID_OPERATION;
++    }
++    return bufferSource->signalEndOfInputStream();
++}
++
++status_t OMXNodeInstance::allocateSecureBuffer(
++        OMX_U32 portIndex, size_t size, OMX::buffer_id *buffer,
++        void **buffer_data, sp<NativeHandle> *native_handle) {
++    if (buffer == NULL || buffer_data == NULL || native_handle == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    if (portIndex >= NELEM(mSecureBufferType)) {
++        ALOGE("b/31385713, portIndex(%u)", portIndex);
++        android_errorWriteLog(0x534e4554, "31385713");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autoLock(mLock);
++
++    if (!mSailed) {
++        ALOGE("b/35467458");
++        android_errorWriteLog(0x534e4554, "35467458");
++        return BAD_VALUE;
++    }
++
++    BufferMeta *buffer_meta = new BufferMeta(size, portIndex);
++
++    OMX_BUFFERHEADERTYPE *header;
++
++    OMX_ERRORTYPE err = OMX_AllocateBuffer(
++            mHandle, &header, portIndex, buffer_meta, size);
++
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(allocateBuffer, err, BUFFER_FMT(portIndex, "%zu@", size));
++        delete buffer_meta;
++        buffer_meta = NULL;
++
++        *buffer = 0;
++
++        return StatusFromOMXError(err);
++    }
++
++    CHECK_EQ(header->pAppPrivate, buffer_meta);
++
++    *buffer = makeBufferID(header);
++    if (mSecureBufferType[portIndex] == kSecureBufferTypeNativeHandle) {
++        *buffer_data = NULL;
++        *native_handle = NativeHandle::create(
++                (native_handle_t *)header->pBuffer, false /* ownsHandle */);
++    } else {
++        *buffer_data = header->pBuffer;
++        *native_handle = NULL;
++    }
++
++    addActiveBuffer(portIndex, *buffer);
++
++    sp<GraphicBufferSource> bufferSource(getGraphicBufferSource());
++    if (bufferSource != NULL && portIndex == kPortIndexInput) {
++        bufferSource->addCodecBuffer(header);
++    }
++    CLOG_BUFFER(allocateSecureBuffer, NEW_BUFFER_FMT(
++            *buffer, portIndex, "%zu@%p:%p", size, *buffer_data,
++            *native_handle == NULL ? NULL : (*native_handle)->handle()));
++
++    return OK;
++}
++
++status_t OMXNodeInstance::allocateBufferWithBackup(
++        OMX_U32 portIndex, const sp<IMemory> &params,
++        OMX::buffer_id *buffer, OMX_U32 allottedSize) {
++    if (params == NULL || buffer == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autoLock(mLock);
++    if (allottedSize > params->size() || portIndex >= NELEM(mNumPortBuffers)) {
++        return BAD_VALUE;
++    }
++
++    if (!mSailed) {
++        ALOGE("b/35467458");
++        android_errorWriteLog(0x534e4554, "35467458");
++        return BAD_VALUE;
++    }
++
++    // metadata buffers are not connected cross process; only copy if not meta
++#ifdef CAMCORDER_GRALLOC_SOURCE
++    bool copy = true;
++#else
++    bool copy = mMetadataType[portIndex] == kMetadataBufferTypeInvalid;
++#endif
++
++    BufferMeta *buffer_meta = new BufferMeta(
++            params, portIndex,
++            (portIndex == kPortIndexInput) && copy /* copyToOmx */,
++            (portIndex == kPortIndexOutput) && copy /* copyFromOmx */,
++            NULL /* data */);
++
++    OMX_BUFFERHEADERTYPE *header;
++
++    OMX_ERRORTYPE err = OMX_AllocateBuffer(
++            mHandle, &header, portIndex, buffer_meta, allottedSize);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(allocateBufferWithBackup, err,
++                SIMPLE_BUFFER(portIndex, (size_t)allottedSize, params->pointer()));
++        delete buffer_meta;
++        buffer_meta = NULL;
++
++        *buffer = 0;
++
++        return StatusFromOMXError(err);
++    }
++
++    CHECK_EQ(header->pAppPrivate, buffer_meta);
++
++    *buffer = makeBufferID(header);
++
++    addActiveBuffer(portIndex, *buffer);
++
++    sp<GraphicBufferSource> bufferSource(getGraphicBufferSource());
++    if (bufferSource != NULL && portIndex == kPortIndexInput) {
++        bufferSource->addCodecBuffer(header);
++    }
++
++    CLOG_BUFFER(allocateBufferWithBackup, NEW_BUFFER_FMT(*buffer, portIndex, "%zu@%p :> %u@%p",
++            params->size(), params->pointer(), allottedSize, header->pBuffer));
++
++    return OK;
++}
++
++status_t OMXNodeInstance::freeBuffer(
++        OMX_U32 portIndex, OMX::buffer_id buffer) {
++    Mutex::Autolock autoLock(mLock);
++    CLOG_BUFFER(freeBuffer, "%s:%u %#x", portString(portIndex), portIndex, buffer);
++
++    removeActiveBuffer(portIndex, buffer);
++
++    OMX_BUFFERHEADERTYPE *header = findBufferHeader(buffer, portIndex);
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++    BufferMeta *buffer_meta = static_cast<BufferMeta *>(header->pAppPrivate);
++
++    OMX_ERRORTYPE err = OMX_FreeBuffer(mHandle, portIndex, header);
++    CLOG_IF_ERROR(freeBuffer, err, "%s:%u %#x", portString(portIndex), portIndex, buffer);
++
++    delete buffer_meta;
++    buffer_meta = NULL;
++    invalidateBufferID(buffer);
++
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::fillBuffer(OMX::buffer_id buffer, int fenceFd) {
++    Mutex::Autolock autoLock(mLock);
++
++    OMX_BUFFERHEADERTYPE *header = findBufferHeader(buffer, kPortIndexOutput);
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++    header->nFilledLen = 0;
++    header->nOffset = 0;
++    header->nFlags = 0;
++
++    // meta now owns fenceFd
++    status_t res = storeFenceInMeta_l(header, fenceFd, kPortIndexOutput);
++    if (res != OK) {
++        CLOG_ERROR(fillBuffer::storeFenceInMeta, res, EMPTY_BUFFER(buffer, header, fenceFd));
++        return res;
++    }
++
++    {
++        Mutex::Autolock _l(mDebugLock);
++        mOutputBuffersWithCodec.add(header);
++        CLOG_BUMPED_BUFFER(fillBuffer, WITH_STATS(EMPTY_BUFFER(buffer, header, fenceFd)));
++    }
++
++    OMX_ERRORTYPE err = OMX_FillThisBuffer(mHandle, header);
++    if (err != OMX_ErrorNone) {
++        CLOG_ERROR(fillBuffer, err, EMPTY_BUFFER(buffer, header, fenceFd));
++        Mutex::Autolock _l(mDebugLock);
++        mOutputBuffersWithCodec.remove(header);
++    }
++    return StatusFromOMXError(err);
++}
++
++status_t OMXNodeInstance::emptyBuffer(
++        OMX::buffer_id buffer,
++        OMX_U32 rangeOffset, OMX_U32 rangeLength,
++        OMX_U32 flags, OMX_TICKS timestamp, int fenceFd) {
++    Mutex::Autolock autoLock(mLock);
++
++    // no emptybuffer if using input surface
++    if (getGraphicBufferSource() != NULL) {
++        android_errorWriteLog(0x534e4554, "29422020");
++        return INVALID_OPERATION;
++    }
++
++    OMX_BUFFERHEADERTYPE *header = findBufferHeader(buffer, kPortIndexInput);
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++    BufferMeta *buffer_meta =
++        static_cast<BufferMeta *>(header->pAppPrivate);
++
++#ifndef CAMCORDER_GRALLOC_SOURCE
++    // set up proper filled length if component is configured for gralloc metadata mode
++    // ignore rangeOffset in this case (as client may be assuming ANW meta buffers).
++    if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource) {
++        header->nFilledLen = rangeLength ? sizeof(VideoGrallocMetadata) : 0;
++#else
++    sp<ABuffer> backup = buffer_meta->getBuffer(header, true /* backup */, false /* limit */);
++    sp<ABuffer> codec = buffer_meta->getBuffer(header, false /* backup */, false /* limit */);
++
++    // convert incoming ANW meta buffers if component is configured for gralloc metadata mode
++    // ignore rangeOffset in this case
++    if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource
++            && backup->capacity() >= sizeof(VideoNativeMetadata)
++            && codec->capacity() >= sizeof(VideoGrallocMetadata)
++            && ((VideoNativeMetadata *)backup->base())->eType
++                    == kMetadataBufferTypeANWBuffer) {
++        VideoNativeMetadata &backupMeta = *(VideoNativeMetadata *)backup->base();
++        VideoGrallocMetadata &codecMeta = *(VideoGrallocMetadata *)codec->base();
++        CLOG_BUFFER(emptyBuffer, "converting ANWB %p to handle %p",
++                backupMeta.pBuffer, backupMeta.pBuffer->handle);
++        codecMeta.pHandle = backupMeta.pBuffer != NULL ? backupMeta.pBuffer->handle : NULL;
++        codecMeta.eType = kMetadataBufferTypeGrallocSource;
++        header->nFilledLen = rangeLength ? sizeof(codecMeta) : 0;
++#endif
++        header->nOffset = 0;
++    } else {
++        // rangeLength and rangeOffset must be a subset of the allocated data in the buffer.
++        // corner case: we permit rangeOffset == end-of-buffer with rangeLength == 0.
++        if (rangeOffset > header->nAllocLen
++                || rangeLength > header->nAllocLen - rangeOffset) {
++            CLOG_ERROR(emptyBuffer, OMX_ErrorBadParameter, FULL_BUFFER(NULL, header, fenceFd));
++            if (fenceFd >= 0) {
++                ::close(fenceFd);
++            }
++            return BAD_VALUE;
++        }
++        header->nFilledLen = rangeLength;
++        header->nOffset = rangeOffset;
++
++        buffer_meta->CopyToOMX(header);
++    }
++
++    return emptyBuffer_l(header, flags, timestamp, (intptr_t)buffer, fenceFd);
++}
++
++// log queued buffer activity for the next few input and/or output frames
++// if logging at internal state level
++void OMXNodeInstance::bumpDebugLevel_l(size_t numInputBuffers, size_t numOutputBuffers) {
++    if (DEBUG == ADebug::kDebugInternalState) {
++        DEBUG_BUMP = ADebug::kDebugAll;
++        if (numInputBuffers > 0) {
++            mDebugLevelBumpPendingBuffers[kPortIndexInput] = numInputBuffers;
++        }
++        if (numOutputBuffers > 0) {
++            mDebugLevelBumpPendingBuffers[kPortIndexOutput] = numOutputBuffers;
++        }
++    }
++}
++
++void OMXNodeInstance::unbumpDebugLevel_l(size_t portIndex) {
++    if (mDebugLevelBumpPendingBuffers[portIndex]) {
++        --mDebugLevelBumpPendingBuffers[portIndex];
++    }
++    if (!mDebugLevelBumpPendingBuffers[0]
++            && !mDebugLevelBumpPendingBuffers[1]) {
++        DEBUG_BUMP = DEBUG;
++    }
++}
++
++status_t OMXNodeInstance::storeFenceInMeta_l(
++        OMX_BUFFERHEADERTYPE *header, int fenceFd, OMX_U32 portIndex) {
++    // propagate fence if component supports it; wait for it otherwise
++    OMX_U32 metaSize = portIndex == kPortIndexInput ? header->nFilledLen : header->nAllocLen;
++    if (mMetadataType[portIndex] == kMetadataBufferTypeANWBuffer
++            && metaSize >= sizeof(VideoNativeMetadata)) {
++        VideoNativeMetadata &nativeMeta = *(VideoNativeMetadata *)(header->pBuffer);
++        if (nativeMeta.nFenceFd >= 0) {
++            ALOGE("fence (%d) already exists in meta", nativeMeta.nFenceFd);
++            if (fenceFd >= 0) {
++                ::close(fenceFd);
++            }
++            return ALREADY_EXISTS;
++        }
++        nativeMeta.nFenceFd = fenceFd;
++    } else if (fenceFd >= 0) {
++        CLOG_BUFFER(storeFenceInMeta, "waiting for fence %d", fenceFd);
++        sp<Fence> fence = new Fence(fenceFd);
++        return fence->wait(IOMX::kFenceTimeoutMs);
++    }
++    return OK;
++}
++
++int OMXNodeInstance::retrieveFenceFromMeta_l(
++        OMX_BUFFERHEADERTYPE *header, OMX_U32 portIndex) {
++    OMX_U32 metaSize = portIndex == kPortIndexInput ? header->nAllocLen : header->nFilledLen;
++    int fenceFd = -1;
++    if (mMetadataType[portIndex] == kMetadataBufferTypeANWBuffer
++            && header->nAllocLen >= sizeof(VideoNativeMetadata)) {
++        VideoNativeMetadata &nativeMeta = *(VideoNativeMetadata *)(header->pBuffer);
++        if (nativeMeta.eType == kMetadataBufferTypeANWBuffer) {
++            fenceFd = nativeMeta.nFenceFd;
++            nativeMeta.nFenceFd = -1;
++        }
++        if (metaSize < sizeof(nativeMeta) && fenceFd >= 0) {
++            CLOG_ERROR(foundFenceInEmptyMeta, BAD_VALUE, FULL_BUFFER(
++                    NULL, header, nativeMeta.nFenceFd));
++            fenceFd = -1;
++        }
++    }
++    return fenceFd;
++}
++
++status_t OMXNodeInstance::emptyBuffer_l(
++        OMX_BUFFERHEADERTYPE *header, OMX_U32 flags, OMX_TICKS timestamp,
++        intptr_t debugAddr, int fenceFd) {
++    header->nFlags = flags;
++    header->nTimeStamp = timestamp;
++
++    status_t res = storeFenceInMeta_l(header, fenceFd, kPortIndexInput);
++    if (res != OK) {
++        CLOG_ERROR(emptyBuffer::storeFenceInMeta, res, WITH_STATS(
++                FULL_BUFFER(debugAddr, header, fenceFd)));
++        return res;
++    }
++
++    {
++        Mutex::Autolock _l(mDebugLock);
++        mInputBuffersWithCodec.add(header);
++
++        // bump internal-state debug level for 2 input frames past a buffer with CSD
++        if ((flags & OMX_BUFFERFLAG_CODECCONFIG) != 0) {
++            bumpDebugLevel_l(2 /* numInputBuffers */, 0 /* numOutputBuffers */);
++        }
++
++        CLOG_BUMPED_BUFFER(emptyBuffer, WITH_STATS(FULL_BUFFER(debugAddr, header, fenceFd)));
++    }
++
++    OMX_ERRORTYPE err = OMX_EmptyThisBuffer(mHandle, header);
++    CLOG_IF_ERROR(emptyBuffer, err, FULL_BUFFER(debugAddr, header, fenceFd));
++
++    {
++        Mutex::Autolock _l(mDebugLock);
++        if (err != OMX_ErrorNone) {
++            mInputBuffersWithCodec.remove(header);
++        } else if (!(flags & OMX_BUFFERFLAG_CODECCONFIG)) {
++            unbumpDebugLevel_l(kPortIndexInput);
++        }
++    }
++
++    return StatusFromOMXError(err);
++}
++
++// like emptyBuffer, but the data is already in header->pBuffer
++status_t OMXNodeInstance::emptyGraphicBuffer(
++        OMX_BUFFERHEADERTYPE *header, const sp<GraphicBuffer> &graphicBuffer,
++        OMX_U32 flags, OMX_TICKS timestamp, int fenceFd) {
++    if (header == NULL) {
++        ALOGE("b/25884056");
++        return BAD_VALUE;
++    }
++
++    Mutex::Autolock autoLock(mLock);
++    OMX::buffer_id buffer = findBufferID(header);
++    status_t err = updateGraphicBufferInMeta_l(
++            kPortIndexInput, graphicBuffer, buffer, header,
++            true /* updateCodecBuffer */);
++    if (err != OK) {
++        CLOG_ERROR(emptyGraphicBuffer, err, FULL_BUFFER(
++                (intptr_t)header->pBuffer, header, fenceFd));
++        return err;
++    }
++
++    header->nOffset = 0;
++    if (graphicBuffer == NULL) {
++        header->nFilledLen = 0;
++    } else if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource) {
++        header->nFilledLen = sizeof(VideoGrallocMetadata);
++    } else {
++        header->nFilledLen = sizeof(VideoNativeMetadata);
++    }
++    return emptyBuffer_l(header, flags, timestamp, (intptr_t)header->pBuffer, fenceFd);
++}
++
++status_t OMXNodeInstance::getExtensionIndex(
++        const char *parameterName, OMX_INDEXTYPE *index) {
++    Mutex::Autolock autoLock(mLock);
++
++    OMX_ERRORTYPE err = OMX_GetExtensionIndex(
++            mHandle, const_cast<char *>(parameterName), index);
++
++    return StatusFromOMXError(err);
++}
++
++inline static const char *asString(IOMX::InternalOptionType i, const char *def = "??") {
++    switch (i) {
++        case IOMX::INTERNAL_OPTION_SUSPEND:           return "SUSPEND";
++        case IOMX::INTERNAL_OPTION_REPEAT_PREVIOUS_FRAME_DELAY:
++            return "REPEAT_PREVIOUS_FRAME_DELAY";
++        case IOMX::INTERNAL_OPTION_MAX_TIMESTAMP_GAP: return "MAX_TIMESTAMP_GAP";
++        case IOMX::INTERNAL_OPTION_MAX_FPS:           return "MAX_FPS";
++        case IOMX::INTERNAL_OPTION_START_TIME:        return "START_TIME";
++        case IOMX::INTERNAL_OPTION_TIME_LAPSE:        return "TIME_LAPSE";
++        case IOMX::INTERNAL_OPTION_TIME_OFFSET:       return "TIME_OFFSET";
++        default:                                      return def;
++    }
++}
++
++template<typename T>
++static bool getInternalOption(
++        const void *data, size_t size, T *out) {
++    if (size != sizeof(T)) {
++        return false;
++    }
++    *out = *(T*)data;
++    return true;
++}
++
++status_t OMXNodeInstance::setInternalOption(
++        OMX_U32 portIndex,
++        IOMX::InternalOptionType type,
++        const void *data,
++        size_t size) {
++    CLOG_CONFIG(setInternalOption, "%s(%d): %s:%u %zu@%p",
++            asString(type), type, portString(portIndex), portIndex, size, data);
++    switch (type) {
++        case IOMX::INTERNAL_OPTION_SUSPEND:
++        case IOMX::INTERNAL_OPTION_REPEAT_PREVIOUS_FRAME_DELAY:
++        case IOMX::INTERNAL_OPTION_MAX_TIMESTAMP_GAP:
++        case IOMX::INTERNAL_OPTION_MAX_FPS:
++        case IOMX::INTERNAL_OPTION_START_TIME:
++        case IOMX::INTERNAL_OPTION_TIME_LAPSE:
++        case IOMX::INTERNAL_OPTION_TIME_OFFSET:
++        case IOMX::INTERNAL_OPTION_COLOR_ASPECTS:
++        {
++            const sp<GraphicBufferSource> &bufferSource =
++                getGraphicBufferSource();
++
++            if (bufferSource == NULL || portIndex != kPortIndexInput) {
++                CLOGW("setInternalOption is only for Surface input");
++                return ERROR_UNSUPPORTED;
++            }
++
++            if (type == IOMX::INTERNAL_OPTION_SUSPEND) {
++                bool suspend;
++                if (!getInternalOption(data, size, &suspend)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "suspend=%d", suspend);
++                bufferSource->suspend(suspend);
++            } else if (type == IOMX::INTERNAL_OPTION_REPEAT_PREVIOUS_FRAME_DELAY) {
++                int64_t delayUs;
++                if (!getInternalOption(data, size, &delayUs)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "delayUs=%lld", (long long)delayUs);
++                return bufferSource->setRepeatPreviousFrameDelayUs(delayUs);
++            } else if (type == IOMX::INTERNAL_OPTION_TIME_OFFSET) {
++                int64_t timeOffsetUs;
++                if (!getInternalOption(data, size, &timeOffsetUs)) {
++                    return INVALID_OPERATION;
++                }
++                CLOG_CONFIG(setInternalOption, "bufferOffsetUs=%lld", (long long)timeOffsetUs);
++                return bufferSource->setInputBufferTimeOffset(timeOffsetUs);
++            } else if (type == IOMX::INTERNAL_OPTION_MAX_TIMESTAMP_GAP) {
++                int64_t maxGapUs;
++                if (!getInternalOption(data, size, &maxGapUs)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "gapUs=%lld", (long long)maxGapUs);
++                return bufferSource->setMaxTimestampGapUs(maxGapUs);
++            } else if (type == IOMX::INTERNAL_OPTION_MAX_FPS) {
++                float maxFps;
++                if (!getInternalOption(data, size, &maxFps)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "maxFps=%f", maxFps);
++                return bufferSource->setMaxFps(maxFps);
++            } else if (type == IOMX::INTERNAL_OPTION_START_TIME) {
++                int64_t skipFramesBeforeUs;
++                if (!getInternalOption(data, size, &skipFramesBeforeUs)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "beforeUs=%lld", (long long)skipFramesBeforeUs);
++                bufferSource->setSkipFramesBeforeUs(skipFramesBeforeUs);
++            } else if (type == IOMX::INTERNAL_OPTION_TIME_LAPSE) {
++                GraphicBufferSource::TimeLapseConfig config;
++                if (!getInternalOption(data, size, &config)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "perFrameUs=%lld perCaptureUs=%lld",
++                        (long long)config.mTimePerFrameUs, (long long)config.mTimePerCaptureUs);
++
++                return bufferSource->setTimeLapseConfig(config);
++            } else if (type == IOMX::INTERNAL_OPTION_COLOR_ASPECTS) {
++                ColorAspects aspects;
++                if (!getInternalOption(data, size, &aspects)) {
++                    return INVALID_OPERATION;
++                }
++
++                CLOG_CONFIG(setInternalOption, "setting color aspects");
++                bufferSource->setColorAspects(aspects);
++            }
++
++            return OK;
++        }
++
++        default:
++            return ERROR_UNSUPPORTED;
++    }
++}
++
++bool OMXNodeInstance::handleMessage(omx_message &msg) {
++    const sp<GraphicBufferSource>& bufferSource(getGraphicBufferSource());
++
++    if (msg.type == omx_message::FILL_BUFFER_DONE) {
++        OMX_BUFFERHEADERTYPE *buffer =
++            findBufferHeader(msg.u.extended_buffer_data.buffer, kPortIndexOutput);
++        if (buffer == NULL) {
++            ALOGE("b/25884056");
++            return false;
++        }
++
++        {
++            Mutex::Autolock _l(mDebugLock);
++            mOutputBuffersWithCodec.remove(buffer);
++
++            CLOG_BUMPED_BUFFER(
++                    FBD, WITH_STATS(FULL_BUFFER(
++                            msg.u.extended_buffer_data.buffer, buffer, msg.fenceFd)));
++
++            unbumpDebugLevel_l(kPortIndexOutput);
++        }
++
++        BufferMeta *buffer_meta =
++            static_cast<BufferMeta *>(buffer->pAppPrivate);
++
++        if (buffer->nOffset + buffer->nFilledLen < buffer->nOffset
++                || buffer->nOffset + buffer->nFilledLen > buffer->nAllocLen) {
++            CLOG_ERROR(onFillBufferDone, OMX_ErrorBadParameter,
++                    FULL_BUFFER(NULL, buffer, msg.fenceFd));
++        }
++        buffer_meta->CopyFromOMX(buffer);
++
++        if (bufferSource != NULL) {
++            // fix up the buffer info (especially timestamp) if needed
++            bufferSource->codecBufferFilled(buffer);
++
++            msg.u.extended_buffer_data.timestamp = buffer->nTimeStamp;
++        }
++    } else if (msg.type == omx_message::EMPTY_BUFFER_DONE) {
++        OMX_BUFFERHEADERTYPE *buffer =
++            findBufferHeader(msg.u.buffer_data.buffer, kPortIndexInput);
++        if (buffer == NULL) {
++            return false;
++        }
++
++        {
++            Mutex::Autolock _l(mDebugLock);
++            mInputBuffersWithCodec.remove(buffer);
++
++            CLOG_BUMPED_BUFFER(
++                    EBD, WITH_STATS(EMPTY_BUFFER(msg.u.buffer_data.buffer, buffer, msg.fenceFd)));
++        }
++
++        if (bufferSource != NULL) {
++            // This is one of the buffers used exclusively by
++            // GraphicBufferSource.
++            // Don't dispatch a message back to ACodec, since it doesn't
++            // know that anyone asked to have the buffer emptied and will
++            // be very confused.
++            bufferSource->codecBufferEmptied(buffer, msg.fenceFd);
++            return true;
++        }
++    }
++
++    return false;
++}
++
++void OMXNodeInstance::onMessages(std::list<omx_message> &messages) {
++    for (std::list<omx_message>::iterator it = messages.begin(); it != messages.end(); ) {
++        if (handleMessage(*it)) {
++            messages.erase(it++);
++        } else {
++            ++it;
++        }
++    }
++
++    if (!messages.empty()) {
++        mObserver->onMessages(messages);
++    }
++}
++
++void OMXNodeInstance::onObserverDied(OMXMaster *master) {
++    ALOGE("!!! Observer died. Quickly, do something, ... anything...");
++
++    // Try to force shutdown of the node and hope for the best.
++    freeNode(master);
++}
++
++void OMXNodeInstance::onGetHandleFailed() {
++    delete this;
++}
++
++// OMXNodeInstance::OnEvent calls OMX::OnEvent, which then calls here.
++// Don't try to acquire mLock here -- in rare circumstances this will hang.
++void OMXNodeInstance::onEvent(
++        OMX_EVENTTYPE event, OMX_U32 arg1, OMX_U32 arg2) {
++    const char *arg1String = "??";
++    const char *arg2String = "??";
++    ADebug::Level level = ADebug::kDebugInternalState;
++
++    switch (event) {
++        case OMX_EventCmdComplete:
++            arg1String = asString((OMX_COMMANDTYPE)arg1);
++            switch (arg1) {
++                case OMX_CommandStateSet:
++                    arg2String = asString((OMX_STATETYPE)arg2);
++                    level = ADebug::kDebugState;
++                    break;
++                case OMX_CommandFlush:
++                case OMX_CommandPortEnable:
++                {
++                    // bump internal-state debug level for 2 input and output frames
++                    Mutex::Autolock _l(mDebugLock);
++                    bumpDebugLevel_l(2 /* numInputBuffers */, 2 /* numOutputBuffers */);
++                }
++                // fall through
++                default:
++                    arg2String = portString(arg2);
++            }
++            break;
++        case OMX_EventError:
++            arg1String = asString((OMX_ERRORTYPE)arg1);
++            level = ADebug::kDebugLifeCycle;
++            break;
++        case OMX_EventPortSettingsChanged:
++            arg2String = asString((OMX_INDEXEXTTYPE)arg2);
++            // fall through
++        default:
++            arg1String = portString(arg1);
++    }
++
++    CLOGI_(level, onEvent, "%s(%x), %s(%x), %s(%x)",
++            asString(event), event, arg1String, arg1, arg2String, arg2);
++    const sp<GraphicBufferSource>& bufferSource(getGraphicBufferSource());
++
++    if (bufferSource != NULL
++            && event == OMX_EventCmdComplete
++            && arg1 == OMX_CommandStateSet
++            && arg2 == OMX_StateExecuting) {
++        bufferSource->omxExecuting();
++    }
++
++    // allow configuration if we return to the loaded state
++    if (event == OMX_EventCmdComplete
++            && arg1 == OMX_CommandStateSet
++            && arg2 == OMX_StateLoaded) {
++        mSailed = false;
++    }
++}
++
++// static
++OMX_ERRORTYPE OMXNodeInstance::OnEvent(
++        OMX_IN OMX_HANDLETYPE /* hComponent */,
++        OMX_IN OMX_PTR pAppData,
++        OMX_IN OMX_EVENTTYPE eEvent,
++        OMX_IN OMX_U32 nData1,
++        OMX_IN OMX_U32 nData2,
++        OMX_IN OMX_PTR pEventData) {
++    if (pAppData == NULL) {
++        ALOGE("b/25884056");
++        return OMX_ErrorBadParameter;
++    }
++    OMXNodeInstance *instance = static_cast<OMXNodeInstance *>(pAppData);
++    if (instance->mDying) {
++        return OMX_ErrorNone;
++    }
++    return instance->owner()->OnEvent(
++            instance->nodeID(), eEvent, nData1, nData2, pEventData);
++}
++
++// static
++OMX_ERRORTYPE OMXNodeInstance::OnEmptyBufferDone(
++        OMX_IN OMX_HANDLETYPE /* hComponent */,
++        OMX_IN OMX_PTR pAppData,
++        OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
++    if (pAppData == NULL) {
++        ALOGE("b/25884056");
++        return OMX_ErrorBadParameter;
++    }
++    OMXNodeInstance *instance = static_cast<OMXNodeInstance *>(pAppData);
++    if (instance->mDying) {
++        return OMX_ErrorNone;
++    }
++    int fenceFd = instance->retrieveFenceFromMeta_l(pBuffer, kPortIndexOutput);
++    return instance->owner()->OnEmptyBufferDone(instance->nodeID(),
++            instance->findBufferID(pBuffer), pBuffer, fenceFd);
++}
++
++// static
++OMX_ERRORTYPE OMXNodeInstance::OnFillBufferDone(
++        OMX_IN OMX_HANDLETYPE /* hComponent */,
++        OMX_IN OMX_PTR pAppData,
++        OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
++    if (pAppData == NULL) {
++        ALOGE("b/25884056");
++        return OMX_ErrorBadParameter;
++    }
++    OMXNodeInstance *instance = static_cast<OMXNodeInstance *>(pAppData);
++    if (instance->mDying) {
++        return OMX_ErrorNone;
++    }
++    int fenceFd = instance->retrieveFenceFromMeta_l(pBuffer, kPortIndexOutput);
++    return instance->owner()->OnFillBufferDone(instance->nodeID(),
++            instance->findBufferID(pBuffer), pBuffer, fenceFd);
++}
++
++void OMXNodeInstance::addActiveBuffer(OMX_U32 portIndex, OMX::buffer_id id) {
++    ActiveBuffer active;
++    active.mPortIndex = portIndex;
++    active.mID = id;
++    mActiveBuffers.push(active);
++
++    if (portIndex < NELEM(mNumPortBuffers)) {
++        ++mNumPortBuffers[portIndex];
++    }
++}
++
++void OMXNodeInstance::removeActiveBuffer(
++        OMX_U32 portIndex, OMX::buffer_id id) {
++    for (size_t i = 0; i < mActiveBuffers.size(); ++i) {
++        if (mActiveBuffers[i].mPortIndex == portIndex
++                && mActiveBuffers[i].mID == id) {
++            mActiveBuffers.removeItemsAt(i);
++
++            if (portIndex < NELEM(mNumPortBuffers)) {
++                --mNumPortBuffers[portIndex];
++            }
++            return;
++        }
++    }
++
++     CLOGW("Attempt to remove an active buffer [%#x] we know nothing about...", id);
++}
++
++void OMXNodeInstance::freeActiveBuffers() {
++    // Make sure to count down here, as freeBuffer will in turn remove
++    // the active buffer from the vector...
++    for (size_t i = mActiveBuffers.size(); i > 0;) {
++        i--;
++        freeBuffer(mActiveBuffers[i].mPortIndex, mActiveBuffers[i].mID);
++    }
++}
++
++OMX::buffer_id OMXNodeInstance::makeBufferID(OMX_BUFFERHEADERTYPE *bufferHeader) {
++    if (bufferHeader == NULL) {
++        return 0;
++    }
++    Mutex::Autolock autoLock(mBufferIDLock);
++    OMX::buffer_id buffer;
++    do { // handle the very unlikely case of ID overflow
++        if (++mBufferIDCount == 0) {
++            ++mBufferIDCount;
++        }
++        buffer = (OMX::buffer_id)mBufferIDCount;
++    } while (mBufferIDToBufferHeader.indexOfKey(buffer) >= 0);
++    mBufferIDToBufferHeader.add(buffer, bufferHeader);
++    mBufferHeaderToBufferID.add(bufferHeader, buffer);
++    return buffer;
++}
++
++OMX_BUFFERHEADERTYPE *OMXNodeInstance::findBufferHeader(
++        OMX::buffer_id buffer, OMX_U32 portIndex) {
++    if (buffer == 0) {
++        return NULL;
++    }
++    Mutex::Autolock autoLock(mBufferIDLock);
++    ssize_t index = mBufferIDToBufferHeader.indexOfKey(buffer);
++    if (index < 0) {
++        CLOGW("findBufferHeader: buffer %u not found", buffer);
++        return NULL;
++    }
++    OMX_BUFFERHEADERTYPE *header = mBufferIDToBufferHeader.valueAt(index);
++    BufferMeta *buffer_meta =
++        static_cast<BufferMeta *>(header->pAppPrivate);
++    if (buffer_meta->getPortIndex() != portIndex) {
++        CLOGW("findBufferHeader: buffer %u found but with incorrect port index.", buffer);
++        android_errorWriteLog(0x534e4554, "28816827");
++        return NULL;
++    }
++    return header;
++}
++
++OMX::buffer_id OMXNodeInstance::findBufferID(OMX_BUFFERHEADERTYPE *bufferHeader) {
++    if (bufferHeader == NULL) {
++        return 0;
++    }
++    Mutex::Autolock autoLock(mBufferIDLock);
++    ssize_t index = mBufferHeaderToBufferID.indexOfKey(bufferHeader);
++    if (index < 0) {
++        CLOGW("findBufferID: bufferHeader %p not found", bufferHeader);
++        return 0;
++    }
++    return mBufferHeaderToBufferID.valueAt(index);
++}
++
++void OMXNodeInstance::invalidateBufferID(OMX::buffer_id buffer) {
++    if (buffer == 0) {
++        return;
++    }
++    Mutex::Autolock autoLock(mBufferIDLock);
++    ssize_t index = mBufferIDToBufferHeader.indexOfKey(buffer);
++    if (index < 0) {
++        CLOGW("invalidateBufferID: buffer %u not found", buffer);
++        return;
++    }
++    mBufferHeaderToBufferID.removeItem(mBufferIDToBufferHeader.valueAt(index));
++    mBufferIDToBufferHeader.removeItemsAt(index);
++}
++
++}  // namespace android
 diff --git a/media/libstagefright/omx/SimpleSoftOMXComponent.cpp b/media/libstagefright/omx/SimpleSoftOMXComponent.cpp
 index 7c975f7..76cbbc4 100644
 --- a/media/libstagefright/omx/SimpleSoftOMXComponent.cpp
@@ -1398,6 +5410,99 @@ index ecddc48..0abe6ac 100644
      registerExtensions();
      ProcessState::self()->startThreadPool();
      IPCThreadState::self()->joinThreadPool();
+diff --git a/media/mtp/MtpServer.cpp b/media/mtp/MtpServer.cpp
+index e39dcdd..65a2415 100644
+--- a/media/mtp/MtpServer.cpp
++++ b/media/mtp/MtpServer.cpp
+@@ -136,20 +136,9 @@ void MtpServer::removeStorage(MtpStorage* storage) {
+ }
+ 
+ MtpStorage* MtpServer::getStorage(MtpStorageID id) {
+-    if (id == 0)
+-        return mStorages[0];
+-    for (size_t i = 0; i < mStorages.size(); i++) {
+-        MtpStorage* storage = mStorages[i];
+-        if (storage->getStorageID() == id)
+-            return storage;
+-    }
+-    return NULL;
+-}
++     Mutex::Autolock autoLock(mMutex);
+ 
+-bool MtpServer::hasStorage(MtpStorageID id) {
+-    if (id == 0 || id == 0xFFFFFFFF)
+-        return mStorages.size() > 0;
+-    return (getStorage(id) != NULL);
++    return getStorageLocked(id);
+ }
+ 
+ void MtpServer::run() {
+@@ -254,6 +243,23 @@ void MtpServer::sendObjectRemoved(MtpObjectHandle handle) {
+     sendEvent(MTP_EVENT_OBJECT_REMOVED, handle);
+ }
+ 
++MtpStorage* MtpServer::getStorageLocked(MtpStorageID id) {
++    if (id == 0)
++        return mStorages.empty() ? NULL : mStorages[0];
++    for (size_t i = 0; i < mStorages.size(); i++) {
++        MtpStorage* storage = mStorages[i];
++        if (storage->getStorageID() == id)
++            return storage;
++    }
++    return NULL;
++}
++
++bool MtpServer::hasStorage(MtpStorageID id) {
++    if (id == 0 || id == 0xFFFFFFFF)
++        return mStorages.size() > 0;
++    return (getStorageLocked(id) != NULL);
++}
++
+ void MtpServer::sendStoreAdded(MtpStorageID id) {
+     ALOGV("sendStoreAdded %08X\n", id);
+     sendEvent(MTP_EVENT_STORE_ADDED, id);
+@@ -537,7 +543,7 @@ MtpResponseCode MtpServer::doGetStorageInfo() {
+         return MTP_RESPONSE_INVALID_PARAMETER;
+ 
+     MtpStorageID id = mRequest.getParameter(1);
+-    MtpStorage* storage = getStorage(id);
++    MtpStorage* storage = getStorageLocked(id);
+     if (!storage)
+         return MTP_RESPONSE_INVALID_STORAGE_ID;
+ 
+@@ -888,7 +894,7 @@ MtpResponseCode MtpServer::doSendObjectInfo() {
+     if (mRequest.getParameterCount() < 2)
+         return MTP_RESPONSE_INVALID_PARAMETER;
+     MtpStorageID storageID = mRequest.getParameter(1);
+-    MtpStorage* storage = getStorage(storageID);
++    MtpStorage* storage = getStorageLocked(storageID);
+     MtpObjectHandle parent = mRequest.getParameter(2);
+     if (!storage)
+         return MTP_RESPONSE_INVALID_STORAGE_ID;
+diff --git a/media/mtp/MtpServer.h b/media/mtp/MtpServer.h
+index b3a11e0..cd543c8 100644
+--- a/media/mtp/MtpServer.h
++++ b/media/mtp/MtpServer.h
+@@ -95,8 +95,6 @@ public:
+     virtual             ~MtpServer();
+ 
+     MtpStorage*         getStorage(MtpStorageID id);
+-    inline bool         hasStorage() { return mStorages.size() > 0; }
+-    bool                hasStorage(MtpStorageID id);
+     void                addStorage(MtpStorage* storage);
+     void                removeStorage(MtpStorage* storage);
+ 
+@@ -107,6 +105,10 @@ public:
+     void                sendDevicePropertyChanged(MtpDeviceProperty property);
+ 
+ private:
++    MtpStorage*         getStorageLocked(MtpStorageID id);
++    inline bool         hasStorage() { return mStorages.size() > 0; }
++    bool                hasStorage(MtpStorageID id);
++
+     void                sendStoreAdded(MtpStorageID id);
+     void                sendStoreRemoved(MtpStorageID id);
+     void                sendEvent(MtpEventCode code, uint32_t param1);
 diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
 index fec3a57..a0ef28c 100644
 --- a/services/audioflinger/AudioFlinger.cpp
@@ -1588,3 +5693,45 @@ index 266fb03..3c2b98a 100644
  }
  
  status_t CameraClient::setVideoBufferMode(int32_t videoBufferMode) {
+diff --git a/services/soundtrigger/SoundTriggerHwService.cpp b/services/soundtrigger/SoundTriggerHwService.cpp
+index eebc487..74d0c70 100644
+--- a/services/soundtrigger/SoundTriggerHwService.cpp
++++ b/services/soundtrigger/SoundTriggerHwService.cpp
+@@ -278,6 +278,37 @@ void SoundTriggerHwService::sendRecognitionEvent(struct sound_trigger_recognitio
+      if (module == NULL) {
+          return;
+      }
++    struct sound_trigger_phrase_recognition_event newEvent;
++    if (event-> type == SOUND_MODEL_TYPE_KEYPHRASE && event->data_size != 0
++        && event->data_offset != sizeof(struct sound_trigger_phrase_recognition_event)) {
++        // set some defaults for the phrase if the recognition event won't be parsed properly
++        // TODO: read defaults from the config
++
++        memset(&newEvent, 0, sizeof(struct sound_trigger_phrase_recognition_event));
++
++        sp<Model> model = module->getModel(event->model);
++
++        newEvent.num_phrases = 1;
++        newEvent.phrase_extras[0].id = 100;
++        newEvent.phrase_extras[0].recognition_modes = RECOGNITION_MODE_VOICE_TRIGGER;
++        newEvent.phrase_extras[0].confidence_level = 100;
++        newEvent.phrase_extras[0].num_levels = 1;
++        newEvent.phrase_extras[0].levels[0].level = 100;
++        newEvent.phrase_extras[0].levels[0].user_id = 100;
++        newEvent.common.status = event->status;
++        newEvent.common.type = event->type;
++        newEvent.common.model = event->model;
++        newEvent.common.capture_available = event->capture_available;
++        newEvent.common.capture_session = event->capture_session;
++        newEvent.common.capture_delay_ms = event->capture_delay_ms;
++        newEvent.common.capture_preamble_ms = event->capture_preamble_ms;
++        newEvent.common.trigger_in_data = event->trigger_in_data;
++        newEvent.common.audio_config = event->audio_config;
++        newEvent.common.data_size = event->data_size;
++        newEvent.common.data_offset = sizeof(struct sound_trigger_phrase_recognition_event);
++
++         event = &newEvent.common;
++     }
+      sp<IMemory> eventMemory = prepareRecognitionEvent_l(event);
+      if (eventMemory == 0) {
+          return;

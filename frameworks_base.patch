@@ -232,6 +232,73 @@ index e4f573b..0d3f50c 100644
              EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
          }
      }
+diff --git a/core/jni/android_util_Binder.cpp b/core/jni/android_util_Binder.cpp
+index 5559d48..bee11db 100644
+--- a/core/jni/android_util_Binder.cpp
++++ b/core/jni/android_util_Binder.cpp
+@@ -132,6 +132,14 @@ static struct strict_mode_callback_offsets_t
+     jmethodID mCallback;
+ } gStrictModeCallbackOffsets;
+ 
++static struct thread_dispatch_offsets_t
++{
++    // Class state.
++    jclass mClass;
++    jmethodID mDispatchUncaughtException;
++    jmethodID mCurrentThread;
++} gThreadDispatchOffsets;
++
+ // ****************************************************************************
+ // ****************************************************************************
+ // ****************************************************************************
+@@ -165,6 +173,23 @@ static JNIEnv* javavm_to_jnienv(JavaVM* vm)
+     return vm->GetEnv((void **)&env, JNI_VERSION_1_4) >= 0 ? env : NULL;
+ }
+ 
++// Report a java.lang.Error (or subclass). This may terminate the runtime.
++static void report_java_lang_error(JNIEnv* env, jthrowable error)
++{
++    // Try to run the uncaught exception machinery.
++    jobject thread = env->CallStaticObjectMethod(gThreadDispatchOffsets.mClass,
++            gThreadDispatchOffsets.mCurrentThread);
++    if (thread != nullptr) {
++        env->CallVoidMethod(thread, gThreadDispatchOffsets.mDispatchUncaughtException,
++                error);
++        // Should not return here, unless more errors occured.
++    }
++    // Some error occurred that meant that either dispatchUncaughtException could not be
++    // called or that it had an error itself (as this should be unreachable under normal
++    // conditions). Clear the exception.
++    env->ExceptionClear();
++}
++
+ static void report_exception(JNIEnv* env, jthrowable excep, const char* msg)
+ {
+     env->ExceptionClear();
+@@ -191,6 +216,10 @@ static void report_exception(JNIEnv* env, jthrowable excep, const char* msg)
+     }
+ 
+     if (env->IsInstanceOf(excep, gErrorOffsets.mClass)) {
++        // Try to report the error. This should not return under normal circumstances.
++        report_java_lang_error(env, excep);
++        // The traditional handling: re-raise and abort.
++
+         /*
+          * It's an Error: Reraise the exception, detach this thread, and
+          * wait for the fireworks. Die even more blatantly after a minute
+@@ -1318,5 +1347,12 @@ int register_android_os_Binder(JNIEnv* env)
+     gStrictModeCallbackOffsets.mCallback = GetStaticMethodIDOrDie(env, clazz,
+             "onBinderStrictModePolicyChange", "(I)V");
+ 
++    clazz = FindClassOrDie(env, "java/lang/Thread");
++    gThreadDispatchOffsets.mClass = MakeGlobalRefOrDie(env, clazz);
++    gThreadDispatchOffsets.mDispatchUncaughtException = GetMethodIDOrDie(env, clazz,
++            "dispatchUncaughtException", "(Ljava/lang/Throwable;)V");
++    gThreadDispatchOffsets.mCurrentThread = GetStaticMethodIDOrDie(env, clazz, "currentThread",
++            "()Ljava/lang/Thread;");
++
+     return 0;
+ }
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
 index 011884c..a5035ee 100644
 --- a/core/res/AndroidManifest.xml
@@ -1089,6 +1156,60 @@ index aa8e781..ec3208b 100644
          if (mWin.mTurnOnScreen) {
              if (DEBUG_VISIBILITY) Slog.v(TAG, "Show surface turning screen on: " + mWin);
              mWin.mTurnOnScreen = false;
+diff --git a/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java b/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
+index e3b6ecc..ff63b08 100644
+--- a/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
++++ b/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
+@@ -71,6 +71,7 @@ import android.content.pm.PackageManager;
+ import android.content.pm.PackageManager.NameNotFoundException;
+ import android.content.pm.PackageManagerInternal;
+ import android.content.pm.ParceledListSlice;
++import android.content.pm.PermissionInfo;
+ import android.content.pm.ResolveInfo;
+ import android.content.pm.ServiceInfo;
+ import android.content.pm.UserInfo;
+@@ -123,6 +124,7 @@ import android.telephony.TelephonyManager;
+ import android.text.TextUtils;
+ import android.util.ArrayMap;
+ import android.util.ArraySet;
++import android.util.EventLog;
+ import android.util.Log;
+ import android.util.Pair;
+ import android.util.Slog;
+@@ -8621,6 +8623,10 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
+                         < android.os.Build.VERSION_CODES.M) {
+                     return false;
+                 }
++                if (!isRuntimePermission(permission)) {
++                    EventLog.writeEvent(0x534e4554, "62623498", user.getIdentifier(), "");
++                    return false;
++                }
+                 final PackageManager packageManager = mContext.getPackageManager();
+                 switch (grantState) {
+                     case DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED: {
+@@ -8646,6 +8652,8 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
+                 return true;
+             } catch (SecurityException se) {
+                 return false;
++            } catch (NameNotFoundException e) {
++                return false;
+             } finally {
+                 mInjector.binderRestoreCallingIdentity(ident);
+             }
+@@ -8691,6 +8699,13 @@ public class DevicePolicyManagerService extends IDevicePolicyManager.Stub {
+         }
+     }
+ 
++    public boolean isRuntimePermission(String permissionName) throws NameNotFoundException {
++        PackageManager packageManager = mContext.getPackageManager();
++        PermissionInfo permissionInfo = packageManager.getPermissionInfo(permissionName, 0);
++        return (permissionInfo.protectionLevel & PermissionInfo.PROTECTION_MASK_BASE)
++                == PermissionInfo.PROTECTION_DANGEROUS;
++    }
++
+     @Override
+     public boolean isProvisioningAllowed(String action) {
+         if (!mHasFeature) {
 diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
 index ffbea9f..8dd05b1 100644
 --- a/services/net/java/android/net/dhcp/DhcpClient.java
