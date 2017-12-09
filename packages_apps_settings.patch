@@ -10,6 +10,90 @@ index 2ec976d..c155cf7 100644
  
      <application android:label="@string/settings_label"
              android:icon="@mipmap/ic_launcher_settings"
+diff --git a/src/com/android/settings/ActivityPicker.java b/src/com/android/settings/ActivityPicker.java
+index 2c3436f..ae61944 100644
+--- a/src/com/android/settings/ActivityPicker.java
++++ b/src/com/android/settings/ActivityPicker.java
+@@ -78,6 +78,10 @@ public class ActivityPicker extends AlertActivity implements
+         Parcelable parcel = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+         if (parcel instanceof Intent) {
+             mBaseIntent = (Intent) parcel;
++            mBaseIntent.setFlags(mBaseIntent.getFlags() & ~(Intent.FLAG_GRANT_READ_URI_PERMISSION
++                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
++                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
++                    | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION));
+         } else {
+             mBaseIntent = new Intent(Intent.ACTION_MAIN, null);
+             mBaseIntent.addCategory(Intent.CATEGORY_DEFAULT);
+diff --git a/src/com/android/settings/DeviceAdminAdd.java b/src/com/android/settings/DeviceAdminAdd.java
+index 9d4d895..2f6afd7 100644
+--- a/src/com/android/settings/DeviceAdminAdd.java
++++ b/src/com/android/settings/DeviceAdminAdd.java
+@@ -16,6 +16,8 @@
+ 
+ package com.android.settings;
+ 
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
++
+ import android.app.Activity;
+ import android.app.ActivityManagerNative;
+ import android.app.AlertDialog;
+@@ -88,7 +90,6 @@ public class DeviceAdminAdd extends Activity {
+     Handler mHandler;
+ 
+     DevicePolicyManager mDPM;
+-    AppOpsManager mAppOps;
+     DeviceAdminInfo mDeviceAdmin;
+     CharSequence mAddMsgText;
+     String mProfileOwnerName;
+@@ -113,19 +114,17 @@ public class DeviceAdminAdd extends Activity {
+     boolean mWaitingForRemoveMsg;
+     boolean mAddingProfileOwner;
+     boolean mAdminPoliciesInitialized;
+-    int mCurSysAppOpMode;
+-    int mCurToastAppOpMode;
+ 
+     boolean mIsCalledFromSupportDialog = false;
+ 
+     @Override
+     protected void onCreate(Bundle icicle) {
+         super.onCreate(icicle);
++        getWindow().addPrivateFlags(PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
+ 
+         mHandler = new Handler(getMainLooper());
+ 
+         mDPM = (DevicePolicyManager)getSystemService(Context.DEVICE_POLICY_SERVICE);
+-        mAppOps = (AppOpsManager)getSystemService(Context.APP_OPS_SERVICE);
+         PackageManager packageManager = getPackageManager();
+ 
+         if ((getIntent().getFlags()&Intent.FLAG_ACTIVITY_NEW_TASK) != 0) {
+@@ -447,24 +446,14 @@ public class DeviceAdminAdd extends Activity {
+     @Override
+     protected void onResume() {
+         super.onResume();
++        mActionButton.setEnabled(true);
+         updateInterface();
+-        // As long as we are running, don't let this admin overlay stuff on top of the screen.
+-        final int uid = mDeviceAdmin.getActivityInfo().applicationInfo.uid;
+-        final String pkg = mDeviceAdmin.getActivityInfo().applicationInfo.packageName;
+-        mCurSysAppOpMode = mAppOps.checkOp(AppOpsManager.OP_SYSTEM_ALERT_WINDOW, uid, pkg);
+-        mCurToastAppOpMode = mAppOps.checkOp(AppOpsManager.OP_TOAST_WINDOW, uid, pkg);
+-        mAppOps.setMode(AppOpsManager.OP_SYSTEM_ALERT_WINDOW, uid, pkg, AppOpsManager.MODE_IGNORED);
+-        mAppOps.setMode(AppOpsManager.OP_TOAST_WINDOW, uid, pkg, AppOpsManager.MODE_IGNORED);
+     }
+ 
+     @Override
+     protected void onPause() {
+         super.onPause();
+-        // As long as we are running, don't let this admin overlay stuff on top of the screen.
+-        final int uid = mDeviceAdmin.getActivityInfo().applicationInfo.uid;
+-        final String pkg = mDeviceAdmin.getActivityInfo().applicationInfo.packageName;
+-        mAppOps.setMode(AppOpsManager.OP_SYSTEM_ALERT_WINDOW, uid, pkg, mCurSysAppOpMode);
+-        mAppOps.setMode(AppOpsManager.OP_TOAST_WINDOW, uid, pkg, mCurToastAppOpMode);
++        mActionButton.setEnabled(false);
+         try {
+             ActivityManagerNative.getDefault().resumeAppSwitches();
+         } catch (RemoteException e) {
 diff --git a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
 index 196a4ab..1f69768 100644
 --- a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java

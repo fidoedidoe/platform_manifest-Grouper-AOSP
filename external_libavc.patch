@@ -1,5 +1,5 @@
 diff --git a/decoder/ih264d_api.c b/decoder/ih264d_api.c
-index 2cde456..d86aaee 100644
+index 2cde456..5ef49b1 100644
 --- a/decoder/ih264d_api.c
 +++ b/decoder/ih264d_api.c
 @@ -1623,6 +1623,89 @@ UWORD32 ih264d_map_error(UWORD32 i4_err_status)
@@ -92,7 +92,17 @@ index 2cde456..d86aaee 100644
  /*****************************************************************************/
  /*                                                                           */
  /*  Function Name :  ih264d_video_decode                                     */
-@@ -1865,6 +1948,13 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -1721,7 +1804,8 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+                     && ps_dec->i4_decode_header == 0)
+     {
+         UWORD32 i;
+-        if(ps_dec->ps_out_buffer->u4_num_bufs == 0)
++        if((ps_dec->ps_out_buffer->u4_num_bufs == 0) ||
++           (ps_dec->ps_out_buffer->u4_num_bufs > IVD_VIDDEC_MAX_IO_BUFFERS))
+         {
+             ps_dec_op->u4_error_code |= 1 << IVD_UNSUPPORTEDPARAM;
+             ps_dec_op->u4_error_code |= IVD_DISP_FRM_ZERO_OP_BUFS;
+@@ -1865,6 +1949,13 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
                                        &(ps_dec->s_disp_op));
          if(0 == ps_dec->s_disp_op.u4_error_code)
          {
@@ -106,7 +116,7 @@ index 2cde456..d86aaee 100644
              ps_dec->u4_fmt_conv_cur_row = 0;
              ps_dec->u4_fmt_conv_num_rows = ps_dec->s_disp_frame_info.u4_y_ht;
              ih264d_format_convert(ps_dec, &(ps_dec->s_disp_op),
-@@ -2094,7 +2184,8 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2094,7 +2185,8 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
                              || (ret == IVD_MEM_ALLOC_FAILED)
                              || (ret == ERROR_UNAVAIL_PICBUF_T)
                              || (ret == ERROR_UNAVAIL_MVBUF_T)
@@ -116,7 +126,7 @@ index 2cde456..d86aaee 100644
              {
                  ps_dec->u4_slice_start_code_found = 0;
                  break;
-@@ -2148,7 +2239,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2148,7 +2240,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
      }
      while(( header_data_left == 1)||(frame_data_left == 1));
  
@@ -125,7 +135,7 @@ index 2cde456..d86aaee 100644
              && (ret != IVD_MEM_ALLOC_FAILED)
              && ps_dec->u2_total_mbs_coded < ps_dec->u2_frm_ht_in_mbs * ps_dec->u2_frm_wd_in_mbs)
      {
-@@ -2290,7 +2381,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2290,7 +2382,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
  
      }
  
@@ -134,7 +144,7 @@ index 2cde456..d86aaee 100644
                      && (ERROR_DANGLING_FIELD_IN_PIC != i4_err_status))
      {
          /*
-@@ -2316,8 +2407,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2316,8 +2408,7 @@ WORD32 ih264d_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
          /* if new frame in not found (if we are still getting slices from previous frame)
           * ih264d_deblock_display is not called. Such frames will not be added to reference /display
           */
@@ -144,7 +154,7 @@ index 2cde456..d86aaee 100644
          {
              /* Calling Function to deblock Picture and Display */
              ret = ih264d_deblock_display(ps_dec);
-@@ -2843,27 +2933,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2843,27 +2934,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
      UWORD16 pic_wd, pic_ht;
      ivd_ctl_getbufinfo_op_t *ps_ctl_op =
                      (ivd_ctl_getbufinfo_op_t*)pv_api_op;
@@ -174,7 +184,7 @@ index 2cde456..d86aaee 100644
  
      ps_ctl_op->u4_num_disp_bufs = 1;
  
-@@ -2930,37 +3008,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
+@@ -2930,37 +3009,15 @@ WORD32 ih264d_get_buf_info(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)
                          ps_ctl_op->u4_num_disp_bufs, 32);
      }
  
@@ -220,10 +230,85 @@ index 2cde456..d86aaee 100644
  
      return IV_SUCCESS;
 diff --git a/decoder/ih264d_parse_bslice.c b/decoder/ih264d_parse_bslice.c
-index 772964a..db64ce9 100644
+index 772964a..f087f8d 100644
 --- a/decoder/ih264d_parse_bslice.c
 +++ b/decoder/ih264d_parse_bslice.c
-@@ -1531,10 +1531,7 @@ WORD32 ih264d_parse_bslice(dec_struct_t * ps_dec, UWORD16 u2_first_mb_in_slice)
+@@ -1197,7 +1197,8 @@ void ih264d_get_implicit_weights(dec_struct_t *ps_dec)
+     struct pic_buffer_t *ps_pic_buff0, *ps_pic_buff1;
+     WORD16 i2_dist_scale_factor;
+     WORD16 i16_tb, i16_td, i16_tx;
+-    UWORD32 u4_poc0, u4_poc1;
++    WORD32 i4_tb, i4_td;
++    WORD32 i4_poc0, i4_poc1;
+     UWORD32 ui_temp0, ui_temp1;
+     UWORD8 uc_num_ref_idx_l0_active, uc_num_ref_idx_l1_active;
+ 
+@@ -1210,18 +1211,18 @@ void ih264d_get_implicit_weights(dec_struct_t *ps_dec)
+     for(i = 0; i < uc_num_ref_idx_l0_active; i++)
+     {
+         ps_pic_buff0 = ps_dec->ps_ref_pic_buf_lx[0][i];
+-        u4_poc0 = ps_pic_buff0->i4_avg_poc;
++        i4_poc0 = ps_pic_buff0->i4_avg_poc;
+         for(j = 0; j < uc_num_ref_idx_l1_active; j++)
+         {
+             ps_pic_buff1 = ps_dec->ps_ref_pic_buf_lx[1][j];
+-            u4_poc1 = ps_pic_buff1->i4_avg_poc;
++            i4_poc1 = ps_pic_buff1->i4_avg_poc;
+ 
+-            if(u4_poc1 != u4_poc0)
++            if(i4_poc1 != i4_poc0)
+             {
+-                i16_tb = ps_dec->ps_cur_pic->i4_poc - u4_poc0;
+-                i16_tb = CLIP3(-128, 127, i16_tb);
+-                i16_td = u4_poc1 - u4_poc0;
+-                i16_td = CLIP3(-128, 127, i16_td);
++                i4_tb = ps_dec->ps_cur_pic->i4_poc - i4_poc0;
++                i16_tb = CLIP3(-128, 127, i4_tb);
++                i4_td = i4_poc1 - i4_poc0;
++                i16_td = CLIP3(-128, 127, i4_td);
+                 i16_tx = (16384 + ABS(SIGN_POW2_DIV(i16_td, 1))) / i16_td;
+                 i2_dist_scale_factor = CLIP3(-1024, 1023,
+                                             (((i16_tb * i16_tx) + 32) >> 6));
+@@ -1272,7 +1273,7 @@ void ih264d_get_implicit_weights(dec_struct_t *ps_dec)
+                     u2_l0_idx += MAX_REF_BUFS;
+                 }
+                 ps_pic_buff0 = ps_dec->ps_ref_pic_buf_lx[0][u2_l0_idx];
+-                u4_poc0 = ps_pic_buff0->i4_poc;
++                i4_poc0 = ps_pic_buff0->i4_poc;
+                 for(j = 0; j < (uc_num_ref_idx_l1_active << 1); j++)
+                 {
+                     UWORD16 u2_l1_idx;
+@@ -1285,13 +1286,13 @@ void ih264d_get_implicit_weights(dec_struct_t *ps_dec)
+                         u2_l1_idx += MAX_REF_BUFS;
+                     }
+                     ps_pic_buff1 = ps_dec->ps_ref_pic_buf_lx[1][u2_l1_idx];
+-                    u4_poc1 = ps_pic_buff1->i4_poc;
+-                    if(u4_poc1 != u4_poc0)
++                    i4_poc1 = ps_pic_buff1->i4_poc;
++                    if(i4_poc1 != i4_poc0)
+                     {
+-                        i16_tb = i4_cur_poc - u4_poc0;
+-                        i16_tb = CLIP3(-128, 127, i16_tb);
+-                        i16_td = u4_poc1 - u4_poc0;
+-                        i16_td = CLIP3(-128, 127, i16_td);
++                        i4_tb = i4_cur_poc - i4_poc0;
++                        i16_tb = CLIP3(-128, 127, i4_tb);
++                        i4_td = i4_poc1 - i4_poc0;
++                        i16_td = CLIP3(-128, 127, i4_td);
+                         i16_tx = (16384 + ABS(SIGN_POW2_DIV(i16_td, 1)))
+                                         / i16_td;
+                         i2_dist_scale_factor = CLIP3(
+@@ -1398,7 +1399,8 @@ WORD32 ih264d_parse_bslice(dec_struct_t * ps_dec, UWORD16 u2_first_mb_in_slice)
+         {
+             u1_max_ref_idx = MAX_FRAMES << 1;
+         }
+-        if((u4_temp > u1_max_ref_idx) || (ui_temp1 > u1_max_ref_idx))
++        if((u4_temp > u1_max_ref_idx) || (ui_temp1 > u1_max_ref_idx)
++                        || (u4_temp < 1) || (ui_temp1 < 1))
+         {
+             return ERROR_NUM_REF;
+         }
+@@ -1531,10 +1533,7 @@ WORD32 ih264d_parse_bslice(dec_struct_t * ps_dec, UWORD16 u2_first_mb_in_slice)
              }
  
              num_entries = ((2 * num_entries) + 1);
@@ -236,7 +321,7 @@ index 772964a..db64ce9 100644
              size = num_entries * sizeof(void *);
              size += PAD_MAP_IDX_POC * sizeof(void *);
 diff --git a/decoder/ih264d_parse_pslice.c b/decoder/ih264d_parse_pslice.c
-index bcfbe05..d6b0f23 100644
+index bcfbe05..9b9256b 100644
 --- a/decoder/ih264d_parse_pslice.c
 +++ b/decoder/ih264d_parse_pslice.c
 @@ -1696,10 +1696,8 @@ WORD32 ih264d_mark_err_slice_skip(dec_struct_t * ps_dec,
@@ -252,6 +337,15 @@ index bcfbe05..d6b0f23 100644
          size = num_entries * sizeof(void *);
          size += PAD_MAP_IDX_POC * sizeof(void *);
  
+@@ -1963,7 +1961,7 @@ WORD32 ih264d_parse_pslice(dec_struct_t *ps_dec, UWORD16 u2_first_mb_in_slice)
+ 
+ 
+         UWORD8 u1_max_ref_idx = MAX_FRAMES << u1_field_pic_flag;
+-        if(u4_temp > u1_max_ref_idx)
++        if(u4_temp > u1_max_ref_idx || u4_temp < 1)
+         {
+             return ERROR_NUM_REF;
+         }
 @@ -2063,10 +2061,7 @@ WORD32 ih264d_parse_pslice(dec_struct_t *ps_dec, UWORD16 u2_first_mb_in_slice)
                  num_entries = 1;
              }
@@ -265,7 +359,7 @@ index bcfbe05..d6b0f23 100644
              size = num_entries * sizeof(void *);
              size += PAD_MAP_IDX_POC * sizeof(void *);
 diff --git a/decoder/ih264d_parse_slice.c b/decoder/ih264d_parse_slice.c
-index fad2dff..bdfccb6 100644
+index fad2dff..2d8a9af 100644
 --- a/decoder/ih264d_parse_slice.c
 +++ b/decoder/ih264d_parse_slice.c
 @@ -72,6 +72,7 @@
@@ -312,7 +406,18 @@ index fad2dff..bdfccb6 100644
          }
  
          if(!ps_dec->ps_cur_pic)
-@@ -1785,10 +1802,8 @@ WORD32 ih264d_parse_decode_slice(UWORD8 u1_is_idr_slice,
+@@ -1365,9 +1382,8 @@ WORD32 ih264d_parse_decode_slice(UWORD8 u1_is_idr_slice,
+         if(ps_dec->u1_dangling_field == 1)
+         {
+             ps_dec->u1_second_field = 1 - ps_dec->u1_second_field;
+-            ps_cur_slice->u1_bottom_field_flag = u1_bottom_field_flag;
+-            ps_dec->u2_prv_frame_num = u2_frame_num;
+             ps_dec->u1_first_slice_in_stream = 0;
++            ps_dec->u1_top_bottom_decoded = TOP_FIELD_ONLY | BOT_FIELD_ONLY;
+             return ERROR_DANGLING_FIELD_IN_PIC;
+         }
+ 
+@@ -1785,10 +1801,8 @@ WORD32 ih264d_parse_decode_slice(UWORD8 u1_is_idr_slice,
              num_entries = 1;
          }
          num_entries = ((2 * num_entries) + 1);
