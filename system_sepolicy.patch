@@ -1,3 +1,26 @@
+diff --git a/Android.mk b/Android.mk
+index 0bfa54d..a8b7ff7 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -95,7 +95,10 @@ $(sepolicy_policy.conf): $(call build_policy, $(sepolicy_build_files))
+ 	$(hide) m4 $(PRIVATE_ADDITIONAL_M4DEFS) \
+ 		-D mls_num_sens=$(PRIVATE_MLS_SENS) -D mls_num_cats=$(PRIVATE_MLS_CATS) \
+ 		-D target_build_variant=$(TARGET_BUILD_VARIANT) \
++		-D target_has_legacy_camera_hal1=$(TARGET_HAS_LEGACY_CAMERA_HAL1) \
++		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXTRELS) \
+ 		-s $^ > $@
++
+ 	$(hide) sed '/dontaudit/d' $@ > $@.dontaudit
+ 
+ $(LOCAL_BUILT_MODULE): $(sepolicy_policy.conf) $(HOST_OUT_EXECUTABLES)/checkpolicy $(HOST_OUT_EXECUTABLES)/sepolicy-analyze
+@@ -134,6 +137,7 @@ $(sepolicy_policy_recovery.conf): $(call build_policy, $(sepolicy_build_files))
+ 		-D mls_num_sens=$(PRIVATE_MLS_SENS) -D mls_num_cats=$(PRIVATE_MLS_CATS) \
+ 		-D target_build_variant=$(TARGET_BUILD_VARIANT) \
+ 		-D target_recovery=true \
++		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXTRELS) \
+ 		-s $^ > $@
+ 
+ $(LOCAL_BUILT_MODULE): $(sepolicy_policy_recovery.conf) $(HOST_OUT_EXECUTABLES)/checkpolicy $(HOST_OUT_EXECUTABLES)/sepolicy-analyze
 diff --git a/app.te b/app.te
 index e9dd7b3..ef2bd9d 100644
 --- a/app.te
@@ -12,9 +35,18 @@ index e9dd7b3..ef2bd9d 100644
  
  # Block device access.
 diff --git a/domain.te b/domain.te
-index 45569de..21c9df2 100644
+index 45569de..5013ad3 100644
 --- a/domain.te
 +++ b/domain.te
+@@ -62,7 +62,7 @@ allow domain debuggerd:unix_stream_socket connectto;
+ 
+ # Root fs.
+ allow domain rootfs:dir search;
+-allow domain rootfs:lnk_file read;
++allow domain rootfs:lnk_file { read getattr };
+ 
+ # Device accesses.
+ allow domain device:dir search;
 @@ -159,6 +159,7 @@ neverallow {
    -dumpstate
    -system_server
@@ -59,7 +91,7 @@ index 45569de..21c9df2 100644
  } dalvikcache_data_file:dir no_w_dir_perms;
  
  # Only system_server should be able to send commands via the zygote socket
-@@ -428,13 +435,13 @@ neverallow { domain userdebug_or_eng(`-dumpstate -shell -su') } su_exec:file no_
+@@ -428,14 +435,24 @@ neverallow { domain userdebug_or_eng(`-dumpstate -shell -su') } su_exec:file no_
  # The only exceptions are for NDK text relocations associated with
  # https://code.google.com/p/android/issues/detail?id=23203
  # which, long term, need to go away.
@@ -70,26 +102,40 @@ index 45569de..21c9df2 100644
 -  -app_data_file
 -  -asec_public_file
 -}:file execmod;
-+#neverallow * {
-+#  file_type
-+#  -system_data_file
-+#  -apk_data_file
-+#  -app_data_file
-+#  -asec_public_file
-+#}:file execmod;
- 
+-
++#ifelse(target_needs_platform_text_relocations, `true',
++#  `neverallow * {
++#    file_type
++#    -system_file
++#    -system_data_file
++#    -apk_data_file
++#    -app_data_file
++#    -asec_public_file
++#  }:file execmod;'
++#,
++#  `neverallow * {
++#    file_type
++#    -system_data_file
++#    -apk_data_file
++#    -app_data_file
++#    -asec_public_file
++#  }:file execmod;'
++#)
  # Do not allow making the stack or heap executable.
  # We would also like to minimize execmem but it seems to be
-@@ -443,7 +450,7 @@ neverallow * self:process { execstack execheap };
+ # required by some device-specific service domains.
+@@ -443,7 +460,9 @@ neverallow * self:process { execstack execheap };
  
  # prohibit non-zygote spawned processes from using shared libraries
  # with text relocations. b/20013628 .
 -neverallow { domain -appdomain } file_type:file execmod;
-+#neverallow { domain -appdomain } file_type:file execmod;
++#ifelse(target_needs_platform_text_relocations, `true', ,
++#  `neverallow { domain -appdomain } file_type:file execmod;'
++#)
  
  neverallow { domain -init } proc:{ file dir } mounton;
  
-@@ -570,7 +577,7 @@ neverallow * domain:file { execute execute_no_trans entrypoint };
+@@ -570,7 +589,7 @@ neverallow * domain:file { execute execute_no_trans entrypoint };
  # Instead, if access to part of debugfs is desired, it should have a
  # more specific label.
  # TODO: fix system_server and dumpstate
@@ -111,6 +157,23 @@ index 87cec82..bdc7cbe 100644
  type fuse, sdcard_type, fs_type, mlstrustedobject;
  type sdcardfs, sdcard_type, fs_type, mlstrustedobject;
  type vfat, sdcard_type, fs_type, mlstrustedobject;
+diff --git a/mediaserver.te b/mediaserver.te
+index 5fbaa30..dc05e14 100644
+--- a/mediaserver.te
++++ b/mediaserver.te
+@@ -94,6 +94,12 @@ allow mediaserver processinfo_service:service_manager find;
+ allow mediaserver scheduling_policy_service:service_manager find;
+ allow mediaserver surfaceflinger_service:service_manager find;
+ 
++ifelse(target_has_legacy_camera_hal1, `true',
++  allow mediaserver cameraproxy_service:service_manager find;
++  allow mediaserver cameraserver_service:service_manager add;
++,
++)
++
+ # /oem access
+ allow mediaserver oemfs:dir search;
+ allow mediaserver oemfs:file r_file_perms;
 diff --git a/priv_app.te b/priv_app.te
 index 85516a6..e1f96d5 100644
 --- a/priv_app.te
