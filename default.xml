@@ -5,8 +5,6 @@
            fetch="https://android.googlesource.com/" />
   <remote  name="ads"
            fetch="https://github.com/AndDiSa/" />
-  <remote  name="millosr"
-           fetch="https://github.com/millosr/" />
   <remote  name="unlegacy"
            fetch="https://github.com/Unlegacy-Android/" />
   <default revision="refs/tags/android-7.1.2_r33"
@@ -31,7 +29,7 @@
   <project path="developers/samples/android" name="platform/developers/samples/android" />
   <project path="development" name="platform/development" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/asus/grouper" name="android_device_asus_grouper" remote="ads" revision="ads-7.1.0" groups="device,grouper" />
-  <project path="device/asus/tilapia" name="device_asus_tilapia" remote="millosr" revision="nAOSP-7.1.2" groups="device,grouper" />
+  <project path="device/asus/tilapia" name="device_asus_tilapia" remote="ads" revision="ads-7.1.0" groups="device,grouper" />
   <project path="device/common" name="device/common" groups="pdk-cw-fs,pdk-fs" />
   <project path="device/generic/arm64" name="device/generic/arm64" groups="pdk" />
   <project path="device/generic/armv7-a-neon" name="device/generic/armv7-a-neon" groups="pdk" />
