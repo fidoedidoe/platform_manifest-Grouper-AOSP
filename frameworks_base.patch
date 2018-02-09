@@ -382,6 +382,29 @@ index 011884c..a5035ee 100644
      <!-- @SystemApi Allows an application to manage (create, destroy,
           Z-order) application tokens in the window manager.
           <p>Not for use by third-party applications.
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index 7baed78..a0fbdac 100644
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -2710,4 +2710,6 @@
+          is installed. -->
+     <bool name="config_permissionReviewRequired">false</bool>
+ 
++    <!-- Whether to enable HumanInteractionController by default -->
++    <bool name="config_HICEnabledDefault">true</bool>
+ </resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index 08ac043..9e6f3b8 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -2749,4 +2749,7 @@
+   <java-symbol type="bool" name="use_lock_pattern_drawable" />
+   <java-symbol type="drawable" name="lockscreen_notselected" />
+   <java-symbol type="drawable" name="lockscreen_selected" />
++
++  <!-- Whether to enable HumanInteractionController by default -->
++  <java-symbol type="bool" name="config_HICEnabledDefault" />
+ </resources>
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
 index f062b59..574f7c1 100644
 --- a/core/res/res/xml/config_webview_packages.xml
@@ -491,6 +514,33 @@ index 0fa9a85..925f368 100644
      </string>
  
      <!-- The tiles to display in QuickSettings -->
+diff --git a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java b/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
+index 851ab77..a384641 100644
+--- a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
++++ b/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
+@@ -36,9 +36,6 @@ public class HumanInteractionClassifier extends Classifier {
+     private static final String HIC_ENABLE = "HIC_enable";
+     private static final float FINGER_DISTANCE = 0.1f;
+ 
+-    /** Default value for the HIC_ENABLE setting: 1 - enabled, 0 - disabled */
+-    private static final int HIC_ENABLE_DEFAULT = 1;
+-
+     private static HumanInteractionClassifier sInstance = null;
+ 
+     private final Handler mHandler = new Handler();
+@@ -105,9 +102,11 @@ public class HumanInteractionClassifier extends Classifier {
+     }
+ 
+     private void updateConfiguration() {
++        boolean enabledDefault = mContext.getResources()
++                .getBoolean(com.android.internal.R.bool.config_HICEnabledDefault);
+         mEnableClassifier = 0 != Settings.Global.getInt(
+                 mContext.getContentResolver(),
+-                HIC_ENABLE, HIC_ENABLE_DEFAULT);
++ 		HIC_ENABLE, enabledDefault ? 1 : 0);
+     }
+ 
+     public void setType(int type) {
 diff --git a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
 index dd80750..005206f 100644
 --- a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java

@@ -4169,10 +4169,23 @@ index d656519..d2ea7a5 100644
  
      if(1 == ps_codec->i4_pic_present)
 diff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c
-index c0f1564..6a9fe5e 100644
+index c0f1564..8348fc6 100644
 --- a/decoder/ihevcd_parse_headers.c
 +++ b/decoder/ihevcd_parse_headers.c
-@@ -1285,15 +1285,31 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+@@ -1272,12 +1272,6 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+     if((0 >= ps_sps->i2_pic_width_in_luma_samples) || (0 >= ps_sps->i2_pic_height_in_luma_samples))
+         return IHEVCD_INVALID_PARAMETER;
+ 
+-    /* i2_pic_width_in_luma_samples and i2_pic_height_in_luma_samples
+-       should be multiples of min_cb_size. Here these are aligned to 8,
+-       i.e. smallest CB size */
+-    ps_sps->i2_pic_width_in_luma_samples = ALIGN8(ps_sps->i2_pic_width_in_luma_samples);
+-    ps_sps->i2_pic_height_in_luma_samples = ALIGN8(ps_sps->i2_pic_height_in_luma_samples);
+-
+     BITS_PARSE("pic_cropping_flag", value, ps_bitstrm, 1);
+     ps_sps->i1_pic_cropping_flag = value;
+ 
+@@ -1285,15 +1279,31 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
      {
  
          UEV_PARSE("pic_crop_left_offset", value, ps_bitstrm);
@@ -4204,7 +4217,18 @@ index c0f1564..6a9fe5e 100644
          ps_sps->i2_pic_crop_bottom_offset = value;
      }
      else
-@@ -1797,6 +1813,19 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
+@@ -1402,7 +1412,9 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+                     (ps_sps->i1_log2_diff_max_min_transform_block_size < 0) ||
+                     (ps_sps->i1_log2_max_transform_block_size > ps_sps->i1_log2_ctb_size) ||
+                     (ps_sps->i1_log2_ctb_size < 4) ||
+-                    (ps_sps->i1_log2_ctb_size > 6))
++                    (ps_sps->i1_log2_ctb_size > 6) ||
++                    (ps_sps->i2_pic_width_in_luma_samples % (1 << ps_sps->i1_log2_min_coding_block_size) != 0) ||
++                    (ps_sps->i2_pic_height_in_luma_samples % (1 << ps_sps->i1_log2_min_coding_block_size) != 0))
+     {
+         return IHEVCD_INVALID_PARAMETER;
+     }
+@@ -1797,6 +1809,19 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
      BITS_PARSE("tiles_enabled_flag", value, ps_bitstrm, 1);
      ps_pps->i1_tiles_enabled_flag = value;
  
@@ -4225,7 +4249,7 @@ index c0f1564..6a9fe5e 100644
      ps_pps->i1_entropy_coding_sync_enabled_flag = value;
  
 diff --git a/decoder/ihevcd_parse_slice.c b/decoder/ihevcd_parse_slice.c
-index 126b14c..70c2e88 100644
+index 126b14c..e394a4e 100644
 --- a/decoder/ihevcd_parse_slice.c
 +++ b/decoder/ihevcd_parse_slice.c
 @@ -2376,26 +2376,29 @@ IHEVCD_ERROR_T ihevcd_parse_slice_data(codec_t *ps_codec)
@@ -4329,6 +4353,51 @@ index 126b14c..70c2e88 100644
                              ((ps_pps->i1_tiles_enabled_flag && end_of_tile) ||
                                              (ps_pps->i1_entropy_coding_sync_enabled_flag && end_of_tile_row)))
              {
+@@ -3090,15 +3105,7 @@ IHEVCD_ERROR_T ihevcd_parse_slice_data(codec_t *ps_codec)
+                 UWORD32 *pu4_nbr_pu_idx = ps_proc->pu4_pic_pu_idx_map;
+                 WORD32 nbr_pu_idx_strd = MAX_CTB_SIZE / MIN_PU_SIZE + 2;
+                 pu_t *ps_pu;
+-
+-                for(row = 0; row < ctb_size / MIN_PU_SIZE; row++)
+-                {
+-                    for(col = 0; col < ctb_size / MIN_PU_SIZE; col++)
+-                    {
+-                        pu1_pic_pu_map_ctb[row * ctb_size / MIN_PU_SIZE + col] = 0;
+-                    }
+-                }
+-
++                WORD32 ctb_size_in_min_pu = (ctb_size / MIN_PU_SIZE);
+ 
+                 /* Neighbor PU idx update inside CTB */
+                 /* 1byte per 4x4. Indicates the PU idx that 4x4 block belongs to */
+@@ -3149,6 +3156,27 @@ IHEVCD_ERROR_T ihevcd_parse_slice_data(codec_t *ps_codec)
+ 
+                     }
+                 }
++
++                /* Updating the CTB level PU idx (Used for collocated MV pred)*/
++                {
++                    WORD32 ctb_row, ctb_col, index_pic_map, index_nbr_map;
++                    WORD32 first_pu_of_ctb;
++                    first_pu_of_ctb = pu4_nbr_pu_idx[1 + nbr_pu_idx_strd];
++
++                    index_pic_map = 0 * ctb_size_in_min_pu + 0;
++                    index_nbr_map = (0 + 1) * nbr_pu_idx_strd + (0 + 1);
++
++                    for(ctb_row = 0; ctb_row < ctb_size_in_min_pu; ctb_row++)
++                    {
++                        for(ctb_col = 0; ctb_col < ctb_size_in_min_pu; ctb_col++)
++                        {
++                            pu1_pic_pu_map_ctb[index_pic_map + ctb_col] = pu4_nbr_pu_idx[index_nbr_map + ctb_col]
++                                            - first_pu_of_ctb;
++                        }
++                        index_pic_map += ctb_size_in_min_pu;
++                        index_nbr_map += nbr_pu_idx_strd;
++                    }
++                }
+             }
+ 
+             /*************************************************/
 diff --git a/decoder/ihevcd_parse_slice_header.c b/decoder/ihevcd_parse_slice_header.c
 index e1b50b7..ae19328 100644
 --- a/decoder/ihevcd_parse_slice_header.c
@@ -4342,6 +4411,54 @@ index e1b50b7..ae19328 100644
              return IHEVCD_IGNORE_SLICE;
      }
      else
+diff --git a/decoder/ihevcd_process_slice.c b/decoder/ihevcd_process_slice.c
+index f57cc31..72db2cc 100644
+--- a/decoder/ihevcd_process_slice.c
++++ b/decoder/ihevcd_process_slice.c
+@@ -704,14 +704,8 @@ IHEVCD_ERROR_T ihevcd_process(process_ctxt_t *ps_proc)
+                     WORD32 row, col;
+                     UWORD32 *pu4_nbr_pu_idx = ps_proc->pu4_pic_pu_idx_map;
+                     WORD32 nbr_pu_idx_strd = MAX_CTB_SIZE / MIN_PU_SIZE + 2;
++                    WORD32 ctb_size_in_min_pu = (ctb_size / MIN_PU_SIZE);
+ 
+-                    for(row = 0; row < ctb_size / MIN_PU_SIZE; row++)
+-                    {
+-                        for(col = 0; col < ctb_size / MIN_PU_SIZE; col++)
+-                        {
+-                            pu1_pic_pu_map_ctb[row * ctb_size / MIN_PU_SIZE + col] = 0;
+-                        }
+-                    }
+                     /* Neighbor PU idx update inside CTB */
+                     /* 1byte per 4x4. Indicates the PU idx that 4x4 block belongs to */
+ 
+@@ -760,6 +754,27 @@ IHEVCD_ERROR_T ihevcd_process(process_ctxt_t *ps_proc)
+                                             pu4_nbr_pu_idx[(ctb_size_left / MIN_PU_SIZE) * nbr_pu_idx_strd + i + 1];
+ 
+                         }
++
++                        /* Updating the CTB level PU idx (Used for collocated MV pred)*/
++                        {
++                            WORD32 ctb_row, ctb_col, index_pic_map, index_nbr_map;
++                            WORD32 first_pu_of_ctb;
++                            first_pu_of_ctb = pu4_nbr_pu_idx[1 + nbr_pu_idx_strd];
++
++                            index_pic_map = 0 * ctb_size_in_min_pu + 0;
++                            index_nbr_map = (0 + 1) * nbr_pu_idx_strd + (0 + 1);
++
++                            for(ctb_row = 0; ctb_row < ctb_size_in_min_pu; ctb_row++)
++                            {
++                                for(ctb_col = 0; ctb_col < ctb_size_in_min_pu; ctb_col++)
++                                {
++                                    pu1_pic_pu_map_ctb[index_pic_map + ctb_col] = pu4_nbr_pu_idx[index_nbr_map + ctb_col]
++                                                    - first_pu_of_ctb;
++                                }
++                                index_pic_map += ctb_size_in_min_pu;
++                                index_nbr_map += nbr_pu_idx_strd;
++                            }
++                        }
+                     }
+                 }
+             }
 diff --git a/decoder/ihevcd_utils.c b/decoder/ihevcd_utils.c
 index 7d76577..14cdd2b 100755
 --- a/decoder/ihevcd_utils.c

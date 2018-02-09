@@ -10,6 +10,19 @@ index 2ec976d..c155cf7 100644
  
      <application android:label="@string/settings_label"
              android:icon="@mipmap/ic_launcher_settings"
+diff --git a/res/values/strings.xml b/res/values/strings.xml
+index c731267..9ec0584 100644
+--- a/res/values/strings.xml
++++ b/res/values/strings.xml
+@@ -1348,7 +1348,7 @@
+     <string name="bluetooth_display_passkey_pin_msg">To pair with:<xliff:g id="bold1">&lt;br>&lt;b></xliff:g><xliff:g id="device_name">%1$s</xliff:g><xliff:g id="end_bold1">&lt;/b>&lt;br>&lt;br></xliff:g>Type on it:<xliff:g id="bold2">&lt;br>&lt;b></xliff:g><xliff:g id="passkey">%2$s</xliff:g><xliff:g id="end_bold2">&lt;/b></xliff:g>, then press Return or Enter.</string>
+ 
+     <!-- Checkbox message in pairing dialogs.  [CHAR LIMIT=NONE] -->
+-    <string name="bluetooth_pairing_shares_phonebook">Allow <xliff:g id="device_name">%1$s</xliff:g> to access your contacts and call history</string>
++    <string name="bluetooth_pairing_shares_phonebook">Allow access to your contacts and call history</string>
+ 
+     <!-- Title for BT error dialogs. -->
+     <string name="bluetooth_error_title"></string>
 diff --git a/src/com/android/settings/ActivityPicker.java b/src/com/android/settings/ActivityPicker.java
 index 2c3436f..ae61944 100644
 --- a/src/com/android/settings/ActivityPicker.java
