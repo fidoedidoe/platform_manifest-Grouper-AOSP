@@ -1,0 +1,56 @@
+diff --git a/Android.mk b/Android.mk
+index f44b4d4..f0061b9 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -13,13 +13,10 @@
+ # limitations under the License.
+ #
+ LOCAL_PATH:= $(call my-dir)
+-
+ apache_http_src_files := \
+     $(call all-java-files-under,src) \
+     $(call all-java-files-under,android)
+-
+ apache_http_java_libs := conscrypt
+-
+ apache_http_packages := $(strip \
+   com.android.internal.http.multipart \
+   org.apache.commons.logging \
+@@ -93,9 +90,9 @@ LOCAL_SRC_FILES += \
+     ../../frameworks/base/core/java/android/net/http/HttpResponseCache.java \
+     ../../frameworks/base/core/java/android/net/http/SslCertificate.java \
+     ../../frameworks/base/core/java/android/net/http/SslError.java \
++    ../../frameworks/base/core/java/com/android/internal/util/HexDump.java \
+ 
+-
+-LOCAL_JAVA_LIBRARIES := $(apache_http_java_libs)
++LOCAL_JAVA_LIBRARIES := bouncycastle okhttp $(apache_http_java_libs)
+ LOCAL_MODULE_CLASS := JAVA_LIBRARIES
+ LOCAL_DROIDDOC_SOURCE_PATH := $(LOCAL_PATH)/src \
+   $(LOCAL_PATH)/android \
+@@ -109,8 +106,8 @@ LOCAL_DROIDDOC_OPTIONS:= \
+ LOCAL_SDK_VERSION := 21
+ LOCAL_UNINSTALLABLE_MODULE := true
+ LOCAL_MODULE := apache-http-stubs-gen
+-
+ include $(BUILD_DROIDDOC)
++
+ apache_http_stubs_gen_stamp := $(full_target)
+ 
+ # For unbundled build we'll use the prebuilt jar from prebuilts/sdk.
+@@ -122,7 +119,6 @@ LOCAL_MODULE := org.apache.http.legacy
+ LOCAL_SOURCE_FILES_ALL_GENERATED := true
+ LOCAL_SDK_VERSION := 21
+ include $(BUILD_STATIC_JAVA_LIBRARY)
+-
+ # Make sure to run droiddoc first to generate the stub source files.
+ $(full_classes_compiled_jar) : $(apache_http_stubs_gen_stamp)
+ $(full_classes_jack) : $(apache_http_stubs_gen_stamp)
+@@ -130,7 +126,6 @@ $(full_classes_jack) : $(apache_http_stubs_gen_stamp)
+ # Archive a copy of the classes.jar in SDK build.
+ $(call dist-for-goals,sdk win_sdk,$(full_classes_jar):org.apache.http.legacy.jar)
+ endif  # not TARGET_BUILD_APPS
+-
+ apache_http_src_files :=
+ apache_http_java_libs :=
+ apache_http_packages :=

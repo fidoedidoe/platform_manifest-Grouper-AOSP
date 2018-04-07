@@ -1,0 +1,554 @@
+diff --git a/common/error_code.h b/common/error_code.h
+index 32155f2..3800bf0 100644
+--- a/common/error_code.h
++++ b/common/error_code.h
+@@ -72,6 +72,9 @@ enum class ErrorCode : int {
+   kOmahaRequestXMLHasEntityDecl = 46,
+   kFilesystemVerifierError = 47,
+   kUserCanceled = 48,
++  kNonCriticalUpdateInOOBE = 49,
++  // kOmahaUpdateIgnoredOverCellular = 50,
++  kPayloadTimestampError = 51,
+ 
+   // VERY IMPORTANT! When adding new error codes:
+   //
+diff --git a/common/error_code_utils.cc b/common/error_code_utils.cc
+index dc9eaf4..0a015eb 100644
+--- a/common/error_code_utils.cc
++++ b/common/error_code_utils.cc
+@@ -142,6 +142,10 @@ string ErrorCodeToString(ErrorCode code) {
+       return "ErrorCode::kFilesystemVerifierError";
+     case ErrorCode::kUserCanceled:
+       return "ErrorCode::kUserCanceled";
++    case ErrorCode::kNonCriticalUpdateInOOBE:
++      return "ErrorCode::kNonCriticalUpdateInOOBE";
++    case ErrorCode::kPayloadTimestampError:
++      return "ErrorCode::kPayloadTimestampError";
+     // Don't add a default case to let the compiler warn about newly added
+     // error codes which should be added here.
+   }
+diff --git a/common/fake_hardware.h b/common/fake_hardware.h
+index 0bd297b..25324ae 100644
+--- a/common/fake_hardware.h
++++ b/common/fake_hardware.h
+@@ -82,6 +82,8 @@ class FakeHardware : public HardwareInterface {
+     return false;
+   }
+ 
++  int64_t GetBuildTimestamp() const override { return build_timestamp_; }
++
+   // Setters
+   void SetIsOfficialBuild(bool is_official_build) {
+     is_official_build_ = is_official_build;
+@@ -118,6 +120,10 @@ class FakeHardware : public HardwareInterface {
+     powerwash_count_ = powerwash_count;
+   }
+ 
++  void SetBuildTimestamp(int64_t build_timestamp) {
++    build_timestamp_ = build_timestamp;
++  }
++
+  private:
+   bool is_official_build_;
+   bool is_normal_boot_mode_;
+@@ -128,6 +134,7 @@ class FakeHardware : public HardwareInterface {
+   std::string ec_version_;
+   int powerwash_count_;
+   bool powerwash_scheduled_{false};
++  int64_t build_timestamp_{0};
+ 
+   DISALLOW_COPY_AND_ASSIGN(FakeHardware);
+ };
+diff --git a/common/hardware_interface.h b/common/hardware_interface.h
+index c2d4296..d5f73f7 100644
+--- a/common/hardware_interface.h
++++ b/common/hardware_interface.h
+@@ -17,6 +17,8 @@
+ #ifndef UPDATE_ENGINE_COMMON_HARDWARE_INTERFACE_H_
+ #define UPDATE_ENGINE_COMMON_HARDWARE_INTERFACE_H_
+ 
++#include <stdint.h>
++
+ #include <string>
+ #include <vector>
+ 
+@@ -81,6 +83,9 @@ class HardwareInterface {
+   // powerwash cycles. In case of an error, such as no directory available,
+   // returns false.
+   virtual bool GetPowerwashSafeDirectory(base::FilePath* path) const = 0;
++
++  // Returns the timestamp of the current OS build.
++  virtual int64_t GetBuildTimestamp() const = 0;
+ };
+ 
+ }  // namespace chromeos_update_engine
+diff --git a/hardware_android.cc b/hardware_android.cc
+index 778f8ad..9490c24 100644
+--- a/hardware_android.cc
++++ b/hardware_android.cc
+@@ -25,6 +25,7 @@
+ #include <bootloader.h>
+ 
+ #include <base/files/file_util.h>
++#include <base/strings/stringprintf.h>
+ #include <brillo/make_unique_ptr.h>
+ #include <cutils/properties.h>
+ 
+@@ -45,6 +46,16 @@ const char kAndroidRecoveryPowerwashCommand[] =
+     "--wipe_data\n"
+     "--reason=wipe_data_from_ota\n";
+ 
++// Android properties that identify the hardware and potentially non-updatable
++// parts of the bootloader (such as the bootloader version and the baseband
++// version).
++const char kPropBootBootloader[] = "ro.boot.bootloader";
++const char kPropBootBaseband[] = "ro.boot.baseband";
++const char kPropProductManufacturer[] = "ro.product.manufacturer";
++const char kPropBootHardwareSKU[] = "ro.boot.hardware.sku";
++const char kPropBootRevision[] = "ro.boot.revision";
++const char kPropBuildDateUTC[] = "ro.build.date.utc";
++
+ // Write a recovery command line |message| to the BCB. The arguments to recovery
+ // must be separated by '\n'. An empty string will erase the BCB.
+ bool WriteBootloaderRecoveryMessage(const string& message) {
+@@ -122,26 +133,43 @@ bool HardwareAndroid::IsNormalBootMode() const {
+   return property_get_bool("ro.debuggable", 0) != 1;
+ }
+ 
++bool HardwareAndroid::AreDevFeaturesEnabled() const {
++  return !IsNormalBootMode();
++}
++
++bool HardwareAndroid::IsOOBEEnabled() const {
++  // No OOBE flow blocking updates for Android-based boards.
++  return false;
++}
++
+ bool HardwareAndroid::IsOOBEComplete(base::Time* out_time_of_oobe) const {
+-  LOG(WARNING) << "STUB: Assuming OOBE is complete.";
++  LOG(WARNING) << "OOBE is not enabled but IsOOBEComplete() called.";
+   if (out_time_of_oobe)
+     *out_time_of_oobe = base::Time();
+   return true;
+ }
+ 
+ string HardwareAndroid::GetHardwareClass() const {
+-  LOG(WARNING) << "STUB: GetHardwareClass().";
+-  return "ANDROID";
++  char manufacturer[PROPERTY_VALUE_MAX];
++  char sku[PROPERTY_VALUE_MAX];
++  char revision[PROPERTY_VALUE_MAX];
++  property_get(kPropBootHardwareSKU, sku, "");
++  property_get(kPropProductManufacturer, manufacturer, "");
++  property_get(kPropBootRevision, revision, "");
++
++  return base::StringPrintf("%s:%s:%s", manufacturer, sku, revision);
+ }
+ 
+ string HardwareAndroid::GetFirmwareVersion() const {
+-  LOG(WARNING) << "STUB: GetFirmwareVersion().";
+-  return "0";
++  char bootloader[PROPERTY_VALUE_MAX];
++  property_get(kPropBootBootloader, bootloader, "");
++  return bootloader;
+ }
+ 
+ string HardwareAndroid::GetECVersion() const {
+-  LOG(WARNING) << "STUB: GetECVersion().";
+-  return "0";
++  char baseband[PROPERTY_VALUE_MAX];
++  property_get(kPropBootBaseband, baseband, "");
++  return baseband;
+ }
+ 
+ int HardwareAndroid::GetPowerwashCount() const {
+@@ -173,4 +201,8 @@ bool HardwareAndroid::GetPowerwashSafeDirectory(base::FilePath* path) const {
+   return false;
+ }
+ 
++int64_t HardwareAndroid::GetBuildTimestamp() const {
++  return property_get_int64(kPropBuildDateUTC, 0);
++}
++
+ }  // namespace chromeos_update_engine
+diff --git a/hardware_android.h b/hardware_android.h
+index 4ea3404..6561377 100644
+--- a/hardware_android.h
++++ b/hardware_android.h
+@@ -45,6 +45,7 @@ class HardwareAndroid final : public HardwareInterface {
+   bool CancelPowerwash() override;
+   bool GetNonVolatileDirectory(base::FilePath* path) const override;
+   bool GetPowerwashSafeDirectory(base::FilePath* path) const override;
++  int64_t GetBuildTimestamp() const override;
+ 
+  private:
+   DISALLOW_COPY_AND_ASSIGN(HardwareAndroid);
+diff --git a/hardware_chromeos.cc b/hardware_chromeos.cc
+index 85131fc..f0f3ea9 100644
+--- a/hardware_chromeos.cc
++++ b/hardware_chromeos.cc
+@@ -16,22 +16,27 @@
+ 
+ #include "update_engine/hardware_chromeos.h"
+ 
++#include <base/files/file_path.h>
+ #include <base/files/file_util.h>
+ #include <base/logging.h>
+ #include <base/strings/string_number_conversions.h>
+ #include <base/strings/string_util.h>
++#include <brillo/key_value_store.h>
+ #include <brillo/make_unique_ptr.h>
++#include <debugd/dbus-constants.h>
+ #include <vboot/crossystem.h>
+ 
+ extern "C" {
+ #include "vboot/vboot_host.h"
+ }
+ 
++#include "update_engine/common/constants.h"
+ #include "update_engine/common/hardware.h"
+ #include "update_engine/common/hwid_override.h"
+ #include "update_engine/common/platform_constants.h"
+ #include "update_engine/common/subprocess.h"
+ #include "update_engine/common/utils.h"
++#include "update_engine/dbus_connection.h"
+ 
+ using std::string;
+ using std::vector;
+@@ -50,6 +55,14 @@ const char kPowerwashSafeDirectory[] =
+ // a powerwash is performed.
+ const char kPowerwashCountMarker[] = "powerwash_count";
+ 
++// The name of the marker file used to trigger powerwash when post-install
++// completes successfully so that the device is powerwashed on next reboot.
++const char kPowerwashMarkerFile[] =
++    "/mnt/stateful_partition/factory_install_reset";
++
++// The contents of the powerwash marker file.
++const char kPowerwashCommand[] = "safe fast keepimg reason=update_engine\n";
++
+ // UpdateManager config path.
+ const char* kConfigFilePath = "/etc/update_manager.conf";
+ 
+@@ -64,11 +77,19 @@ namespace hardware {
+ 
+ // Factory defined in hardware.h.
+ std::unique_ptr<HardwareInterface> CreateHardware() {
+-  return brillo::make_unique_ptr(new HardwareChromeOS());
++  std::unique_ptr<HardwareChromeOS> hardware(new HardwareChromeOS());
++  hardware->Init();
++  return std::move(hardware);
+ }
+ 
+ }  // namespace hardware
+ 
++void HardwareChromeOS::Init() {
++  LoadConfig("" /* root_prefix */, IsNormalBootMode());
++  debugd_proxy_.reset(
++      new org::chromium::debugdProxy(DBusConnection::Get()->GetDBus()));
++}
++
+ bool HardwareChromeOS::IsOfficialBuild() const {
+   return VbGetSystemPropertyInt("debug_build") == 0;
+ }
+@@ -78,7 +99,32 @@ bool HardwareChromeOS::IsNormalBootMode() const {
+   return !dev_mode;
+ }
+ 
++bool HardwareChromeOS::AreDevFeaturesEnabled() const {
++  // Even though the debugd tools are also gated on devmode, checking here can
++  // save us a D-Bus call so it's worth doing explicitly.
++  if (IsNormalBootMode())
++    return false;
++
++  int32_t dev_features = debugd::DEV_FEATURES_DISABLED;
++  brillo::ErrorPtr error;
++  // Some boards may not include debugd so it's expected that this may fail,
++  // in which case we treat it as disabled.
++  if (debugd_proxy_ && debugd_proxy_->QueryDevFeatures(&dev_features, &error) &&
++      !(dev_features & debugd::DEV_FEATURES_DISABLED)) {
++    LOG(INFO) << "Debugd dev tools enabled.";
++    return true;
++  }
++  return false;
++}
++
++bool HardwareChromeOS::IsOOBEEnabled() const {
++  return is_oobe_enabled_;
++}
++
+ bool HardwareChromeOS::IsOOBEComplete(base::Time* out_time_of_oobe) const {
++  if (!is_oobe_enabled_) {
++    LOG(WARNING) << "OOBE is not enabled but IsOOBEComplete() was called";
++  }
+   struct stat statbuf;
+   if (stat(kOOBECompletedMarker, &statbuf) != 0) {
+     if (errno != ENOENT) {
+@@ -150,9 +196,11 @@ bool HardwareChromeOS::SchedulePowerwash() {
+   bool result = utils::WriteFile(
+       kPowerwashMarkerFile, kPowerwashCommand, strlen(kPowerwashCommand));
+   if (result) {
+-    LOG(INFO) << "Created " << marker_file << " to powerwash on next reboot";
++    LOG(INFO) << "Created " << kPowerwashMarkerFile
++              << " to powerwash on next reboot";
+   } else {
+-    PLOG(ERROR) << "Error in creating powerwash marker file: " << marker_file;
++    PLOG(ERROR) << "Error in creating powerwash marker file: "
++                << kPowerwashMarkerFile;
+   }
+ 
+   return result;
+@@ -163,10 +211,10 @@ bool HardwareChromeOS::CancelPowerwash() {
+ 
+   if (result) {
+     LOG(INFO) << "Successfully deleted the powerwash marker file : "
+-              << marker_file;
++              << kPowerwashMarkerFile;
+   } else {
+     PLOG(ERROR) << "Could not delete the powerwash marker file : "
+-                << marker_file;
++                << kPowerwashMarkerFile;
+   }
+ 
+   return result;
+@@ -182,4 +230,27 @@ bool HardwareChromeOS::GetPowerwashSafeDirectory(base::FilePath* path) const {
+   return true;
+ }
+ 
++int64_t HardwareChromeOS::GetBuildTimestamp() const {
++  // TODO(senj): implement this in Chrome OS.
++  return 0;
++}
++
++void HardwareChromeOS::LoadConfig(const string& root_prefix, bool normal_mode) {
++  brillo::KeyValueStore store;
++
++  if (normal_mode) {
++    store.Load(base::FilePath(root_prefix + kConfigFilePath));
++  } else {
++    if (store.Load(base::FilePath(root_prefix + kStatefulPartition +
++                                  kConfigFilePath))) {
++      LOG(INFO) << "UpdateManager Config loaded from stateful partition.";
++    } else {
++      store.Load(base::FilePath(root_prefix + kConfigFilePath));
++    }
++  }
++
++  if (!store.GetBoolean(kConfigOptsIsOOBEEnabled, &is_oobe_enabled_))
++    is_oobe_enabled_ = true;  // Default value.
++}
++
+ }  // namespace chromeos_update_engine
+diff --git a/hardware_chromeos.h b/hardware_chromeos.h
+index 221f12c..e3f086f 100644
+--- a/hardware_chromeos.h
++++ b/hardware_chromeos.h
+@@ -46,6 +46,7 @@ class HardwareChromeOS final : public HardwareInterface {
+   bool CancelPowerwash() override;
+   bool GetNonVolatileDirectory(base::FilePath* path) const override;
+   bool GetPowerwashSafeDirectory(base::FilePath* path) const override;
++  int64_t GetBuildTimestamp() const override;
+ 
+  private:
+   DISALLOW_COPY_AND_ASSIGN(HardwareChromeOS);
+diff --git a/metrics_utils.cc b/metrics_utils.cc
+index 11260fc..433ca1e 100644
+--- a/metrics_utils.cc
++++ b/metrics_utils.cc
+@@ -74,6 +74,7 @@ metrics::AttemptResult GetAttemptResult(ErrorCode code) {
+     case ErrorCode::kDownloadPayloadVerificationError:
+     case ErrorCode::kSignedDeltaPayloadExpectedError:
+     case ErrorCode::kDownloadPayloadPubKeyVerificationError:
++    case ErrorCode::kPayloadTimestampError:
+       return metrics::AttemptResult::kPayloadVerificationFailed;
+ 
+     case ErrorCode::kNewRootfsVerificationError:
+@@ -205,6 +206,7 @@ metrics::DownloadErrorCode GetDownloadErrorCode(ErrorCode code) {
+     case ErrorCode::kOmahaRequestXMLHasEntityDecl:
+     case ErrorCode::kFilesystemVerifierError:
+     case ErrorCode::kUserCanceled:
++    case ErrorCode::kPayloadTimestampError:
+       break;
+ 
+     // Special flags. These can't happen (we mask them out above) but
+diff --git a/payload_consumer/delta_performer.cc b/payload_consumer/delta_performer.cc
+index a156132..b338d34 100644
+--- a/payload_consumer/delta_performer.cc
++++ b/payload_consumer/delta_performer.cc
+@@ -1502,6 +1502,14 @@ ErrorCode DeltaPerformer::ValidateManifest() {
+     }
+   }
+ 
++  if (manifest_.max_timestamp() < hardware_->GetBuildTimestamp()) {
++    LOG(ERROR) << "The current OS build timestamp ("
++               << hardware_->GetBuildTimestamp()
++               << ") is newer than the maximum timestamp in the manifest ("
++               << manifest_.max_timestamp() << ")";
++    return ErrorCode::kPayloadTimestampError;
++  }
++
+   // TODO(garnold) we should be adding more and more manifest checks, such as
+   // partition boundaries etc (see chromium-os:37661).
+ 
+diff --git a/payload_consumer/delta_performer_unittest.cc b/payload_consumer/delta_performer_unittest.cc
+index d1918b7..2ee4516 100644
+--- a/payload_consumer/delta_performer_unittest.cc
++++ b/payload_consumer/delta_performer_unittest.cc
+@@ -638,6 +638,20 @@ TEST_F(DeltaPerformerTest, ValidateManifestBadMinorVersion) {
+                         ErrorCode::kUnsupportedMinorPayloadVersion);
+ }
+ 
++TEST_F(DeltaPerformerTest, ValidateManifestDowngrade) {
++  // The Manifest we are validating.
++  DeltaArchiveManifest manifest;
++
++  manifest.set_minor_version(kFullPayloadMinorVersion);
++  manifest.set_max_timestamp(1);
++  fake_hardware_.SetBuildTimestamp(2);
++
++  RunManifestValidation(manifest,
++                        DeltaPerformer::kSupportedMajorPayloadVersion,
++                        InstallPayloadType::kFull,
++                        ErrorCode::kPayloadTimestampError);
++}
++
+ TEST_F(DeltaPerformerTest, BrilloMetadataSignatureSizeTest) {
+   EXPECT_TRUE(performer_.Write(kDeltaMagic, sizeof(kDeltaMagic)));
+ 
+diff --git a/payload_generator/generate_delta_main.cc b/payload_generator/generate_delta_main.cc
+index 0716c1f..85785c5 100644
+--- a/payload_generator/generate_delta_main.cc
++++ b/payload_generator/generate_delta_main.cc
+@@ -322,6 +322,10 @@ int Main(int argc, char** argv) {
+   DEFINE_string(zlib_fingerprint, "",
+                 "The fingerprint of zlib in the source image in hash string "
+                 "format, used to check imgdiff compatibility.");
++  DEFINE_int64(max_timestamp,
++               0,
++               "The maximum timestamp of the OS allowed to apply this "
++               "payload.");
+ 
+   DEFINE_string(old_channel, "",
+                 "The channel for the old image. 'dev-channel', 'npo-channel', "
+@@ -573,6 +577,8 @@ int Main(int argc, char** argv) {
+     }
+   }
+ 
++  payload_config.max_timestamp = FLAGS_max_timestamp;
++
+   if (payload_config.is_delta) {
+     LOG(INFO) << "Generating delta update";
+   } else {
+diff --git a/payload_generator/payload_file.cc b/payload_generator/payload_file.cc
+index 2f95b21..d2ae706 100644
+--- a/payload_generator/payload_file.cc
++++ b/payload_generator/payload_file.cc
+@@ -70,6 +70,7 @@ bool PayloadFile::Init(const PayloadGenerationConfig& config) {
+     *(manifest_.mutable_new_image_info()) = config.target.image_info;
+ 
+   manifest_.set_block_size(config.block_size);
++  manifest_.set_max_timestamp(config.max_timestamp);
+   return true;
+ }
+ 
+diff --git a/payload_generator/payload_generation_config.h b/payload_generator/payload_generation_config.h
+index 8617d14..dd3242a 100644
+--- a/payload_generator/payload_generation_config.h
++++ b/payload_generator/payload_generation_config.h
+@@ -190,6 +190,9 @@ struct PayloadGenerationConfig {
+ 
+   // The block size used for all the operations in the manifest.
+   size_t block_size = 4096;
++
++  // The maximum timestamp of the OS allowed to apply this payload.
++  int64_t max_timestamp = 0;
+ };
+ 
+ }  // namespace chromeos_update_engine
+diff --git a/payload_state.cc b/payload_state.cc
+index 04b6579..7859420 100644
+--- a/payload_state.cc
++++ b/payload_state.cc
+@@ -295,6 +295,7 @@ void PayloadState::UpdateFailed(ErrorCode error) {
+     case ErrorCode::kPayloadMismatchedType:
+     case ErrorCode::kUnsupportedMajorPayloadVersion:
+     case ErrorCode::kUnsupportedMinorPayloadVersion:
++    case ErrorCode::kPayloadTimestampError:
+       IncrementUrlIndex();
+       break;
+ 
+diff --git a/scripts/brillo_update_payload b/scripts/brillo_update_payload
+index 8d51118..9b599d4 100755
+--- a/scripts/brillo_update_payload
++++ b/scripts/brillo_update_payload
+@@ -143,6 +143,10 @@ if [[ "${COMMAND}" == "generate" ]]; then
+     "Optional: Path to a source image. If specified, this makes a delta update."
+   DEFINE_string metadata_size_file "" \
+     "Optional: Path to output metadata size."
++  DEFINE_string max_timestamp "" \
++    "Optional: The maximum unix timestamp of the OS allowed to apply this \
++payload, should be set to a number higher than the build timestamp of the \
++system running on the device, 0 if not specified."
+ fi
+ if [[ "${COMMAND}" == "hash" || "${COMMAND}" == "sign" ]]; then
+   DEFINE_string unsigned_payload "" "Path to the input unsigned payload."
+@@ -524,6 +528,10 @@ cmd_generate() {
+     GENERATOR_ARGS+=( --out_metadata_size_file="${FLAGS_metadata_size_file}" )
+   fi
+ 
++  if [[ -n "${FLAGS_max_timestamp}" ]]; then
++    GENERATOR_ARGS+=( --max_timestamp="${FLAGS_max_timestamp}" )
++  fi
++
+   if [[ -n "${POSTINSTALL_CONFIG_FILE}" ]]; then
+     GENERATOR_ARGS+=(
+       --new_postinstall_config_file="${POSTINSTALL_CONFIG_FILE}"
+diff --git a/update_attempter_android.cc b/update_attempter_android.cc
+index 1269cef..0fa1fa1 100644
+--- a/update_attempter_android.cc
++++ b/update_attempter_android.cc
+@@ -26,6 +26,7 @@
+ #include <brillo/bind_lambda.h>
+ #include <brillo/message_loops/message_loop.h>
+ #include <brillo/strings/string_utils.h>
++#include <log/log.h>
+ 
+ #include "update_engine/common/constants.h"
+ #include "update_engine/common/file_fetcher.h"
+@@ -308,6 +309,11 @@ void UpdateAttempterAndroid::ProcessingDone(const ActionProcessor* processor,
+       LOG(INFO) << "Resetting update progress.";
+       break;
+ 
++    case ErrorCode::kPayloadTimestampError:
++      // SafetyNet logging, b/36232423
++      android_errorWriteLog(0x534e4554, "36232423");
++      break;
++
+     default:
+       // Ignore all other error codes.
+       break;
+diff --git a/update_manager/chromeos_policy.cc b/update_manager/chromeos_policy.cc
+index aed2aaa..02ec19f 100644
+--- a/update_manager/chromeos_policy.cc
++++ b/update_manager/chromeos_policy.cc
+@@ -76,6 +76,7 @@ bool HandleErrorCode(ErrorCode err_code, int* url_num_error_p) {
+     case ErrorCode::kPayloadMismatchedType:
+     case ErrorCode::kUnsupportedMajorPayloadVersion:
+     case ErrorCode::kUnsupportedMinorPayloadVersion:
++    case ErrorCode::kPayloadTimestampError:
+       LOG(INFO) << "Advancing download URL due to error "
+                 << chromeos_update_engine::utils::ErrorCodeToString(err_code)
+                 << " (" << static_cast<int>(err_code) << ")";
+diff --git a/update_metadata.proto b/update_metadata.proto
+index 454c736..596a04e 100644
+--- a/update_metadata.proto
++++ b/update_metadata.proto
+@@ -281,4 +281,8 @@ message DeltaArchiveManifest {
+   // array can have more than two partitions if needed, and they are identified
+   // by the partition name.
+   repeated PartitionUpdate partitions = 13;
++
++  // The maximum timestamp of the OS allowed to apply this payload.
++  // Can be used to prevent downgrading the OS.
++  optional int64 max_timestamp = 14;
+ }

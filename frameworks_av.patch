@@ -576,6 +576,21 @@ index 594128c..caaa735 100644
      if (index >= mOutputBuffers.size()) {
          for (size_t i = mOutputBuffers.size(); i <= index; ++i) {
              mOutputBuffers.add();
+diff --git a/media/libstagefright/AACExtractor.cpp b/media/libstagefright/AACExtractor.cpp
+index 7449aa7..3ba1858 100644
+--- a/media/libstagefright/AACExtractor.cpp
++++ b/media/libstagefright/AACExtractor.cpp
+@@ -294,6 +294,10 @@ status_t AACSource::read(
+     if (options && options->getSeekTo(&seekTimeUs, &mode)) {
+         if (mFrameDurationUs > 0) {
+             int64_t seekFrame = seekTimeUs / mFrameDurationUs;
++            if (seekFrame < 0 || seekFrame >= (int64_t)mOffsetVector.size()) {
++                android_errorWriteLog(0x534e4554, "70239507");
++                return ERROR_MALFORMED;
++            }
+             mCurrentTimeUs = seekFrame * mFrameDurationUs;
+ 
+             mOffset = mOffsetVector.itemAt(seekFrame);
 diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
 index 37fd5a5..337fb2d 100644
 --- a/media/libstagefright/ACodec.cpp
@@ -1720,10 +1735,26 @@ index 7abc019..590146d 100644
      while (mPrevEstimates.size() > 3) {
          mPrevEstimates.erase(mPrevEstimates.begin());
 diff --git a/media/libstagefright/httplive/M3UParser.cpp b/media/libstagefright/httplive/M3UParser.cpp
-index c04549a..78a2dd0 100644
+index c04549a..1242c95 100644
 --- a/media/libstagefright/httplive/M3UParser.cpp
 +++ b/media/libstagefright/httplive/M3UParser.cpp
-@@ -897,6 +897,9 @@ status_t M3UParser::parseStreamInf(
+@@ -658,10 +658,13 @@ status_t M3UParser::parse(const void *_data, size_t size) {
+         }
+ 
+         if (!line.startsWith("#")) {
++            if (itemMeta == NULL) {
++                ALOGV("itemMeta == NULL");
++                return ERROR_MALFORMED;
++            }
+             if (!mIsVariantPlaylist) {
+                 int64_t durationUs;
+-                if (itemMeta == NULL
+-                        || !itemMeta->findInt64("durationUs", &durationUs)) {
++                if (!itemMeta->findInt64("durationUs", &durationUs)) {
+                     return ERROR_MALFORMED;
+                 }
+                 itemMeta->setInt32("discontinuity-sequence",
+@@ -897,6 +900,9 @@ status_t M3UParser::parseStreamInf(
          }
      }
  

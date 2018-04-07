@@ -3708,6 +3708,16 @@ index e55b380..512116a 100644
  # wpa_ptk_rekey: Maximum lifetime for PTK in seconds. This can be used to
  # enforce rekeying of PTK to mitigate some attacks against TKIP deficiencies.
  #
+diff --git a/wpa_supplicant/wpa_supplicant_template.conf b/wpa_supplicant/wpa_supplicant_template.conf
+index f3f2a64..d511029 100644
+--- a/wpa_supplicant/wpa_supplicant_template.conf
++++ b/wpa_supplicant/wpa_supplicant_template.conf
+@@ -3,4 +3,4 @@ update_config=1
+ eapol_version=1
+ ap_scan=1
+ fast_reauth=1
+-pmf=1
++pmf=0
 diff --git a/wpa_supplicant/wpas_glue.c b/wpa_supplicant/wpas_glue.c
 index f84c8b9..8c1d4fc 100644
 --- a/wpa_supplicant/wpas_glue.c

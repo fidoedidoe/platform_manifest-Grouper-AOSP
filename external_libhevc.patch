@@ -4460,10 +4460,10 @@ index f57cc31..72db2cc 100644
                  }
              }
 diff --git a/decoder/ihevcd_utils.c b/decoder/ihevcd_utils.c
-index 7d76577..14cdd2b 100755
+index 7d76577..14c36ba 100755
 --- a/decoder/ihevcd_utils.c
 +++ b/decoder/ihevcd_utils.c
-@@ -662,6 +662,103 @@ IHEVCD_ERROR_T ihevcd_mv_buf_mgr_add_bufs(codec_t *ps_codec)
+@@ -662,6 +662,106 @@ IHEVCD_ERROR_T ihevcd_mv_buf_mgr_add_bufs(codec_t *ps_codec)
  *******************************************************************************
  *
  * @brief
@@ -4499,6 +4499,9 @@ index 7d76577..14cdd2b 100755
 +        /* In case of shared mode, do not check validity of ps_codec->ps_out_buffer */
 +        return (IHEVCD_ERROR_T)IHEVCD_SUCCESS;
 +    }
++
++    if(ps_codec->i4_disp_strd > (WORD32)wd)
++        wd = ps_codec->i4_disp_strd;
 +
 +    if(ps_codec->e_chroma_fmt == IV_YUV_420P)
 +        u4_min_num_out_bufs = MIN_OUT_BUFS_420;
@@ -4567,7 +4570,7 @@ index 7d76577..14cdd2b 100755
  *  Picture level initializations required during parsing
  *
  * @par Description:
-@@ -713,6 +810,10 @@ IHEVCD_ERROR_T ihevcd_parse_pic_init(codec_t *ps_codec)
+@@ -713,6 +813,10 @@ IHEVCD_ERROR_T ihevcd_parse_pic_init(codec_t *ps_codec)
          ps_codec->s_parse.i4_first_pic_init = 1;
      }
  
