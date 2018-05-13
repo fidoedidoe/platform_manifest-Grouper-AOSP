@@ -1,0 +1,48 @@
+diff --git a/service/java/com/android/server/wifi/WifiStateMachine.java b/service/java/com/android/server/wifi/WifiStateMachine.java
+index 89aabcf..7802b3d 100644
+--- a/service/java/com/android/server/wifi/WifiStateMachine.java
++++ b/service/java/com/android/server/wifi/WifiStateMachine.java
+@@ -2329,7 +2329,7 @@ public class WifiStateMachine extends StateMachine implements WifiNative.WifiRss
+ 
+     @Override
+     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+-        if (args.length > 1 && WifiMetrics.PROTO_DUMP_ARG.equals(args[0])
++        if (args != null && args.length > 1 && WifiMetrics.PROTO_DUMP_ARG.equals(args[0])
+                 && WifiMetrics.CLEAN_DUMP_ARG.equals(args[1])) {
+             // Dump only wifi metrics serialized proto bytes (base64)
+             updateWifiMetrics();
+@@ -4340,6 +4340,12 @@ public class WifiStateMachine extends StateMachine implements WifiNative.WifiRss
+             logStateAndMessage(message, this);
+             switch (message.what) {
+                 case CMD_START_SUPPLICANT:
++                   /* Stop a running supplicant after a runtime restart
++                    * Avoids issues with drivers that do not handle interface down
++                    * on a running supplicant properly.
++                    */
++                    mWifiMonitor.killSupplicant(mP2pSupported);
++
+                     if (mWifiNative.loadDriver()) {
+                         try {
+                             mNwService.wifiFirmwareReload(mInterfaceName, "STA");
+@@ -4372,12 +4378,6 @@ public class WifiStateMachine extends StateMachine implements WifiNative.WifiRss
+                             loge("Unable to change interface settings: " + ie);
+                         }
+ 
+-                       /* Stop a running supplicant after a runtime restart
+-                        * Avoids issues with drivers that do not handle interface down
+-                        * on a running supplicant properly.
+-                        */
+-                        mWifiMonitor.killSupplicant(mP2pSupported);
+-
+                         if (mWifiNative.startHal() == false) {
+                             /* starting HAL is optional */
+                             loge("Failed to start HAL");
+@@ -5527,7 +5527,7 @@ public class WifiStateMachine extends StateMachine implements WifiNative.WifiRss
+                     // If we have COMPLETED a connection to a BSSID, start doing
+                     // DNAv4/DNAv6 -style probing for on-link neighbors of
+                     // interest (e.g. routers); harmless if none are configured.
+-                    if (state == SupplicantState.COMPLETED) {
++                    if (isRoaming() && state == SupplicantState.COMPLETED) {
+                         mIpManager.confirmConfiguration();
+                     }
+                     break;

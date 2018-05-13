@@ -1,5 +1,5 @@
 diff --git a/Android.mk b/Android.mk
-index 0bfa54d..a8b7ff7 100644
+index 0bfa54d..886e081 100644
 --- a/Android.mk
 +++ b/Android.mk
 @@ -95,7 +95,10 @@ $(sepolicy_policy.conf): $(call build_policy, $(sepolicy_build_files))
@@ -7,7 +7,7 @@ index 0bfa54d..a8b7ff7 100644
  		-D mls_num_sens=$(PRIVATE_MLS_SENS) -D mls_num_cats=$(PRIVATE_MLS_CATS) \
  		-D target_build_variant=$(TARGET_BUILD_VARIANT) \
 +		-D target_has_legacy_camera_hal1=$(TARGET_HAS_LEGACY_CAMERA_HAL1) \
-+		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXTRELS) \
++		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXT_RELOCATIONS) \
  		-s $^ > $@
 +
  	$(hide) sed '/dontaudit/d' $@ > $@.dontaudit
@@ -17,7 +17,7 @@ index 0bfa54d..a8b7ff7 100644
  		-D mls_num_sens=$(PRIVATE_MLS_SENS) -D mls_num_cats=$(PRIVATE_MLS_CATS) \
  		-D target_build_variant=$(TARGET_BUILD_VARIANT) \
  		-D target_recovery=true \
-+		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXTRELS) \
++		-D target_needs_platform_text_relocations=$(TARGET_NEEDS_PLATFORM_TEXT_RELOCATIONS) \
  		-s $^ > $@
  
  $(LOCAL_BUILT_MODULE): $(sepolicy_policy_recovery.conf) $(HOST_OUT_EXECUTABLES)/checkpolicy $(HOST_OUT_EXECUTABLES)/sepolicy-analyze
@@ -34,6 +34,16 @@ index e9dd7b3..ef2bd9d 100644
  neverallow { appdomain -bluetooth } self:capability2 *;
  
  # Block device access.
+diff --git a/attributes b/attributes
+index a846c34..e8fe3ae 100644
+--- a/attributes
++++ b/attributes
+@@ -113,3 +113,5 @@ attribute boot_control_hal;
+ # postinstall. This includes the background daemon and the sideload tool from
+ # recovery for A/B devices.
+ attribute update_engine_common;
++
++attribute tracefs_type;
 diff --git a/domain.te b/domain.te
 index 45569de..5013ad3 100644
 --- a/domain.te
