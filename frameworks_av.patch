@@ -4721,6 +4721,18 @@ index f18b88d..a3f3ea5 100644
          mAudioTrackServerProxy = new StaticAudioTrackServerProxy(mCblk, mBuffer, frameCount,
                  mFrameSize);
      }
+diff --git a/services/audiopolicy/common/managerdefinitions/src/AudioPort.cpp b/services/audiopolicy/common/managerdefinitions/src/AudioPort.cpp
+index 17ed537..ce9bdc2 100644
+--- a/services/audiopolicy/common/managerdefinitions/src/AudioPort.cpp
++++ b/services/audiopolicy/common/managerdefinitions/src/AudioPort.cpp
+@@ -384,6 +384,7 @@ AudioPortConfig::AudioPortConfig()
+     mSamplingRate = 0;
+     mChannelMask = AUDIO_CHANNEL_NONE;
+     mFormat = AUDIO_FORMAT_INVALID;
++    memset(&mGain, 0, sizeof(struct audio_gain_config));
+     mGain.index = -1;
+ }
+ 
 diff --git a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
 index 3e5bb7d..2ecd6b1 100644
 --- a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp

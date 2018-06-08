@@ -154,6 +154,18 @@ index 69ded69..5f9e42c 100644
      dump_stat(fd, &stats->overdue_scheduling,
                "    Overdue scheduling time in ms (total/max/avg)");
  
+diff --git a/osi/src/config.c b/osi/src/config.c
+index 345f907..0e8c421 100644
+--- a/osi/src/config.c
++++ b/osi/src/config.c
+@@ -34,6 +34,7 @@
+ #include "osi/include/allocator.h"
+ #include "osi/include/list.h"
+ #include "osi/include/log.h"
++#include "log/log.h"
+ 
+ typedef struct {
+   char *key;
 diff --git a/stack/avdt/avdt_api.c b/stack/avdt/avdt_api.c
 index 98ef5f7..5201054 100644
 --- a/stack/avdt/avdt_api.c
@@ -168,7 +180,7 @@ index 98ef5f7..5201054 100644
              p_pkt->offset = L2CAP_MIN_OFFSET;
              p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
 diff --git a/stack/avrc/avrc_pars_ct.c b/stack/avrc/avrc_pars_ct.c
-index 63cc384..0e67dd5 100644
+index 63cc384..bd96d6c 100644
 --- a/stack/avrc/avrc_pars_ct.c
 +++ b/stack/avrc/avrc_pars_ct.c
 @@ -22,6 +22,7 @@
@@ -205,6 +217,51 @@ index 63cc384..0e67dd5 100644
          for (int xx = 0; xx < p_result->get_cur_app_val.num_val; xx++)
          {
              BE_STREAM_TO_UINT8(app_sett[xx].attr_id, p);
+@@ -269,7 +282,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+ 
+     case AVRC_PDU_GET_PLAYER_APP_ATTR_TEXT:
+     {
+-        tAVRC_APP_SETTING_TEXT   *p_setting_text;
+         UINT8                    num_attrs;
+ 
+         if (len == 0)
+@@ -278,9 +290,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+             break;
+         }
+         BE_STREAM_TO_UINT8(num_attrs, p);
++        if (num_attrs > AVRC_MAX_APP_ATTR_SIZE) {
++            num_attrs = AVRC_MAX_APP_ATTR_SIZE;
++        }
+         AVRC_TRACE_DEBUG("%s attr count = %d ", __func__, p_result->get_app_attr_txt.num_attr);
+         p_result->get_app_attr_txt.num_attr = num_attrs;
+-        p_setting_text = (tAVRC_APP_SETTING_TEXT*)osi_malloc(num_attrs * sizeof(tAVRC_APP_SETTING_TEXT));
++        p_result->get_app_attr_txt.p_attrs = (tAVRC_APP_SETTING_TEXT*)osi_malloc(num_attrs * sizeof(tAVRC_APP_SETTING_TEXT));
+         for (int xx = 0; xx < num_attrs; xx++)
+         {
+             BE_STREAM_TO_UINT8(p_result->get_app_attr_txt.p_attrs[xx].attr_id, p);
+@@ -300,7 +315,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+ 
+     case AVRC_PDU_GET_PLAYER_APP_VALUE_TEXT:
+     {
+-        tAVRC_APP_SETTING_TEXT   *p_setting_text;
+         UINT8                    num_vals;
+ 
+         if (len == 0)
+@@ -309,10 +323,13 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+             break;
+         }
+         BE_STREAM_TO_UINT8(num_vals, p);
++        if (num_vals > AVRC_MAX_APP_ATTR_SIZE) {
++            num_vals = AVRC_MAX_APP_ATTR_SIZE;
++        }
+         p_result->get_app_val_txt.num_attr = num_vals;
+         AVRC_TRACE_DEBUG("%s value count = %d ", __func__, p_result->get_app_val_txt.num_attr);
+ 
+-        p_setting_text = (tAVRC_APP_SETTING_TEXT *)osi_malloc(num_vals * sizeof(tAVRC_APP_SETTING_TEXT));
++        p_result->get_app_val_txt.p_attrs = (tAVRC_APP_SETTING_TEXT *)osi_malloc(num_vals * sizeof(tAVRC_APP_SETTING_TEXT));
+         for (int i = 0; i < num_vals; i++) {
+             BE_STREAM_TO_UINT8(p_result->get_app_val_txt.p_attrs[i].attr_id, p);
+             BE_STREAM_TO_UINT16(p_result->get_app_val_txt.p_attrs[i].charset_id, p);
 diff --git a/stack/avrc/avrc_pars_tg.c b/stack/avrc/avrc_pars_tg.c
 index 3f3fe93..63f74b6 100644
 --- a/stack/avrc/avrc_pars_tg.c
@@ -673,10 +730,77 @@ index c888817..7cbe2d3 100644
  /*******************************************************************************
  **
 diff --git a/stack/sdp/sdp_server.c b/stack/sdp/sdp_server.c
-index 627f4cf..43ea76e 100644
+index 627f4cf..ba9e8fd 100644
 --- a/stack/sdp/sdp_server.c
 +++ b/stack/sdp/sdp_server.c
-@@ -230,7 +230,7 @@ static void process_service_search (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -23,6 +23,7 @@
+  *
+  ******************************************************************************/
+ 
++#include <cutils/log.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+@@ -126,11 +127,25 @@ void sdp_server_handle_client_req (tCONN_CB *p_ccb, BT_HDR *p_msg)
+     alarm_set_on_queue(p_ccb->sdp_conn_timer, SDP_INACT_TIMEOUT_MS,
+                        sdp_conn_timer_timeout, p_ccb, btu_general_alarm_queue);
+ 
++    if (p_req + sizeof(pdu_id) + sizeof(trans_num) > p_req_end) {
++        android_errorWriteLog(0x534e4554, "69384124");
++        trans_num = 0;
++        sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX,
++                                SDP_TEXT_BAD_HEADER);
++    }
++
+     /* The first byte in the message is the pdu type */
+     pdu_id = *p_req++;
+ 
+     /* Extract the transaction number and parameter length */
+     BE_STREAM_TO_UINT16 (trans_num, p_req);
++
++    if (p_req + sizeof(param_len) > p_req_end) {
++        android_errorWriteLog(0x534e4554, "69384124");
++        sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX,
++                                SDP_TEXT_BAD_HEADER);
++    }
++
+     BE_STREAM_TO_UINT16 (param_len, p_req);
+ 
+     if ((p_req + param_len) != p_req_end)
+@@ -195,17 +210,14 @@ static void process_service_search (tCONN_CB *p_ccb, UINT16 trans_num,
+     }
+ 
+     /* Get the max replies we can send. Cap it at our max anyways. */
+-    BE_STREAM_TO_UINT16 (max_replies, p_req);
+-
+-    if (max_replies > SDP_MAX_RECORDS)
+-        max_replies = SDP_MAX_RECORDS;
+-
+-
+-    if ((!p_req) || (p_req > p_req_end))
+-    {
++    if (p_req + sizeof(max_replies) + sizeof(uint8_t) > p_req_end) {
++        android_errorWriteLog(0x534e4554, "69384124");
+         sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_MAX_RECORDS_LIST);
+         return;
+     }
++    BE_STREAM_TO_UINT16(max_replies, p_req);
++
++    if (max_replies > SDP_MAX_RECORDS) max_replies = SDP_MAX_RECORDS;
+ 
+ 
+     /* Get a list of handles that match the UUIDs given to us */
+@@ -222,15 +234,15 @@ static void process_service_search (tCONN_CB *p_ccb, UINT16 trans_num,
+     /* Check if this is a continuation request */
+     if (*p_req)
+     {
+-        if (*p_req++ != SDP_CONTINUATION_LEN || (p_req >= p_req_end))
+-        {
++        if (*p_req++ != SDP_CONTINUATION_LEN ||
++            (p_req + sizeof(cont_offset) > p_req_end)) {
+             sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_CONT_STATE,
+                                      SDP_TEXT_BAD_CONT_LEN);
+             return;
          }
          BE_STREAM_TO_UINT16 (cont_offset, p_req);
  
@@ -685,7 +809,39 @@ index 627f4cf..43ea76e 100644
          {
              sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_CONT_STATE,
                                       SDP_TEXT_BAD_CONT_INX);
-@@ -360,6 +360,11 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -327,15 +339,15 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+     BOOLEAN         is_cont = FALSE;
+     UINT16          attr_len;
+ 
+-    /* Extract the record handle */
+-    BE_STREAM_TO_UINT32 (rec_handle, p_req);
+-
+-    if (p_req > p_req_end)
+-    {
++    if (p_req + sizeof(rec_handle) + sizeof(max_list_len) > p_req_end) {
++        android_errorWriteLog(0x534e4554, "69384124");
+         sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_SERV_REC_HDL, SDP_TEXT_BAD_HANDLE);
+         return;
+     }
+ 
++    /* Extract the record handle */
++    BE_STREAM_TO_UINT32(rec_handle, p_req);
++
+     /* Get the max list length we can send. Cap it at MTU size minus overhead */
+     BE_STREAM_TO_UINT16 (max_list_len, p_req);
+ 
+@@ -344,8 +356,8 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+ 
+     p_req = sdpu_extract_attr_seq (p_req, param_len, &attr_seq);
+ 
+-    if ((!p_req) || (!attr_seq.num_attr) || (p_req > p_req_end))
+-    {
++    if ((!p_req) || (!attr_seq.num_attr) ||
++        (p_req + sizeof(uint8_t) > p_req_end)) {
+         sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_ATTR_LIST);
+         return;
+     }
+@@ -360,13 +372,19 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
          return;
      }
  
@@ -697,7 +853,37 @@ index 627f4cf..43ea76e 100644
      /* Free and reallocate buffer */
      osi_free(p_ccb->rsp_list);
      p_ccb->rsp_list = (UINT8 *)osi_malloc(max_list_len);
-@@ -584,6 +589,11 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+ 
+     /* Check if this is a continuation request */
+     if (*p_req) {
+-        if (*p_req++ != SDP_CONTINUATION_LEN) {
++        if (*p_req++ != SDP_CONTINUATION_LEN ||
++            (p_req + sizeof(cont_offset) > p_req_end)) {
+             sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_CONT_STATE,
+                                     SDP_TEXT_BAD_CONT_LEN);
+             return;
+@@ -562,8 +580,8 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+     /* Extract the UUID sequence to search for */
+     p_req = sdpu_extract_uid_seq (p_req, param_len, &uid_seq);
+ 
+-    if ((!p_req) || (!uid_seq.num_uids))
+-    {
++    if ((!p_req) || (!uid_seq.num_uids) ||
++        (p_req + sizeof(uint16_t) > p_req_end)) {
+         sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_UUID_LIST);
+         return;
+     }
+@@ -576,21 +594,27 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+ 
+     p_req = sdpu_extract_attr_seq (p_req, param_len, &attr_seq);
+ 
+-    if ((!p_req) || (!attr_seq.num_attr))
+-    {
++    if ((!p_req) || (!attr_seq.num_attr) ||
++        (p_req + sizeof(uint8_t) > p_req_end)) {
+         sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_ATTR_LIST);
+         return;
+     }
  
      memcpy(&attr_seq_sav, &attr_seq, sizeof(tSDP_ATTR_SEQ)) ;
  
@@ -709,8 +895,17 @@ index 627f4cf..43ea76e 100644
      /* Free and reallocate buffer */
      osi_free(p_ccb->rsp_list);
      p_ccb->rsp_list = (UINT8 *)osi_malloc(max_list_len);
+ 
+     /* Check if this is a continuation request */
+     if (*p_req) {
+-        if (*p_req++ != SDP_CONTINUATION_LEN) {
++        if (*p_req++ != SDP_CONTINUATION_LEN ||
++            (p_req + sizeof(uint16_t) > p_req_end)) {
+             sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_CONT_STATE,
+                                     SDP_TEXT_BAD_CONT_LEN);
+             return;
 diff --git a/stack/sdp/sdp_utils.c b/stack/sdp/sdp_utils.c
-index a6f0ba6..aa1bfb5 100644
+index a6f0ba6..6b503cb 100644
 --- a/stack/sdp/sdp_utils.c
 +++ b/stack/sdp/sdp_utils.c
 @@ -120,8 +120,9 @@ tCONN_CB *sdpu_allocate_ccb (void)
@@ -734,6 +929,149 @@ index a6f0ba6..aa1bfb5 100644
  
      /* Drop any response pointer we may be holding */
      p_ccb->con_state = SDP_STATE_IDLE;
+@@ -369,6 +369,8 @@ UINT8 *sdpu_extract_uid_seq (UINT8 *p, UINT16 param_len, tSDP_UUID_SEQ *p_seq)
+     p_seq->num_uids = 0;
+ 
+     /* A UID sequence is composed of a bunch of UIDs. */
++    if (sizeof(descr) > param_len) return (NULL);
++    param_len -= sizeof(descr);
+ 
+     BE_STREAM_TO_UINT8 (descr, p);
+     type = descr >> 3;
+@@ -389,19 +391,25 @@ UINT8 *sdpu_extract_uid_seq (UINT8 *p, UINT16 param_len, tSDP_UUID_SEQ *p_seq)
+         seq_len = 16;
+         break;
+     case SIZE_IN_NEXT_BYTE:
++        if (sizeof(uint8_t) > param_len) return (NULL);
++        param_len -= sizeof(uint8_t);
+         BE_STREAM_TO_UINT8 (seq_len, p);
+         break;
+     case SIZE_IN_NEXT_WORD:
++        if (sizeof(uint16_t) > param_len) return (NULL);
++        param_len -= sizeof(uint16_t);
+         BE_STREAM_TO_UINT16 (seq_len, p);
+         break;
+     case SIZE_IN_NEXT_LONG:
++        if (sizeof(uint32_t) > param_len) return (NULL);
++        param_len -= sizeof(uint32_t);
+         BE_STREAM_TO_UINT32 (seq_len, p);
+         break;
+     default:
+         return (NULL);
+     }
+ 
+-    if (seq_len >= param_len)
++    if (seq_len > param_len)
+         return (NULL);
+ 
+     p_seq_end = p + seq_len;
+@@ -428,12 +436,15 @@ UINT8 *sdpu_extract_uid_seq (UINT8 *p, UINT16 param_len, tSDP_UUID_SEQ *p_seq)
+             uuid_len = 16;
+             break;
+         case SIZE_IN_NEXT_BYTE:
++            if (p + sizeof(uint8_t) > p_seq_end) return NULL;
+             BE_STREAM_TO_UINT8 (uuid_len, p);
+             break;
+         case SIZE_IN_NEXT_WORD:
++            if (p + sizeof(uint16_t) > p_seq_end) return NULL;
+             BE_STREAM_TO_UINT16 (uuid_len, p);
+             break;
+         case SIZE_IN_NEXT_LONG:
++            if (p + sizeof(uint32_t) > p_seq_end) return NULL;
+             BE_STREAM_TO_UINT32 (uuid_len, p);
+             break;
+         default:
+@@ -441,8 +452,8 @@ UINT8 *sdpu_extract_uid_seq (UINT8 *p, UINT16 param_len, tSDP_UUID_SEQ *p_seq)
+         }
+ 
+         /* If UUID length is valid, copy it across */
+-        if ((uuid_len == 2) || (uuid_len == 4) || (uuid_len == 16))
+-        {
++        if (((uuid_len == 2) || (uuid_len == 4) || (uuid_len == 16)) &&
++            (p + uuid_len <= p_seq_end)) {
+             p_seq->uuid_entry[p_seq->num_uids].len = (UINT16) uuid_len;
+             BE_STREAM_TO_ARRAY (p, p_seq->uuid_entry[p_seq->num_uids].value, (int)uuid_len);
+             p_seq->num_uids++;
+@@ -483,33 +494,41 @@ UINT8 *sdpu_extract_attr_seq (UINT8 *p, UINT16 param_len, tSDP_ATTR_SEQ *p_seq)
+     p_seq->num_attr = 0;
+ 
+     /* Get attribute sequence info */
++    if (param_len < sizeof(descr)) return NULL;
++    param_len -= sizeof(descr);
+     BE_STREAM_TO_UINT8 (descr, p);
+     type = descr >> 3;
+     size = descr & 7;
+ 
+     if (type != DATA_ELE_SEQ_DESC_TYPE)
+-        return (p);
++        return NULL;
+ 
+     switch (size)
+     {
+     case SIZE_IN_NEXT_BYTE:
++        if (param_len < sizeof(uint8_t)) return NULL;
++        param_len -= sizeof(uint8_t);
+         BE_STREAM_TO_UINT8 (list_len, p);
+         break;
+ 
+     case SIZE_IN_NEXT_WORD:
++        if (param_len < sizeof(uint16_t)) return NULL;
++        param_len -= sizeof(uint16_t);
+         BE_STREAM_TO_UINT16 (list_len, p);
+         break;
+ 
+     case SIZE_IN_NEXT_LONG:
++        if (param_len < sizeof(uint32_t)) return NULL;
++        param_len -= sizeof(uint32_t);
+         BE_STREAM_TO_UINT32 (list_len, p);
+         break;
+ 
+     default:
+-        return (p);
++        return NULL;
+     }
+ 
+     if (list_len > param_len)
+-        return (p);
++        return NULL;
+ 
+     p_end_list = p + list_len;
+ 
+@@ -521,7 +540,7 @@ UINT8 *sdpu_extract_attr_seq (UINT8 *p, UINT16 param_len, tSDP_ATTR_SEQ *p_seq)
+         size = descr & 7;
+ 
+         if (type != UINT_DESC_TYPE)
+-            return (p);
++            return NULL;
+ 
+         switch (size)
+         {
+@@ -532,20 +551,24 @@ UINT8 *sdpu_extract_attr_seq (UINT8 *p, UINT16 param_len, tSDP_ATTR_SEQ *p_seq)
+             attr_len = 4;
+             break;
+         case SIZE_IN_NEXT_BYTE:
++            if (p + sizeof(uint8_t) > p_end_list) return NULL;
+             BE_STREAM_TO_UINT8 (attr_len, p);
+             break;
+         case SIZE_IN_NEXT_WORD:
++            if (p + sizeof(uint16_t) > p_end_list) return NULL;
+             BE_STREAM_TO_UINT16 (attr_len, p);
+             break;
+         case SIZE_IN_NEXT_LONG:
++            if (p + sizeof(uint32_t) > p_end_list) return NULL;
+             BE_STREAM_TO_UINT32 (attr_len, p);
+             break;
+         default:
+-            return (NULL);
++            return NULL;
+             break;
+         }
+ 
+         /* Attribute length must be 2-bytes or 4-bytes for a paired entry. */
++        if (p + attr_len > p_end_list) return NULL;
+         if (attr_len == 2)
+         {
+             BE_STREAM_TO_UINT16 (p_seq->attr_entry[p_seq->num_attr].start, p);
 diff --git a/stack/sdp/sdpint.h b/stack/sdp/sdpint.h
 index 05414cd..71dab92 100644
 --- a/stack/sdp/sdpint.h

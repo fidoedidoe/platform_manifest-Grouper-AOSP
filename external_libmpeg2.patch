@@ -566,7 +566,7 @@ index 79c5ef6..229579c 100644
              pu1_out += u4_out_wid;
          }
 diff --git a/decoder/impeg2d_pnb_pic.c b/decoder/impeg2d_pnb_pic.c
-index 5540044..a3ae436 100644
+index 5540044..f7937a8 100644
 --- a/decoder/impeg2d_pnb_pic.c
 +++ b/decoder/impeg2d_pnb_pic.c
 @@ -77,6 +77,12 @@ WORD32  impeg2d_dec_p_mb_params(dec_state_t *ps_dec)
@@ -616,7 +616,19 @@ index 5540044..a3ae436 100644
  
      }
      u4_next_word = (UWORD16)impeg2d_bit_stream_nxt(ps_stream,16);
-@@ -280,6 +313,8 @@ WORD32 impeg2d_dec_pnb_mb_params(dec_state_t *ps_dec)
+@@ -266,6 +299,11 @@ WORD32 impeg2d_dec_pnb_mb_params(dec_state_t *ps_dec)
+     {
+         u2_mb_addr_incr = impeg2d_get_mb_addr_incr(ps_stream);
+ 
++        if(0 == u2_mb_addr_incr)
++        {
++            return IV_FAIL;
++        }
++
+         if(ps_dec->u2_first_mb)
+         {
+             /****************************************************************/
+@@ -280,6 +318,8 @@ WORD32 impeg2d_dec_pnb_mb_params(dec_state_t *ps_dec)
              ps_dec->u2_mb_x = u2_mb_addr_incr - 1;
              /* For error resilience */
              ps_dec->u2_mb_x = MIN(ps_dec->u2_mb_x, (ps_dec->u2_num_horiz_mb - 1));
@@ -625,7 +637,7 @@ index 5540044..a3ae436 100644
  
              /****************************************************************/
              /* mb_addr_incr is forced to 1 because in this decoder it is used */
-@@ -510,6 +545,12 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_p_b_slice(dec_state_t *ps_dec)
+@@ -510,6 +550,12 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_p_b_slice(dec_state_t *ps_dec)
  
          if(ret)
              return IMPEG2D_MB_TEX_DECODE_ERR;
