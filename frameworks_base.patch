@@ -98,6 +98,169 @@ index 5cc064e..4916c1c 100644
                  if (impl != null && key.mResDir.equals(assetPath)) {
                      if (!ArrayUtils.contains(key.mLibDirs, libAsset)) {
                          final int newLibAssetCount = 1 +
+diff --git a/core/java/android/content/PermissionChecker.java b/core/java/android/content/PermissionChecker.java
+new file mode 100644
+index 0000000..a4b2fe0
+--- /dev/null
++++ b/core/java/android/content/PermissionChecker.java
+@@ -0,0 +1,157 @@
++/*
++ * Copyright (C) 2018 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package android.content;
++import android.annotation.IntDef;
++import android.annotation.NonNull;
++import android.annotation.Nullable;
++import android.app.AppOpsManager;
++import android.content.pm.PackageManager;
++import android.os.Binder;
++import android.os.Process;
++import java.lang.annotation.Retention;
++import java.lang.annotation.RetentionPolicy;
++/**
++ * This class provides permission check APIs that verify both the
++ * permission and the associated app op for this permission if
++ * such is defined.
++ * <p>
++ * In the new permission model permissions with protection level
++ * dangerous are runtime permissions. For apps targeting {@link android.os.Build.VERSION_CODES#M}
++ * and above the user may not grant such permissions or revoke
++ * them at any time. For apps targeting API lower than {@link android.os.Build.VERSION_CODES#M}
++ * these permissions are always granted as such apps do not expect
++ * permission revocations and would crash. Therefore, when the
++ * user disables a permission for a legacy app in the UI the
++ * platform disables the APIs guarded by this permission making
++ * them a no-op which is doing nothing or returning an empty
++ * result or default error.
++ * </p>
++ * <p>
++ * It is important that when you perform an operation on behalf of
++ * another app you use these APIs to check for permissions as the
++ * app may be a legacy app that does not participate in the new
++ * permission model for which the user had disabled the "permission"
++ * which is achieved by disallowing the corresponding app op.
++ * </p>
++ *
++ * @hide
++ */
++public final class PermissionChecker {
++    /** Permission result: The permission is granted. */
++    public static final int PERMISSION_GRANTED =  PackageManager.PERMISSION_GRANTED;
++    /** Permission result: The permission is denied. */
++    public static final int PERMISSION_DENIED =  PackageManager.PERMISSION_DENIED;
++    /** Permission result: The permission is denied because the app op is not allowed. */
++    public static final int PERMISSION_DENIED_APP_OP =  PackageManager.PERMISSION_DENIED  - 1;
++    /** @hide */
++    @IntDef({PERMISSION_GRANTED,
++            PERMISSION_DENIED,
++            PERMISSION_DENIED_APP_OP})
++    @Retention(RetentionPolicy.SOURCE)
++    public @interface PermissionResult {}
++    private PermissionChecker() {
++        /* do nothing */
++    }
++    /**
++     * Checks whether a given package in a UID and PID has a given permission
++     * and whether the app op that corresponds to this permission is allowed.
++     *
++     * @param context Context for accessing resources.
++     * @param permission The permission to check.
++     * @param pid The process id for which to check.
++     * @param uid The uid for which to check.
++     * @param packageName The package name for which to check. If null the
++     *     the first package for the calling UID will be used.
++     * @return The permission check result which is either {@link #PERMISSION_GRANTED}
++     *     or {@link #PERMISSION_DENIED} or {@link #PERMISSION_DENIED_APP_OP}.
++     */
++    @PermissionResult
++    public static int checkPermission(@NonNull Context context, @NonNull String permission,
++            int pid, int uid, @Nullable String packageName) {
++        if (context.checkPermission(permission, pid, uid) == PackageManager.PERMISSION_DENIED) {
++            return PERMISSION_DENIED;
++        }
++        AppOpsManager appOpsManager = context.getSystemService(AppOpsManager.class);
++        String op = appOpsManager.permissionToOp(permission);
++        if (op == null) {
++            return PERMISSION_GRANTED;
++        }
++        if (packageName == null) {
++            String[] packageNames = context.getPackageManager().getPackagesForUid(uid);
++            if (packageNames == null || packageNames.length <= 0) {
++                return PERMISSION_DENIED;
++            }
++            packageName = packageNames[0];
++        }
++        if (appOpsManager.noteProxyOpNoThrow(op, packageName)
++                != AppOpsManager.MODE_ALLOWED) {
++            return PERMISSION_DENIED_APP_OP;
++        }
++        return PERMISSION_GRANTED;
++    }
++    /**
++     * Checks whether your app has a given permission and whether the app op
++     * that corresponds to this permission is allowed.
++     *
++     * @param context Context for accessing resources.
++     * @param permission The permission to check.
++     * @return The permission check result which is either {@link #PERMISSION_GRANTED}
++     *     or {@link #PERMISSION_DENIED} or {@link #PERMISSION_DENIED_APP_OP}.
++     */
++    @PermissionResult
++    public static int checkSelfPermission(@NonNull Context context,
++            @NonNull String permission) {
++        return checkPermission(context, permission, Process.myPid(),
++                Process.myUid(), context.getPackageName());
++    }
++    /**
++     * Checks whether the IPC you are handling has a given permission and whether
++     * the app op that corresponds to this permission is allowed.
++     *
++     * @param context Context for accessing resources.
++     * @param permission The permission to check.
++     * @param packageName The package name making the IPC. If null the
++     *     the first package for the calling UID will be used.
++     * @return The permission check result which is either {@link #PERMISSION_GRANTED}
++     *     or {@link #PERMISSION_DENIED} or {@link #PERMISSION_DENIED_APP_OP}.
++     */
++    @PermissionResult
++    public static int checkCallingPermission(@NonNull Context context,
++            @NonNull String permission, @Nullable String packageName) {
++        if (Binder.getCallingPid() == Process.myPid()) {
++            return PERMISSION_DENIED;
++        }
++        return checkPermission(context, permission, Binder.getCallingPid(),
++                Binder.getCallingUid(), packageName);
++    }
++    /**
++     * Checks whether the IPC you are handling or your app has a given permission
++     * and whether the app op that corresponds to this permission is allowed.
++     *
++     * @param context Context for accessing resources.
++     * @param permission The permission to check.
++     * @return The permission check result which is either {@link #PERMISSION_GRANTED}
++     *     or {@link #PERMISSION_DENIED} or {@link #PERMISSION_DENIED_APP_OP}.
++     */
++    @PermissionResult
++    public static int checkCallingOrSelfPermission(@NonNull Context context,
++            @NonNull String permission) {
++        String packageName = (Binder.getCallingPid() == Process.myPid())
++                ? context.getPackageName() : null;
++        return checkPermission(context, permission, Binder.getCallingPid(),
++                Binder.getCallingUid(), packageName);
++    }
++}
 diff --git a/core/java/android/content/pm/RegisteredServicesCache.java b/core/java/android/content/pm/RegisteredServicesCache.java
 index a110383..aea843a 100644
 --- a/core/java/android/content/pm/RegisteredServicesCache.java
@@ -181,6 +344,21 @@ index 09af05c..6c069be 100644
              int portSeparator = authority.indexOf(':', userInfoSeparator);
  
              if (portSeparator == NOT_FOUND) {
+diff --git a/core/java/android/provider/MediaStore.java b/core/java/android/provider/MediaStore.java
+index de19f81..b17657b 100644
+--- a/core/java/android/provider/MediaStore.java
++++ b/core/java/android/provider/MediaStore.java
+@@ -678,8 +678,8 @@ public final class MediaStore {
+             // Log.v(TAG, "getThumbnail: origId="+origId+", kind="+kind+", isVideo="+isVideo);
+             // If the magic is non-zero, we simply return thumbnail if it does exist.
+             // querying MediaProvider and simply return thumbnail.
+-            MiniThumbFile thumbFile = new MiniThumbFile(isVideo ? Video.Media.EXTERNAL_CONTENT_URI
+-                    : Images.Media.EXTERNAL_CONTENT_URI);
++            MiniThumbFile thumbFile = MiniThumbFile.instance(
++                    isVideo ? Video.Media.EXTERNAL_CONTENT_URI : Images.Media.EXTERNAL_CONTENT_URI);
+             Cursor c = null;
+             try {
+                 long magic = thumbFile.getMagic(origId);
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
 index a8209af..4766d33 100755
 --- a/core/java/android/provider/Settings.java
@@ -211,6 +389,30 @@ index a512957..6ca6d8a 100644
              }
          }
      }
+diff --git a/core/java/android/speech/RecognitionService.java b/core/java/android/speech/RecognitionService.java
+index 674f809..70dfef5 100644
+--- a/core/java/android/speech/RecognitionService.java
++++ b/core/java/android/speech/RecognitionService.java
+@@ -20,7 +20,7 @@ import android.annotation.SdkConstant;
+ import android.annotation.SdkConstant.SdkConstantType;
+ import android.app.Service;
+ import android.content.Intent;
+-import android.content.pm.PackageManager;
++import android.content.PermissionChecker;
+ import android.os.Binder;
+ import android.os.Bundle;
+ import android.os.Handler;
+@@ -174,8 +174,8 @@ public abstract class RecognitionService extends Service {
+      */
+     private boolean checkPermissions(IRecognitionListener listener) {
+         if (DBG) Log.d(TAG, "checkPermissions");
+-        if (RecognitionService.this.checkCallingOrSelfPermission(android.Manifest.permission.
+-                RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
++        if (PermissionChecker.checkCallingOrSelfPermission(this,
++                android.Manifest.permission.RECORD_AUDIO) == PermissionChecker.PERMISSION_GRANTED) {
+             return true;
+         }
+         try {
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
 index 395f738..169f7e1 100644
 --- a/core/java/android/view/WindowManager.java
@@ -512,6 +714,44 @@ index 011884c..8403e80 100644
      <!-- @SystemApi Allows an application to manage (create, destroy,
           Z-order) application tokens in the window manager.
           <p>Not for use by third-party applications.
+diff --git a/core/res/res/values-mcc310-mnc490-fr/strings.xml b/core/res/res/values-mcc310-mnc490-fr/strings.xml
+deleted file mode 100644
+index 33e0c97..0000000
+--- a/core/res/res/values-mcc310-mnc490-fr/strings.xml
++++ /dev/null
+@@ -1,32 +0,0 @@
+-<?xml version="1.0" encoding="UTF-8"?>
+-<!-- 
+-/*
+-** Copyright 2016, The Android Open Source Project
+-**
+-** Licensed under the Apache License, Version 2.0 (the "License");
+-** you may not use this file except in compliance with the License.
+-** You my obtain a copy of the License at
+-**
+-**     http://www.apache.org/licenses/LICENSE-2.0
+-**
+-** Unless required by applicable law or agreed to in writing, software
+-** distributed under the License is distributed on an "AS IS" BASIS,
+-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-** See the License for the specific language governing permissions and
+-** limitations under the License.
+-*/
+- -->
+-
+-<!--  These resources are around just to allow their values to be customized
+-     for different hardware and product builds.  -->
+-
+-<resources xmlns:android="http://schemas.android.com/apk/res/android"
+-    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+-  <string-array name="wfcOperatorErrorAlertMessages">
+-    <item msgid="2780619740658228275">"Pour passer des appels et envoyer des messages via le Wi-Fi, demandez d\'abord à votre opérateur de configurer ce service. Ensuite, réactivez les appels Wi-Fi dans les paramètres."</item>
+-  </string-array>
+-  <string-array name="wfcOperatorErrorNotificationMessages">
+-    <item msgid="4633656294483906293">"Inscrivez-vous auprès de votre opérateur."</item>
+-  </string-array>
+-    <string name="wfcSpnFormat" msgid="1518868466785799436">"Appels Wi-Fi %s"</string>
+-</resources>
 diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
 index 7baed78..a0fbdac 100644
 --- a/core/res/res/values/config.xml
@@ -647,6 +887,169 @@ index 2c9c9d9..7c187fb 100644
  }
  
  /**
+diff --git a/media/java/android/media/MediaScanner.java b/media/java/android/media/MediaScanner.java
+index 0fafe4b..4c113d9 100644
+--- a/media/java/android/media/MediaScanner.java
++++ b/media/java/android/media/MediaScanner.java
+@@ -323,7 +323,6 @@ public class MediaScanner implements AutoCloseable {
+     private final Uri mAudioUri;
+     private final Uri mVideoUri;
+     private final Uri mImagesUri;
+-    private final Uri mThumbsUri;
+     private final Uri mPlaylistsUri;
+     private final Uri mFilesUri;
+     private final Uri mFilesUriNoNotify;
+@@ -419,7 +418,6 @@ public class MediaScanner implements AutoCloseable {
+         mAudioUri = Audio.Media.getContentUri(volumeName);
+         mVideoUri = Video.Media.getContentUri(volumeName);
+         mImagesUri = Images.Media.getContentUri(volumeName);
+-        mThumbsUri = Images.Thumbnails.getContentUri(volumeName);
+         mFilesUri = Files.getContentUri(volumeName);
+         mFilesUriNoNotify = mFilesUri.buildUpon().appendQueryParameter("nonotify", "1").build();
+ 
+@@ -1283,53 +1281,6 @@ public class MediaScanner implements AutoCloseable {
+         }
+     }
+ 
+-    private void pruneDeadThumbnailFiles() {
+-        HashSet<String> existingFiles = new HashSet<String>();
+-        String directory = "/sdcard/DCIM/.thumbnails";
+-        String [] files = (new File(directory)).list();
+-        Cursor c = null;
+-        if (files == null)
+-            files = new String[0];
+-
+-        for (int i = 0; i < files.length; i++) {
+-            String fullPathString = directory + "/" + files[i];
+-            existingFiles.add(fullPathString);
+-        }
+-
+-        try {
+-            c = mMediaProvider.query(
+-                    mThumbsUri,
+-                    new String [] { "_data" },
+-                    null,
+-                    null,
+-                    null, null);
+-            Log.v(TAG, "pruneDeadThumbnailFiles... " + c);
+-            if (c != null && c.moveToFirst()) {
+-                do {
+-                    String fullPathString = c.getString(0);
+-                    existingFiles.remove(fullPathString);
+-                } while (c.moveToNext());
+-            }
+-
+-            for (String fileToDelete : existingFiles) {
+-                if (false)
+-                    Log.v(TAG, "fileToDelete is " + fileToDelete);
+-                try {
+-                    (new File(fileToDelete)).delete();
+-                } catch (SecurityException ex) {
+-                }
+-            }
+-
+-            Log.v(TAG, "/pruneDeadThumbnailFiles... " + c);
+-        } catch (RemoteException e) {
+-            // We will soon be killed...
+-        } finally {
+-            if (c != null) {
+-                c.close();
+-            }
+-        }
+-    }
+-
+     static class MediaBulkDeleter {
+         StringBuilder whereClause = new StringBuilder();
+         ArrayList<String> whereArgs = new ArrayList<String>(100);
+@@ -1373,9 +1324,6 @@ public class MediaScanner implements AutoCloseable {
+             processPlayLists();
+         }
+ 
+-        if (mOriginalCount == 0 && mImagesUri.equals(Images.Media.getContentUri("external")))
+-            pruneDeadThumbnailFiles();
+-
+         // allow GC to clean up
+         mPlayLists.clear();
+     }
+diff --git a/media/java/android/media/MiniThumbFile.java b/media/java/android/media/MiniThumbFile.java
+index 664308c..4f9dc68 100644
+--- a/media/java/android/media/MiniThumbFile.java
++++ b/media/java/android/media/MiniThumbFile.java
+@@ -51,6 +51,7 @@ public class MiniThumbFile {
+     private RandomAccessFile mMiniThumbFile;
+     private FileChannel mChannel;
+     private ByteBuffer mBuffer;
++    private ByteBuffer mEmptyBuffer;
+     private static final Hashtable<String, MiniThumbFile> sThumbFiles =
+         new Hashtable<String, MiniThumbFile>();
+ 
+@@ -127,9 +128,10 @@ public class MiniThumbFile {
+         return mMiniThumbFile;
+     }
+ 
+-    public MiniThumbFile(Uri uri) {
++    private MiniThumbFile(Uri uri) {
+         mUri = uri;
+         mBuffer = ByteBuffer.allocateDirect(BYTES_PER_MINTHUMB);
++        mEmptyBuffer = ByteBuffer.allocateDirect(BYTES_PER_MINTHUMB);
+     }
+ 
+     public synchronized void deactivate() {
+@@ -184,6 +186,54 @@ public class MiniThumbFile {
+         return 0;
+     }
+ 
++    public synchronized void eraseMiniThumb(long id) {
++        RandomAccessFile r = miniThumbDataFile();
++        if (r != null) {
++            long pos = id * BYTES_PER_MINTHUMB;
++            FileLock lock = null;
++            try {
++                mBuffer.clear();
++                mBuffer.limit(1 + 8);
++
++                lock = mChannel.lock(pos, BYTES_PER_MINTHUMB, false);
++                // check that we can read the following 9 bytes
++                // (1 for the "status" and 8 for the long)
++                if (mChannel.read(mBuffer, pos) == 9) {
++                    mBuffer.position(0);
++                    if (mBuffer.get() == 1) {
++                        long currentMagic = mBuffer.getLong();
++                        if (currentMagic == 0) {
++                            // there is no thumbnail stored here
++                            Log.i(TAG, "no thumbnail for id " + id);
++                            return;
++                        }
++                        // zero out the thumbnail slot
++                        // Log.v(TAG, "clearing slot " + id + ", magic " + currentMagic
++                        //         + " at offset " + pos);
++                        mChannel.write(mEmptyBuffer, pos);
++                    }
++                } else {
++                    // Log.v(TAG, "No slot");
++                }
++            } catch (IOException ex) {
++                Log.v(TAG, "Got exception checking file magic: ", ex);
++            } catch (RuntimeException ex) {
++                // Other NIO related exception like disk full, read only channel..etc
++                Log.e(TAG, "Got exception when reading magic, id = " + id +
++                        ", disk full or mount read-only? " + ex.getClass());
++            } finally {
++                try {
++                    if (lock != null) lock.release();
++                }
++                catch (IOException ex) {
++                    // ignore it.
++                }
++            }
++        } else {
++            // Log.v(TAG, "No data file");
++        }
++    }
++
+     public synchronized void saveMiniThumbToFile(byte[] data, long id, long magic)
+             throws IOException {
+         RandomAccessFile r = miniThumbDataFile();
 diff --git a/media/jni/android_media_ExifInterface.cpp b/media/jni/android_media_ExifInterface.cpp
 index 731deae..20f9ef6 100644
 --- a/media/jni/android_media_ExifInterface.cpp

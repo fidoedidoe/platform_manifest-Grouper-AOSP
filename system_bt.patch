@@ -1,3 +1,63 @@
+diff --git a/bta/dm/bta_dm_act.c b/bta/dm/bta_dm_act.c
+index 1bf741d..a8d92e0 100644
+--- a/bta/dm/bta_dm_act.c
++++ b/bta/dm/bta_dm_act.c
+@@ -26,6 +26,7 @@
+ #define LOG_TAG "bt_bta_dm"
+ 
+ #include <assert.h>
++#include <cutils/log.h>
+ #include <string.h>
+ 
+ #include "bt_target.h"
+@@ -49,6 +50,8 @@
+ #include "gap_api.h"
+ #endif
+ 
++#define BTA_MAX_SERVICES 32
++
+ static void bta_dm_inq_results_cb (tBTM_INQ_RESULTS *p_inq, UINT8 *p_eir);
+ static void bta_dm_inq_cmpl_cb (void * p_result);
+ static void bta_dm_service_search_remname_cback (BD_ADDR bd_addr, DEV_CLASS dc, BD_NAME bd_name);
+@@ -1601,7 +1604,7 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
+ #endif
+ 
+     UINT32 num_uuids = 0;
+-    UINT8  uuid_list[32][MAX_UUID_SIZE]; // assuming a max of 32 services
++    UINT8  uuid_list[BTA_MAX_SERVICES][MAX_UUID_SIZE]; // assuming a max of 32 services
+ 
+     if((p_data->sdp_event.sdp_result == SDP_SUCCESS)
+         || (p_data->sdp_event.sdp_result == SDP_NO_RECS_MATCH)
+@@ -1679,8 +1682,12 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
+                             (tBTA_SERVICE_MASK)(BTA_SERVICE_ID_TO_SERVICE_MASK(bta_dm_search_cb.service_index-1));
+                         tmp_svc = bta_service_id_to_uuid_lkup_tbl[bta_dm_search_cb.service_index-1];
+                         /* Add to the list of UUIDs */
+-                        sdpu_uuid16_to_uuid128(tmp_svc, uuid_list[num_uuids]);
+-                        num_uuids++;
++                        if (num_uuids < BTA_MAX_SERVICES) {
++                          sdpu_uuid16_to_uuid128(tmp_svc, uuid_list[num_uuids]);
++                          num_uuids++;
++                        } else {
++                          android_errorWriteLog(0x534e4554, "74016921");
++                        }
+                     }
+                 }
+             }
+@@ -1719,8 +1726,12 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
+                 {
+                     if (SDP_FindServiceUUIDInRec_128bit(p_sdp_rec, &temp_uuid))
+                     {
+-                        memcpy(uuid_list[num_uuids], temp_uuid.uu.uuid128, MAX_UUID_SIZE);
+-                        num_uuids++;
++                        if (num_uuids < BTA_MAX_SERVICES) {
++                          memcpy(uuid_list[num_uuids], temp_uuid.uu.uuid128, MAX_UUID_SIZE);
++                          num_uuids++;
++                        } else {
++                          android_errorWriteLog(0x534e4554, "74016921");
++                        }
+                     }
+                 }
+             } while (p_sdp_rec);
 diff --git a/bta/gatt/bta_gattc_cache.c b/bta/gatt/bta_gattc_cache.c
 index 63c4246..45d2588 100644
 --- a/bta/gatt/bta_gattc_cache.c
@@ -12,7 +72,7 @@ index 63c4246..45d2588 100644
          goto done;
      }
 diff --git a/bta/pan/bta_pan_act.c b/bta/pan/bta_pan_act.c
-index 1995478..82095fb 100644
+index 1995478..4367fce 100644
 --- a/bta/pan/bta_pan_act.c
 +++ b/bta/pan/bta_pan_act.c
 @@ -26,6 +26,8 @@
@@ -24,34 +84,46 @@ index 1995478..82095fb 100644
  #include "bta_api.h"
  #include "bta_sys.h"
  #include "bt_common.h"
-@@ -174,14 +176,25 @@ static void bta_pan_data_buf_ind_cback(UINT16 handle, BD_ADDR src, BD_ADDR dst,
-     tBTA_PAN_SCB *p_scb;
-     BT_HDR *p_new_buf;
- 
-+    p_scb = bta_pan_scb_by_handle(handle);
+@@ -171,20 +173,25 @@ static void bta_pan_data_flow_cb(UINT16 handle, tPAN_RESULT result)
+ static void bta_pan_data_buf_ind_cback(UINT16 handle, BD_ADDR src, BD_ADDR dst, UINT16 protocol, BT_HDR *p_buf,
+                                    BOOLEAN ext, BOOLEAN forward)
+ {
+-    tBTA_PAN_SCB *p_scb;
+-    BT_HDR *p_new_buf;
+-
+-    if (sizeof(tBTA_PAN_DATA_PARAMS) > p_buf->offset) {
+-        /* offset smaller than data structure in front of actual data */
+-        p_new_buf = (BT_HDR *)osi_malloc(PAN_BUF_SIZE);
+-        memcpy((UINT8 *)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
+-               (UINT8 *)(p_buf + 1) + p_buf->offset, p_buf->len);
+-        p_new_buf->len    = p_buf->len;
+-        p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
+-        osi_free(p_buf);
+-    } else {
+-        p_new_buf = p_buf;
++    tBTA_PAN_SCB* p_scb = bta_pan_scb_by_handle(handle);
 +    if (p_scb == NULL) {
 +        return;
 +    }
 +
-     if (sizeof(tBTA_PAN_DATA_PARAMS) > p_buf->offset) {
-         /* offset smaller than data structure in front of actual data */
-+        if (sizeof(BT_HDR) + sizeof(tBTA_PAN_DATA_PARAMS) + p_buf->len >
-+            PAN_BUF_SIZE) {
-+            android_errorWriteLog(0x534e4554, "63146237");
-+            APPL_TRACE_ERROR("%s: received buffer length too large: %d", __func__,
-+                             p_buf->len);
-+            return;
-+        }
-         p_new_buf = (BT_HDR *)osi_malloc(PAN_BUF_SIZE);
-         memcpy((UINT8 *)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
-                (UINT8 *)(p_buf + 1) + p_buf->offset, p_buf->len);
-         p_new_buf->len    = p_buf->len;
-         p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
--        osi_free(p_buf);
-     } else {
-         p_new_buf = p_buf;
++    if (sizeof(BT_HDR) + sizeof(tBTA_PAN_DATA_PARAMS) + p_buf->len >
++        PAN_BUF_SIZE) {
++      android_errorWriteLog(0x534e4554, "63146237");
++      APPL_TRACE_ERROR("%s: received buffer length too large: %d", __func__,
++                       p_buf->len);
++      return;
      }
-@@ -192,11 +205,6 @@ static void bta_pan_data_buf_ind_cback(UINT16 handle, BD_ADDR src, BD_ADDR dst,
++
++    BT_HDR* p_new_buf = (BT_HDR*)osi_malloc(PAN_BUF_SIZE);
++    memcpy((uint8_t*)(p_new_buf + 1) + sizeof(tBTA_PAN_DATA_PARAMS),
++           (uint8_t*)(p_buf + 1) + p_buf->offset, p_buf->len);
++    p_new_buf->len = p_buf->len;
++    p_new_buf->offset = sizeof(tBTA_PAN_DATA_PARAMS);
++
+     /* copy params into the space before the data */
+     bdcpy(((tBTA_PAN_DATA_PARAMS *)p_new_buf)->src, src);
+     bdcpy(((tBTA_PAN_DATA_PARAMS *)p_new_buf)->dst, dst);
+@@ -192,11 +199,6 @@ static void bta_pan_data_buf_ind_cback(UINT16 handle, BD_ADDR src, BD_ADDR dst,
      ((tBTA_PAN_DATA_PARAMS *)p_new_buf)->ext = ext;
      ((tBTA_PAN_DATA_PARAMS *)p_new_buf)->forward = forward;
  
@@ -299,8 +371,42 @@ index 3f3fe93..63f74b6 100644
                      p_u8 = p_result->get_app_val_txt.vals;
                      for (xx=0; xx< p_result->get_app_val_txt.num_val; xx++)
                      {
+diff --git a/stack/bnep/bnep_api.c b/stack/bnep/bnep_api.c
+index 9a7b5d9..3e866d1 100644
+--- a/stack/bnep/bnep_api.c
++++ b/stack/bnep/bnep_api.c
+@@ -24,6 +24,7 @@
+ 
+ #include <string.h>
+ #include "bnep_api.h"
++#include <log/log.h>
+ #include "bnep_int.h"
+ 
+ 
+@@ -414,6 +415,10 @@ tBNEP_RESULT BNEP_WriteBuf (UINT16 handle,
+             else
+             {
+                 new_len += 4;
++                if (new_len > org_len) {
++                  android_errorWriteLog(0x534e4554, "74947856");
++                  return BNEP_IGNORE_CMD;
++                }
+                 p_data[2] = 0;
+                 p_data[3] = 0;
+             }
+@@ -521,6 +526,10 @@ tBNEP_RESULT  BNEP_Write (UINT16 handle,
+             else
+             {
+                 new_len += 4;
++                if (new_len > org_len) {
++                  android_errorWriteLog(0x534e4554, "74947856");
++                  return BNEP_IGNORE_CMD;
++                }
+                 p_data[2] = 0;
+                 p_data[3] = 0;
+             }
 diff --git a/stack/bnep/bnep_main.c b/stack/bnep/bnep_main.c
-index 078a72e..3560d46 100644
+index 078a72e..534c470 100644
 --- a/stack/bnep/bnep_main.c
 +++ b/stack/bnep/bnep_main.c
 @@ -35,6 +35,7 @@
@@ -370,14 +476,6 @@ index 078a72e..3560d46 100644
                  extension_present = ext_type >> 7;
                  ext_type &= 0x7F;
  
-@@ -656,6 +667,7 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
-     if (bnep_cb.p_data_buf_cb)
-     {
-         (*bnep_cb.p_data_buf_cb)(p_bcb->handle, p_src_addr, p_dst_addr, protocol, p_buf, fw_ext_present);
-+	osi_free(p_buf);
-     }
-     else if (bnep_cb.p_data_ind_cb)
-     {
 diff --git a/stack/bnep/bnep_utils.c b/stack/bnep/bnep_utils.c
 index 13fb189..05bcdda 100644
 --- a/stack/bnep/bnep_utils.c
@@ -602,6 +700,370 @@ index 688ed88..9f9ed0a 100644
  #if BLE_INCLUDED == TRUE
        gatt_free();
  #endif
+diff --git a/stack/gatt/gatt_sr.c b/stack/gatt/gatt_sr.c
+index 11ef79c..c2cdb88 100644
+--- a/stack/gatt/gatt_sr.c
++++ b/stack/gatt/gatt_sr.c
+@@ -22,6 +22,7 @@
+  *
+  ******************************************************************************/
+ 
++#include <log/log.h>
+ #include "bt_target.h"
+ #include "bt_utils.h"
+ 
+@@ -344,6 +345,13 @@ void gatt_process_exec_write_req (tGATT_TCB *p_tcb, UINT8 op_code, UINT16 len, U
+     }
+ #endif
+ 
++    if (len < sizeof(flag)) {
++      android_errorWriteLog(0x534e4554, "73172115");
++      GATT_TRACE_ERROR("%s invalid length", __func__);
++      gatt_send_error_rsp(p_tcb, GATT_INVALID_PDU, GATT_REQ_EXEC_WRITE, 0, false);
++      return;
++    }
++
+     STREAM_TO_UINT8(flag, p);
+ 
+     /* mask the flag */
+@@ -1143,6 +1151,14 @@ static void gatts_process_read_req(tGATT_TCB *p_tcb, tGATT_SR_REG *p_rcb, UINT8
+     UINT16          offset = 0, value_len = 0;
+     BT_HDR          *p_msg = (BT_HDR *)osi_calloc(buf_len);
+ 
++    if (op_code == GATT_REQ_READ_BLOB && len < sizeof(UINT16)) {
++      /* Error: packet length is too short */
++      GATT_TRACE_ERROR("%s: packet length=%d too short. min=%d", __func__, len, sizeof(UINT16));
++      android_errorWriteWithInfoLog(0x534e4554, "73172115", -1, NULL, 0);
++      gatt_send_error_rsp(p_tcb, GATT_INVALID_PDU, op_code, 0, false);
++      return;
++    }
++
+     UNUSED(len);
+ 
+     if (op_code == GATT_REQ_READ_BLOB)
+diff --git a/stack/l2cap/l2c_fcr.c b/stack/l2cap/l2c_fcr.c
+index 5ba8b56..282b171 100644
+--- a/stack/l2cap/l2c_fcr.c
++++ b/stack/l2cap/l2c_fcr.c
+@@ -24,6 +24,7 @@
+  ******************************************************************************/
+ 
+ #include <assert.h>
++#include <log/log.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -865,7 +866,24 @@ void l2c_lcc_proc_pdu(tL2C_CCB *p_ccb, BT_HDR *p_buf)
+ 
+     }
+     else
++    {
+         p_data = p_ccb->ble_sdu;
++        if (p_buf->len > (p_ccb->ble_sdu_length - p_data->len)) {
++          L2CAP_TRACE_ERROR("%s: buffer length=%d too big. max=%d. Dropped",
++                            __func__, p_data->len,
++                            (p_ccb->ble_sdu_length - p_data->len));
++          android_errorWriteWithInfoLog(0x534e4554, "75298652", -1, NULL, 0);
++          osi_free(p_buf);
++
++          /* Throw away all pending fragments and disconnects */
++          p_ccb->is_first_seg = true;
++          osi_free(p_ccb->ble_sdu);
++          p_ccb->ble_sdu = NULL;
++          p_ccb->ble_sdu_length = 0;
++          l2cu_disconnect_chnl(p_ccb);
++          return;
++          }
++    }
+ 
+     memcpy((UINT8*)(p_data + 1) + p_data->offset + p_data->len, (UINT8*)(p_buf + 1) + p_buf->offset, p_buf->len);
+     p_data->len += p_buf->len;
+@@ -881,11 +899,6 @@ void l2c_lcc_proc_pdu(tL2C_CCB *p_ccb, BT_HDR *p_buf)
+     {
+         p_ccb->is_first_seg = FALSE;
+     }
+-    else
+-    {
+-        L2CAP_TRACE_ERROR ("%s Length in the SDU messed up",__func__);
+-        // TODO: reset every thing may be???
+-    }
+ 
+     osi_free(p_buf);
+     return;
+diff --git a/stack/l2cap/l2c_main.c b/stack/l2cap/l2c_main.c
+index 3c48d69..cef488c 100644
+--- a/stack/l2cap/l2c_main.c
++++ b/stack/l2cap/l2c_main.c
+@@ -339,9 +339,17 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+         switch (cmd_code)
+         {
+         case L2CAP_CMD_REJECT:
++            if (p + 2 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (rej_reason, p);
+             if (rej_reason == L2CAP_CMD_REJ_MTU_EXCEEDED)
+             {
++                if (p + 2 > p_next_cmd) {
++                  android_errorWriteLog(0x534e4554, "74202041");
++                  return;
++                }
+                 STREAM_TO_UINT16 (rej_mtu, p);
+                 /* What to do with the MTU reject ? We have negotiated an MTU. For now */
+                 /* we will ignore it and let a higher protocol timeout take care of it */
+@@ -350,6 +358,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             }
+             if (rej_reason == L2CAP_CMD_REJ_INVALID_CID)
+             {
++                if (p + 4 > p_next_cmd) {
++                  android_errorWriteLog(0x534e4554, "74202041");
++                  return;
++                }
+                 STREAM_TO_UINT16 (rcid, p);
+                 STREAM_TO_UINT16 (lcid, p);
+ 
+@@ -382,6 +394,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_CONN_REQ:
++            if (p + 4 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (con_info.psm, p);
+             STREAM_TO_UINT16 (rcid, p);
+             if ((p_rcb = l2cu_find_rcb_by_psm (con_info.psm)) == NULL)
+@@ -413,6 +429,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_CONN_RSP:
++            if (p + 8 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (con_info.remote_cid, p);
+             STREAM_TO_UINT16 (lcid, p);
+             STREAM_TO_UINT16 (con_info.l2cap_result, p);
+@@ -445,6 +465,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             cfg_rej = FALSE;
+             cfg_rej_len = 0;
+ 
++            if (p + 4 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (lcid, p);
+             STREAM_TO_UINT16 (cfg_info.flags, p);
+ 
+@@ -455,6 +479,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+             while (p < p_cfg_end)
+             {
++                if (p + 2 > p_next_cmd) {
++                  android_errorWriteLog(0x534e4554, "74202041");
++                  return;
++                }
+                 STREAM_TO_UINT8 (cfg_code, p);
+                 STREAM_TO_UINT8 (cfg_len, p);
+ 
+@@ -462,16 +490,28 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+                 {
+                 case L2CAP_CFG_TYPE_MTU:
+                     cfg_info.mtu_present = TRUE;
++                    if (p + 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT16 (cfg_info.mtu, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_FLUSH_TOUT:
+                     cfg_info.flush_to_present = TRUE;
++                    if (p + 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT16 (cfg_info.flush_to, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_QOS:
+                     cfg_info.qos_present = TRUE;
++                    if (p + 2 + 5 * 4 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8  (cfg_info.qos.qos_flags, p);
+                     STREAM_TO_UINT8  (cfg_info.qos.service_type, p);
+                     STREAM_TO_UINT32 (cfg_info.qos.token_rate, p);
+@@ -483,6 +523,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+                 case L2CAP_CFG_TYPE_FCR:
+                     cfg_info.fcr_present = TRUE;
++                    if (p + 3 + 3 * 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8 (cfg_info.fcr.mode, p);
+                     STREAM_TO_UINT8 (cfg_info.fcr.tx_win_sz, p);
+                     STREAM_TO_UINT8 (cfg_info.fcr.max_transmit, p);
+@@ -493,11 +537,19 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+                 case L2CAP_CFG_TYPE_FCS:
+                     cfg_info.fcs_present = TRUE;
++                    if (p + 1 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8 (cfg_info.fcs, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_EXT_FLOW:
+                     cfg_info.ext_flow_spec_present = TRUE;
++                    if (p + 2 + 2 + 3 * 4 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8  (cfg_info.ext_flow_spec.id, p);
+                     STREAM_TO_UINT8  (cfg_info.ext_flow_spec.stype, p);
+                     STREAM_TO_UINT16 (cfg_info.ext_flow_spec.max_sdu_size, p);
+@@ -548,6 +600,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+         case L2CAP_CMD_CONFIG_RSP:
+             p_cfg_end = p + cmd_len;
++            if (p + 6 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (lcid, p);
+             STREAM_TO_UINT16 (cfg_info.flags, p);
+             STREAM_TO_UINT16 (cfg_info.result, p);
+@@ -557,6 +613,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+             while (p < p_cfg_end)
+             {
++                if (p + 2 > p_next_cmd) {
++                  android_errorWriteLog(0x534e4554, "74202041");
++                  return;
++                }
+                 STREAM_TO_UINT8 (cfg_code, p);
+                 STREAM_TO_UINT8 (cfg_len, p);
+ 
+@@ -564,16 +624,28 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+                 {
+                 case L2CAP_CFG_TYPE_MTU:
+                     cfg_info.mtu_present = TRUE;
++                    if (p + 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT16 (cfg_info.mtu, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_FLUSH_TOUT:
+                     cfg_info.flush_to_present = TRUE;
++                    if (p + 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT16 (cfg_info.flush_to, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_QOS:
+                     cfg_info.qos_present = TRUE;
++                    if (p + 2 + 5 * 4 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8  (cfg_info.qos.qos_flags, p);
+                     STREAM_TO_UINT8  (cfg_info.qos.service_type, p);
+                     STREAM_TO_UINT32 (cfg_info.qos.token_rate, p);
+@@ -585,6 +657,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+                 case L2CAP_CFG_TYPE_FCR:
+                     cfg_info.fcr_present = TRUE;
++                    if (p + 3 + 3 * 2 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8 (cfg_info.fcr.mode, p);
+                     STREAM_TO_UINT8 (cfg_info.fcr.tx_win_sz, p);
+                     STREAM_TO_UINT8 (cfg_info.fcr.max_transmit, p);
+@@ -595,11 +671,19 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+ 
+                 case L2CAP_CFG_TYPE_FCS:
+                     cfg_info.fcs_present = TRUE;
++                    if (p + 1 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8 (cfg_info.fcs, p);
+                     break;
+ 
+                 case L2CAP_CFG_TYPE_EXT_FLOW:
+                     cfg_info.ext_flow_spec_present = TRUE;
++                    if (p + 2 + 2 + 3 * 4 > p_next_cmd) {
++                      android_errorWriteLog(0x534e4554, "74202041");
++                      return;
++                    }
+                     STREAM_TO_UINT8  (cfg_info.ext_flow_spec.id, p);
+                     STREAM_TO_UINT8  (cfg_info.ext_flow_spec.stype, p);
+                     STREAM_TO_UINT16 (cfg_info.ext_flow_spec.max_sdu_size, p);
+@@ -630,6 +714,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_DISC_REQ:
++            if (p + 4 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (lcid, p);
+             STREAM_TO_UINT16 (rcid, p);
+ 
+@@ -647,6 +735,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_DISC_RSP:
++            if (p + 4 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (rcid, p);
+             STREAM_TO_UINT16 (lcid, p);
+ 
+@@ -676,6 +768,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_INFO_REQ:
++            if (p + 2 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (info_type, p);
+             l2cu_send_peer_info_rsp (p_lcb, id, info_type);
+             break;
+@@ -688,6 +784,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+                 p_lcb->w4_info_rsp = FALSE;
+             }
+ 
++            if (p + 4 > p_next_cmd) {
++              android_errorWriteLog(0x534e4554, "74202041");
++              return;
++            }
+             STREAM_TO_UINT16 (info_type, p);
+             STREAM_TO_UINT16 (result, p);
+ 
+@@ -696,6 +796,10 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             if ( (info_type == L2CAP_EXTENDED_FEATURES_INFO_TYPE)
+               && (result == L2CAP_INFO_RESP_RESULT_SUCCESS) )
+             {
++                if (p + 4 > p_next_cmd) {
++                  android_errorWriteLog(0x534e4554, "74202041");
++                  return;
++                }
+                 STREAM_TO_UINT32( p_lcb->peer_ext_fea, p );
+ 
+ #if (L2CAP_NUM_FIXED_CHNLS > 0)
 diff --git a/stack/l2cap/l2cap_client.c b/stack/l2cap/l2cap_client.c
 index 7e8b3cb..cd7edfe 100644
 --- a/stack/l2cap/l2cap_client.c
@@ -658,7 +1120,7 @@ index 583a342..6694ff7 100644
          p = p_start = (UINT8*)(p_buf + 1) + L2CAP_MIN_OFFSET;
          *p++ = reject_opcode;
 diff --git a/stack/pan/pan_main.c b/stack/pan/pan_main.c
-index 5c3a367..9268ff9 100644
+index 5c3a367..7d56ee7 100644
 --- a/stack/pan/pan_main.c
 +++ b/stack/pan/pan_main.c
 @@ -221,6 +221,38 @@ void pan_conn_ind_cb (UINT16 handle,
@@ -700,6 +1162,34 @@ index 5c3a367..9268ff9 100644
  
      /* Requested destination role is */
      if (local_uuid->uu.uuid16 == UUID_SERVCLASS_PANU)
+@@ -596,11 +628,9 @@ void pan_data_buf_ind_cb (UINT16 handle,
+             if (pan_cb.pan_data_buf_ind_cb)
+                 (*pan_cb.pan_data_buf_ind_cb) (pcb->handle, src, dst, protocol, p_buf, ext, forward);
+             else if (pan_cb.pan_data_ind_cb)
+-            {
+                 (*pan_cb.pan_data_ind_cb) (pcb->handle, src, dst, protocol, p_data, len, ext, forward);
+-                osi_free(p_buf);
+-            }
+ 
++            osi_free(p_buf);
+             return;
+         }
+ 
+@@ -623,13 +653,9 @@ void pan_data_buf_ind_cb (UINT16 handle,
+     if (pan_cb.pan_data_buf_ind_cb)
+         (*pan_cb.pan_data_buf_ind_cb) (pcb->handle, src, dst, protocol, p_buf, ext, forward);
+     else if (pan_cb.pan_data_ind_cb)
+-    {
+         (*pan_cb.pan_data_ind_cb) (pcb->handle, src, dst, protocol, p_data, len, ext, forward);
+-        osi_free(p_buf);
+-    }
+-    else
+-        osi_free(p_buf);
+ 
++    osi_free(p_buf);
+     return;
+ }
+ 
 diff --git a/stack/sdp/sdp_main.c b/stack/sdp/sdp_main.c
 index c888817..7cbe2d3 100644
 --- a/stack/sdp/sdp_main.c

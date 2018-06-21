@@ -151,16 +151,127 @@ index bca3832..cf59357 100644
      }
  
      CHECK_EQ(mWriter->start(), (status_t)OK);
+diff --git a/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.cpp b/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.cpp
+index 01f8d65..f7106b2 100644
+--- a/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.cpp
++++ b/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.cpp
+@@ -36,6 +36,11 @@ android::status_t AesCtrDecryptor::decrypt(const android::Vector<uint8_t>& key,
+     uint8_t previousEncryptedCounter[kBlockSize];
+     memset(previousEncryptedCounter, 0, kBlockSize);
+ 
++    if (key.size() != kBlockSize || (sizeof(Iv) / sizeof(uint8_t)) != kBlockSize) {
++        android_errorWriteLog(0x534e4554, "63982768");
++        return android::ERROR_DRM_DECRYPT;
++    }
++
+     size_t offset = 0;
+     AES_KEY opensslKey;
+     AES_set_encrypt_key(key.array(), kBlockBitCount, &opensslKey);
+diff --git a/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.h b/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.h
+index b416266..edb8445 100644
+--- a/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.h
++++ b/drm/mediadrm/plugins/clearkey/AesCtrDecryptor.h
+@@ -18,6 +18,7 @@
+ #define CLEARKEY_AES_CTR_DECRYPTOR_H_
+ 
+ #include <media/stagefright/foundation/ABase.h>
++#include <media/stagefright/MediaErrors.h>
+ #include <Utils.h>
+ #include <utils/Errors.h>
+ #include <utils/Vector.h>
+diff --git a/drm/mediadrm/plugins/clearkey/tests/AesCtrDecryptorUnittest.cpp b/drm/mediadrm/plugins/clearkey/tests/AesCtrDecryptorUnittest.cpp
+index 039e402..5db8290 100644
+--- a/drm/mediadrm/plugins/clearkey/tests/AesCtrDecryptorUnittest.cpp
++++ b/drm/mediadrm/plugins/clearkey/tests/AesCtrDecryptorUnittest.cpp
+@@ -34,7 +34,7 @@ class AesCtrDecryptorTest : public ::testing::Test {
+                             uint8_t* destination, const SubSample* subSamples,
+                             size_t numSubSamples, size_t* bytesDecryptedOut) {
+         Vector<uint8_t> keyVector;
+-        keyVector.appendArray(key, kBlockSize);
++        keyVector.appendArray(key, sizeof(key) / sizeof(uint8_t));
+ 
+         AesCtrDecryptor decryptor;
+         return decryptor.decrypt(keyVector, iv, source, destination, subSamples,
+@@ -57,6 +57,67 @@ class AesCtrDecryptorTest : public ::testing::Test {
+     }
+ };
+ 
++TEST_F(AesCtrDecryptorTest, DecryptsWithEmptyKey) {
++    const size_t kTotalSize = 64;
++    const size_t kNumSubsamples = 1;
++
++    // Test vectors from NIST-800-38A
++    Iv iv = {
++        0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
++        0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
++    };
++
++    uint8_t source[kTotalSize] = { 0 };
++    uint8_t destination[kTotalSize] = { 0 };
++    SubSample subSamples[kNumSubsamples] = {
++        {0, 64}
++    };
++
++    size_t bytesDecrypted = 0;
++    Vector<uint8_t> keyVector;
++    keyVector.clear();
++
++    AesCtrDecryptor decryptor;
++    ASSERT_EQ(android::ERROR_DRM_DECRYPT, decryptor.decrypt(keyVector, iv,
++              &source[0], &destination[0],
++              &subSamples[0], kNumSubsamples, &bytesDecrypted));
++    ASSERT_EQ(0u, bytesDecrypted);
++}
++
++TEST_F(AesCtrDecryptorTest, DecryptsWithKeyTooLong) {
++    const size_t kTotalSize = 64;
++    const size_t kNumSubsamples = 1;
++
++    // Test vectors from NIST-800-38A
++    uint8_t key[kBlockSize * 2] = {
++        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
++        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c,
++        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
++        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c
++    };
++
++    Iv iv = {
++        0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
++        0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
++    };
++
++    uint8_t source[kTotalSize] = { 0 };
++    uint8_t destination[kTotalSize] = { 0 };
++    SubSample subSamples[kNumSubsamples] = {
++        {0, 64}
++    };
++
++    size_t bytesDecrypted = 0;
++    Vector<uint8_t> keyVector;
++    keyVector.appendArray(key, sizeof(key) / sizeof(uint8_t));
++
++    AesCtrDecryptor decryptor;
++    ASSERT_EQ(android::ERROR_DRM_DECRYPT, decryptor.decrypt(keyVector, iv,
++              &source[0], &destination[0],
++              &subSamples[0], kNumSubsamples, &bytesDecrypted));
++    ASSERT_EQ(0u, bytesDecrypted);
++}
++
+ TEST_F(AesCtrDecryptorTest, DecryptsContiguousEncryptedBlock) {
+     const size_t kTotalSize = 64;
+     const size_t kNumSubsamples = 1;
 diff --git a/include/media/IAudioPolicyService.h b/include/media/IAudioPolicyService.h
-index 0e9e3bc..de6e5ce 100644
+index 0e9e3bc..9ffcc77 100644
 --- a/include/media/IAudioPolicyService.h
 +++ b/include/media/IAudioPolicyService.h
-@@ -181,6 +181,8 @@ public:
+@@ -181,6 +181,10 @@ public:
                                      const Parcel& data,
                                      Parcel* reply,
                                      uint32_t flags = 0);
 +private:
 +    void sanetizeAudioAttributes(audio_attributes_t* attr);
++    status_t sanitizeEffectDescriptor(effect_descriptor_t* desc);
++    status_t sanitizeAudioPortConfig(struct audio_port_config* config);
  };
  
  // ----------------------------------------------------------------------------
@@ -178,6 +289,81 @@ index 34b15e9..743ef7f 100644
      virtual sp<IMediaSource> getTrack(size_t index) = 0;
  
      enum GetTrackMetaDataFlags {
+diff --git a/include/media/MediaPlayerInterface.h b/include/media/MediaPlayerInterface.h
+index 4977efd..c1bd8eb 100644
+--- a/include/media/MediaPlayerInterface.h
++++ b/include/media/MediaPlayerInterface.h
+@@ -65,14 +65,17 @@ enum player_type {
+ // duration below which we do not allow deep audio buffering
+ #define AUDIO_SINK_MIN_DEEP_BUFFER_DURATION_US 5000000
+ 
+-// callback mechanism for passing messages to MediaPlayer object
+-typedef void (*notify_callback_f)(void* cookie,
+-        int msg, int ext1, int ext2, const Parcel *obj);
+-
+ // abstract base class - use MediaPlayerInterface
+ class MediaPlayerBase : public RefBase
+ {
+ public:
++    // callback mechanism for passing messages to MediaPlayer object
++    class Listener : public RefBase {
++    public:
++        virtual void notify(int msg, int ext1, int ext2, const Parcel *obj) = 0;
++        virtual ~Listener() {}
++    };
++
+     // AudioSink: abstraction layer for audio output
+     class AudioSink : public RefBase {
+     public:
+@@ -146,7 +149,7 @@ public:
+         virtual String8     getParameters(const String8& /* keys */) { return String8::empty(); }
+     };
+ 
+-                        MediaPlayerBase() : mCookie(0), mNotify(0) {}
++                        MediaPlayerBase() {}
+     virtual             ~MediaPlayerBase() {}
+     virtual status_t    initCheck() = 0;
+     virtual bool        hardwareOutput() = 0;
+@@ -247,22 +250,22 @@ public:
+     };
+ 
+     void        setNotifyCallback(
+-            void* cookie, notify_callback_f notifyFunc) {
++            const sp<Listener> &listener) {
+         Mutex::Autolock autoLock(mNotifyLock);
+-        mCookie = cookie; mNotify = notifyFunc;
++        mListener = listener;
+     }
+ 
+     void        sendEvent(int msg, int ext1=0, int ext2=0,
+                           const Parcel *obj=NULL) {
+-        notify_callback_f notifyCB;
+-        void* cookie;
++        sp<Listener> listener;
+         {
+             Mutex::Autolock autoLock(mNotifyLock);
+-            notifyCB = mNotify;
+-            cookie = mCookie;
++            listener = mListener;
+         }
+ 
+-        if (notifyCB) notifyCB(cookie, msg, ext1, ext2, obj);
++        if (listener != NULL) {
++            listener->notify(msg, ext1, ext2, obj);
++        }
+     }
+ 
+     virtual status_t dump(int /* fd */, const Vector<String16>& /* args */) const {
+@@ -273,8 +276,7 @@ private:
+     friend class MediaPlayerService;
+ 
+     Mutex               mNotifyLock;
+-    void*               mCookie;
+-    notify_callback_f   mNotify;
++    sp<Listener>        mListener;
+ };
+ 
+ // Implement this class for media players that use the AudioFlinger software mixer
 diff --git a/include/media/stagefright/MediaBufferGroup.h b/include/media/stagefright/MediaBufferGroup.h
 index 3051406..870bb9b 100644
 --- a/include/media/stagefright/MediaBufferGroup.h
@@ -228,7 +414,7 @@ index dcf3fa0..07ea818 100644
          strncpy(name, EqualizerGetPresetName(param2), *pValueSize - 1);
          name[*pValueSize - 1] = 0;
 diff --git a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp b/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
-index 4dc8b45..19892dd 100644
+index 4dc8b45..80c8a38 100644
 --- a/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
 +++ b/media/libeffects/lvm/wrapper/Reverb/EffectReverb.cpp
 @@ -180,12 +180,13 @@ int  Reverb_init            (ReverbContext *pContext);
@@ -261,7 +447,18 @@ index 4dc8b45..19892dd 100644
      int status = 0;
      int16_t level;
      int16_t ratio;
-@@ -1776,6 +1778,11 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
+@@ -1766,6 +1768,10 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
+         if (param != REVERB_PARAM_PRESET) {
+             return -EINVAL;
+         }
++        if (vsize < (int)sizeof(uint16_t)) {
++            android_errorWriteLog(0x534e4554, "67647856");
++            return -EINVAL;
++        }
+ 
+         uint16_t preset = *(uint16_t *)pValue;
+         ALOGV("set REVERB_PARAM_PRESET, preset %d", preset);
+@@ -1776,6 +1782,11 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
          return 0;
      }
  
@@ -273,7 +470,7 @@ index 4dc8b45..19892dd 100644
      switch (param){
          case REVERB_PARAM_PROPERTIES:
              ALOGV("\tReverb_setParameter() REVERB_PARAM_PROPERTIES");
-@@ -1851,6 +1858,31 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
+@@ -1851,6 +1862,31 @@ int Reverb_setParameter (ReverbContext *pContext, void *pParam, void *pValue){
      return status;
  } /* end Reverb_setParameter */
  
@@ -305,7 +502,7 @@ index 4dc8b45..19892dd 100644
  } // namespace
  } // namespace
  
-@@ -2022,7 +2054,8 @@ int Reverb_command(effect_handle_t  self,
+@@ -2022,7 +2058,8 @@ int Reverb_command(effect_handle_t  self,
  
              *(int *)pReplyData = android::Reverb_setParameter(pContext,
                                                               (void *)p->data,
@@ -316,37 +513,144 @@ index 4dc8b45..19892dd 100644
  
          case EFFECT_CMD_ENABLE:
 diff --git a/media/libmedia/IAudioPolicyService.cpp b/media/libmedia/IAudioPolicyService.cpp
-index 6405d6d..09bacc0 100644
+index 6405d6d..be826ab 100644
 --- a/media/libmedia/IAudioPolicyService.cpp
 +++ b/media/libmedia/IAudioPolicyService.cpp
-@@ -893,6 +893,7 @@ status_t BnAudioPolicyService::onTransact(
+@@ -873,7 +873,7 @@ status_t BnAudioPolicyService::onTransact(
+             audio_output_flags_t flags =
+                     static_cast <audio_output_flags_t>(data.readInt32());
+             bool hasOffloadInfo = data.readInt32() != 0;
+-            audio_offload_info_t offloadInfo;
++            audio_offload_info_t offloadInfo = {};
+             if (hasOffloadInfo) {
+                 data.read(&offloadInfo, sizeof(audio_offload_info_t));
+             }
+@@ -889,10 +889,11 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case GET_OUTPUT_FOR_ATTR: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            audio_attributes_t attr;
++            audio_attributes_t attr = {};
              bool hasAttributes = data.readInt32() != 0;
              if (hasAttributes) {
                  data.read(&attr, sizeof(audio_attributes_t));
-+		sanetizeAudioAttributes(&attr);
++                sanetizeAudioAttributes(&attr);
              }
              audio_session_t session = (audio_session_t)data.readInt32();
              audio_stream_type_t stream = AUDIO_STREAM_DEFAULT;
-@@ -960,6 +961,7 @@ status_t BnAudioPolicyService::onTransact(
+@@ -958,8 +959,9 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case GET_INPUT_FOR_ATTR: {
              CHECK_INTERFACE(IAudioPolicyService, data, reply);
-             audio_attributes_t attr;
+-            audio_attributes_t attr;
++            audio_attributes_t attr = {};
              data.read(&attr, sizeof(audio_attributes_t));
 +            sanetizeAudioAttributes(&attr);
              audio_session_t session = (audio_session_t)data.readInt32();
              pid_t pid = (pid_t)data.readInt32();
              uid_t uid = (uid_t)data.readInt32();
-@@ -1332,6 +1334,7 @@ status_t BnAudioPolicyService::onTransact(
+@@ -1055,8 +1057,11 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case GET_OUTPUT_FOR_EFFECT: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            effect_descriptor_t desc;
+-            data.read(&desc, sizeof(effect_descriptor_t));
++            effect_descriptor_t desc = {};
++            if (data.read(&desc, sizeof(desc)) != NO_ERROR) {
++                android_errorWriteLog(0x534e4554, "73126106");
++            }
++            (void)sanitizeEffectDescriptor(&desc);
+             audio_io_handle_t output = getOutputForEffect(&desc);
+             reply->writeInt32(static_cast <int>(output));
+             return NO_ERROR;
+@@ -1064,8 +1069,11 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case REGISTER_EFFECT: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            effect_descriptor_t desc;
+-            data.read(&desc, sizeof(effect_descriptor_t));
++            effect_descriptor_t desc = {};
++            if (data.read(&desc, sizeof(desc)) != NO_ERROR) {
++                android_errorWriteLog(0x534e4554, "73126106");
++            }
++            (void)sanitizeEffectDescriptor(&desc);
+             audio_io_handle_t io = data.readInt32();
+             uint32_t strategy = data.readInt32();
+             audio_session_t session = (audio_session_t) data.readInt32();
+@@ -1124,7 +1132,7 @@ status_t BnAudioPolicyService::onTransact(
+                 count = AudioEffect::kMaxPreProcessing;
+             }
+             uint32_t retCount = count;
+-            effect_descriptor_t *descriptors = new effect_descriptor_t[count];
++            effect_descriptor_t *descriptors = new effect_descriptor_t[count]{};
+             status_t status = queryDefaultPreProcessing(audioSession, descriptors, &retCount);
+             reply->writeInt32(status);
+             if (status != NO_ERROR && status != NO_MEMORY) {
+@@ -1143,7 +1151,7 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case IS_OFFLOAD_SUPPORTED: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            audio_offload_info_t info;
++            audio_offload_info_t info = {};
+             data.read(&info, sizeof(audio_offload_info_t));
+             bool isSupported = isOffloadSupported(info);
+             reply->writeInt32(isSupported);
+@@ -1198,7 +1206,7 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case CREATE_AUDIO_PATCH: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            struct audio_patch patch;
++            struct audio_patch patch = {};
+             data.read(&patch, sizeof(struct audio_patch));
+             audio_patch_handle_t handle = AUDIO_PATCH_HANDLE_NONE;
+             if (data.read(&handle, sizeof(audio_patch_handle_t)) != NO_ERROR) {
+@@ -1214,7 +1222,7 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case RELEASE_AUDIO_PATCH: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            audio_patch_handle_t handle;
++            audio_patch_handle_t handle = AUDIO_PATCH_HANDLE_NONE;
+             data.read(&handle, sizeof(audio_patch_handle_t));
+             status_t status = releaseAudioPatch(handle);
+             reply->writeInt32(status);
+@@ -1253,8 +1261,9 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case SET_AUDIO_PORT_CONFIG: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            struct audio_port_config config;
++            struct audio_port_config config = {};
+             data.read(&config, sizeof(struct audio_port_config));
++            (void)sanitizeAudioPortConfig(&config);
+             status_t status = setAudioPortConfig(&config);
+             reply->writeInt32(status);
+             return NO_ERROR;
+@@ -1328,10 +1337,12 @@ status_t BnAudioPolicyService::onTransact(
+ 
+         case START_AUDIO_SOURCE: {
+             CHECK_INTERFACE(IAudioPolicyService, data, reply);
+-            struct audio_port_config source;
++            struct audio_port_config source = {};
              data.read(&source, sizeof(struct audio_port_config));
-             audio_attributes_t attributes;
+-            audio_attributes_t attributes;
++            (void)sanitizeAudioPortConfig(&source);
++            audio_attributes_t attributes = {};
              data.read(&attributes, sizeof(audio_attributes_t));
 +            sanetizeAudioAttributes(&attributes);
              audio_io_handle_t handle = {};
              status_t status = startAudioSource(&source, &attributes, &handle);
              reply->writeInt32(status);
-@@ -1371,6 +1374,16 @@ status_t BnAudioPolicyService::onTransact(
+@@ -1371,6 +1382,44 @@ status_t BnAudioPolicyService::onTransact(
      }
  }
  
++/** returns true if string overflow was prevented by zero termination */
++template <size_t size>
++static bool preventStringOverflow(char (&s)[size]) {
++    if (strnlen(s, size) < size) return false;
++    s[size - 1] = '\0';
++    return true;
++}
++
 +void BnAudioPolicyService::sanetizeAudioAttributes(audio_attributes_t* attr)
 +{
 +    const size_t tagsMaxSize = AUDIO_ATTRIBUTES_TAGS_MAX_SIZE;
@@ -356,11 +660,30 @@ index 6405d6d..09bacc0 100644
 +    attr->tags[tagsMaxSize - 1] = '\0';
 +}
 +
++/** returns BAD_VALUE if sanitization was required. */
++status_t BnAudioPolicyService::sanitizeEffectDescriptor(effect_descriptor_t* desc)
++{
++    if (preventStringOverflow(desc->name)
++        | /* always */ preventStringOverflow(desc->implementor)) {
++        android_errorWriteLog(0x534e4554, "73126106"); // SafetyNet logging
++        return BAD_VALUE;
++    }
++    return NO_ERROR;
++}
++
++/** returns BAD_VALUE if sanitization was required. */
++status_t BnAudioPolicyService::sanitizeAudioPortConfig(struct audio_port_config* config)
++{
++    if (config->type == AUDIO_PORT_TYPE_DEVICE &&
++        preventStringOverflow(config->ext.device.address)) {
++        return BAD_VALUE;
++    }
++    return NO_ERROR;
++}
++
  // ----------------------------------------------------------------------------
  
--} // namespace android
-+ 
-+ } // namespace android
+ } // namespace android
 diff --git a/media/libmedia/IDataSource.cpp b/media/libmedia/IDataSource.cpp
 index 51c9938..5ad39fe 100644
 --- a/media/libmedia/IDataSource.cpp
@@ -445,8 +768,45 @@ index 72d1d7c..4be1118 100644
              break;
          }
      }
+diff --git a/media/libmediaplayerservice/MediaPlayerFactory.cpp b/media/libmediaplayerservice/MediaPlayerFactory.cpp
+index 605c710..f5ec20c 100644
+--- a/media/libmediaplayerservice/MediaPlayerFactory.cpp
++++ b/media/libmediaplayerservice/MediaPlayerFactory.cpp
+@@ -127,8 +127,7 @@ player_type MediaPlayerFactory::getPlayerType(const sp<IMediaPlayer>& client,
+ 
+ sp<MediaPlayerBase> MediaPlayerFactory::createPlayer(
+         player_type playerType,
+-        void* cookie,
+-        notify_callback_f notifyFunc,
++        const sp<MediaPlayerBase::Listener> &listener,
+         pid_t pid) {
+     sp<MediaPlayerBase> p;
+     IFactory* factory;
+@@ -153,7 +152,7 @@ sp<MediaPlayerBase> MediaPlayerFactory::createPlayer(
+ 
+     init_result = p->initCheck();
+     if (init_result == NO_ERROR) {
+-        p->setNotifyCallback(cookie, notifyFunc);
++        p->setNotifyCallback(listener);
+     } else {
+         ALOGE("Failed to create player object of type %d, initCheck failed"
+               " (res = %d)", playerType, init_result);
+diff --git a/media/libmediaplayerservice/MediaPlayerFactory.h b/media/libmediaplayerservice/MediaPlayerFactory.h
+index e22a56f..e88700c 100644
+--- a/media/libmediaplayerservice/MediaPlayerFactory.h
++++ b/media/libmediaplayerservice/MediaPlayerFactory.h
+@@ -65,8 +65,7 @@ class MediaPlayerFactory {
+                                      const sp<DataSource> &source);
+ 
+     static sp<MediaPlayerBase> createPlayer(player_type playerType,
+-                                            void* cookie,
+-                                            notify_callback_f notifyFunc,
++                                            const sp<MediaPlayerBase::Listener> &listener,
+                                             pid_t pid);
+ 
+     static void registerBuiltinFactories();
 diff --git a/media/libmediaplayerservice/MediaPlayerService.cpp b/media/libmediaplayerservice/MediaPlayerService.cpp
-index bd16e91..6e689e6 100644
+index bd16e91..7196f42 100644
 --- a/media/libmediaplayerservice/MediaPlayerService.cpp
 +++ b/media/libmediaplayerservice/MediaPlayerService.cpp
 @@ -82,6 +82,9 @@
@@ -496,7 +856,19 @@ index bd16e91..6e689e6 100644
      }
      write(fd, "\n", 1);
      return NO_ERROR;
-@@ -590,7 +613,10 @@ MediaPlayerService::Client::Client(
+@@ -580,17 +603,21 @@ MediaPlayerService::Client::Client(
+     mUID = uid;
+     mRetransmitEndpointValid = false;
+     mAudioAttributes = NULL;
++    mListener = new Listener(this);
+ 
+ #if CALLBACK_ANTAGONIZER
+     ALOGD("create Antagonizer");
+-    mAntagonizer = new Antagonizer(notify, this);
++    mAntagonizer = new Antagonizer(mListener);
+ #endif
+ }
+ 
  MediaPlayerService::Client::~Client()
  {
      ALOGV("Client(%d) destructor pid = %d", mConnId, mPid);
@@ -508,7 +880,7 @@ index bd16e91..6e689e6 100644
      wp<Client> client(this);
      disconnect();
      mService->removeClient(client);
-@@ -609,10 +635,9 @@ void MediaPlayerService::Client::disconnect()
+@@ -609,15 +636,14 @@ void MediaPlayerService::Client::disconnect()
          Mutex::Autolock l(mLock);
          p = mPlayer;
          mClient.clear();
@@ -520,7 +892,13 @@ index bd16e91..6e689e6 100644
      // clear the notification to prevent callbacks to dead client
      // and reset the player. We assume the player will serialize
      // access to itself if necessary.
-@@ -633,7 +658,7 @@ void MediaPlayerService::Client::disconnect()
+     if (p != 0) {
+-        p->setNotifyCallback(0, 0);
++        p->setNotifyCallback(0);
+ #if CALLBACK_ANTAGONIZER
+         ALOGD("kill Antagonizer");
+         mAntagonizer->kill();
+@@ -633,13 +659,13 @@ void MediaPlayerService::Client::disconnect()
  sp<MediaPlayerBase> MediaPlayerService::Client::createPlayer(player_type playerType)
  {
      // determine if we have the right player type
@@ -529,7 +907,14 @@ index bd16e91..6e689e6 100644
      if ((p != NULL) && (p->playerType() != playerType)) {
          ALOGV("delete player");
          p.clear();
-@@ -721,6 +746,7 @@ void MediaPlayerService::Client::setDataSource_post(
+     }
+     if (p == NULL) {
+-        p = MediaPlayerFactory::createPlayer(playerType, this, notify, mPid);
++        p = MediaPlayerFactory::createPlayer(playerType, mListener, mPid);
+     }
+ 
+     if (p != NULL) {
+@@ -721,6 +747,7 @@ void MediaPlayerService::Client::setDataSource_post(
      }
  
      if (mStatus == OK) {
@@ -537,6 +922,213 @@ index bd16e91..6e689e6 100644
          mPlayer = p;
      }
  }
+@@ -1276,24 +1303,36 @@ status_t MediaPlayerService::Client::getRetransmitEndpoint(
+ }
+ 
+ void MediaPlayerService::Client::notify(
+-        void* cookie, int msg, int ext1, int ext2, const Parcel *obj)
++        int msg, int ext1, int ext2, const Parcel *obj)
+ {
+-    Client* client = static_cast<Client*>(cookie);
+-    if (client == NULL) {
+-        return;
+-    }
+-
+     sp<IMediaPlayerClient> c;
++    sp<Client> nextClient;
++    status_t errStartNext = NO_ERROR;
+     {
+-        Mutex::Autolock l(client->mLock);
+-        c = client->mClient;
+-        if (msg == MEDIA_PLAYBACK_COMPLETE && client->mNextClient != NULL) {
+-            if (client->mAudioOutput != NULL)
+-                client->mAudioOutput->switchToNextOutput();
+-            client->mNextClient->start();
+-            if (client->mNextClient->mClient != NULL) {
+-                client->mNextClient->mClient->notify(
+-                        MEDIA_INFO, MEDIA_INFO_STARTED_AS_NEXT, 0, obj);
++        Mutex::Autolock l(mLock);
++        c = mClient;
++        if (msg == MEDIA_PLAYBACK_COMPLETE && mNextClient != NULL) {
++            nextClient = mNextClient;
++
++            if (mAudioOutput != NULL)
++                mAudioOutput->switchToNextOutput();
++
++            errStartNext = nextClient->start();
++        }
++    }
++
++    if (nextClient != NULL) {
++        sp<IMediaPlayerClient> nc;
++        {
++            Mutex::Autolock l(nextClient->mLock);
++            nc = nextClient->mClient;
++        }
++        if (nc != NULL) {
++            if (errStartNext == NO_ERROR) {
++                nc->notify(MEDIA_INFO, MEDIA_INFO_STARTED_AS_NEXT, 0, obj);
++            } else {
++                nc->notify(MEDIA_ERROR, MEDIA_ERROR_UNKNOWN , 0, obj);
++                ALOGE("gapless:start playback for next track failed, err(%d)", errStartNext);
+             }
+         }
+     }
+@@ -1302,17 +1341,17 @@ void MediaPlayerService::Client::notify(
+         MEDIA_INFO_METADATA_UPDATE == ext1) {
+         const media::Metadata::Type metadata_type = ext2;
+ 
+-        if(client->shouldDropMetadata(metadata_type)) {
++        if(shouldDropMetadata(metadata_type)) {
+             return;
+         }
+ 
+         // Update the list of metadata that have changed. getMetadata
+         // also access mMetadataUpdated and clears it.
+-        client->addNewMetadataUpdate(metadata_type);
++        addNewMetadataUpdate(metadata_type);
+     }
+ 
+     if (c != NULL) {
+-        ALOGV("[%d] notify (%p, %d, %d, %d)", client->mConnId, cookie, msg, ext1, ext2);
++        ALOGV("[%d] notify (%d, %d, %d)", mConnId, msg, ext1, ext2);
+         c->notify(msg, ext1, ext2, obj);
+     }
+ }
+@@ -1344,8 +1383,8 @@ void MediaPlayerService::Client::addNewMetadataUpdate(media::Metadata::Type meta
+ #if CALLBACK_ANTAGONIZER
+ const int Antagonizer::interval = 10000; // 10 msecs
+ 
+-Antagonizer::Antagonizer(notify_callback_f cb, void* client) :
+-    mExit(false), mActive(false), mClient(client), mCb(cb)
++Antagonizer::Antagonizer(const sp<MediaPlayerBase::Listener> &listener) :
++    mExit(false), mActive(false), mListener(listener)
+ {
+     createThread(callbackThread, this);
+ }
+@@ -1365,7 +1404,7 @@ int Antagonizer::callbackThread(void* user)
+     while (!p->mExit) {
+         if (p->mActive) {
+             ALOGV("send event");
+-            p->mCb(p->mClient, 0, 0, 0);
++            p->mListener->notify(0, 0, 0, 0);
+         }
+         usleep(interval);
+     }
+diff --git a/media/libmediaplayerservice/MediaPlayerService.h b/media/libmediaplayerservice/MediaPlayerService.h
+index 7a41d9c..99b1d4d 100644
+--- a/media/libmediaplayerservice/MediaPlayerService.h
++++ b/media/libmediaplayerservice/MediaPlayerService.h
+@@ -49,7 +49,7 @@ class MediaRecorderClient;
+ #if CALLBACK_ANTAGONIZER
+ class Antagonizer {
+ public:
+-    Antagonizer(notify_callback_f cb, void* client);
++    Antagonizer(const sp<MediaPlayerBase::Listener> &listener);
+     void start() { mActive = true; }
+     void stop() { mActive = false; }
+     void kill();
+@@ -57,12 +57,11 @@ private:
+     static const int interval;
+     Antagonizer();
+     static int callbackThread(void* cookie);
+-    Mutex               mLock;
+-    Condition           mCondition;
+-    bool                mExit;
+-    bool                mActive;
+-    void*               mClient;
+-    notify_callback_f   mCb;
++    Mutex                         mLock;
++    Condition                     mCondition;
++    bool                          mExit;
++    bool                          mActive;
++    sp<MediaPlayerBase::Listener> mListener;
+ };
+ #endif
+ 
+@@ -206,7 +205,6 @@ class MediaPlayerService : public BnMediaPlayerService
+ 
+     }; // AudioOutput
+ 
+-
+ public:
+     static  void                instantiate();
+ 
+@@ -335,8 +333,7 @@ private:
+         void                    setDataSource_post(const sp<MediaPlayerBase>& p,
+                                                    status_t status);
+ 
+-        static  void            notify(void* cookie, int msg,
+-                                       int ext1, int ext2, const Parcel *obj);
++                void            notify(int msg, int ext1, int ext2, const Parcel *obj);
+ 
+                 pid_t           pid() const { return mPid; }
+         virtual status_t        dump(int fd, const Vector<String16>& args);
+@@ -391,23 +388,38 @@ private:
+ 
+         status_t setAudioAttributes_l(const Parcel &request);
+ 
+-        mutable     Mutex                       mLock;
+-                    sp<MediaPlayerBase>         mPlayer;
+-                    sp<MediaPlayerService>      mService;
+-                    sp<IMediaPlayerClient>      mClient;
+-                    sp<AudioOutput>             mAudioOutput;
+-                    pid_t                       mPid;
+-                    status_t                    mStatus;
+-                    bool                        mLoop;
+-                    int32_t                     mConnId;
+-                    audio_session_t             mAudioSessionId;
+-                    audio_attributes_t *        mAudioAttributes;
+-                    uid_t                       mUID;
+-                    sp<ANativeWindow>           mConnectedWindow;
+-                    sp<IBinder>                 mConnectedWindowBinder;
+-                    struct sockaddr_in          mRetransmitEndpoint;
+-                    bool                        mRetransmitEndpointValid;
+-                    sp<Client>                  mNextClient;
++        class Listener : public MediaPlayerBase::Listener {
++        public:
++            Listener(const wp<Client> &client) : mClient(client) {}
++            virtual ~Listener() {}
++            virtual void notify(int msg, int ext1, int ext2, const Parcel *obj) {
++                sp<Client> client = mClient.promote();
++                if (client != NULL) {
++                    client->notify(msg, ext1, ext2, obj);
++                }
++            }
++        private:
++            wp<Client> mClient;
++        };
++
++        mutable     Mutex                         mLock;
++                    sp<MediaPlayerBase>           mPlayer;
++                    sp<MediaPlayerService>        mService;
++                    sp<IMediaPlayerClient>        mClient;
++                    sp<AudioOutput>               mAudioOutput;
++                    pid_t                         mPid;
++                    status_t                      mStatus;
++                    bool                          mLoop;
++                    int32_t                       mConnId;
++                    audio_session_t               mAudioSessionId;
++                    audio_attributes_t *          mAudioAttributes;
++                    uid_t                         mUID;
++                    sp<ANativeWindow>             mConnectedWindow;
++                    sp<IBinder>                   mConnectedWindowBinder;
++                    struct sockaddr_in            mRetransmitEndpoint;
++                    bool                          mRetransmitEndpointValid;
++                    sp<Client>                    mNextClient;
++                    sp<MediaPlayerBase::Listener> mListener;
+ 
+         // Metadata filters.
+         media::Metadata::Filter mMetadataAllow;  // protected by mLock
+@@ -422,7 +434,7 @@ private:
+         sp<IBinder::DeathRecipient> mExtractorDeathListener;
+         sp<IBinder::DeathRecipient> mCodecDeathListener;
+ #if CALLBACK_ANTAGONIZER
+-                    Antagonizer*                mAntagonizer;
++                    Antagonizer*                  mAntagonizer;
+ #endif
+     }; // Client
+ 
 diff --git a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp b/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
 index dc4e5d4..b64d899 100644
 --- a/media/libmediaplayerservice/nuplayer/NuPlayer.cpp
@@ -1090,6 +1682,26 @@ index 5441714..d1603c1 100644
              return ERROR_BUFFER_TOO_SMALL;
          }
      }
+diff --git a/media/libstagefright/MPEG4Writer.cpp b/media/libstagefright/MPEG4Writer.cpp
+index 5e96c2b..6ca2abb 100644
+--- a/media/libstagefright/MPEG4Writer.cpp
++++ b/media/libstagefright/MPEG4Writer.cpp
+@@ -1674,10 +1674,12 @@ void MPEG4Writer::Track::getCodecSpecificDataFromInputFormatIfPossible() {
+             || !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)) {
+         if (mMeta->findData(kKeyESDS, &type, &data, &size)) {
+             ESDS esds(data, size);
+-            if (esds.getCodecSpecificInfo(&data, &size) != OK) {
+-                data = NULL;
+-                size = 0;
++            if (esds.getCodecSpecificInfo(&data, &size) == OK &&
++                    data != NULL &&
++                    copyCodecSpecificData((uint8_t*)data, size) == OK) {
++                mGotAllCodecSpecificData = true;
+             }
++            return;
+         }
+     }
+     if (data != NULL && copyCodecSpecificData((uint8_t *)data, size) == OK) {
 diff --git a/media/libstagefright/MediaCodecList.cpp b/media/libstagefright/MediaCodecList.cpp
 index 0fb5072..a25c47d 100644
 --- a/media/libstagefright/MediaCodecList.cpp
@@ -1303,10 +1915,35 @@ index 15ff569..547267c 100644
              ALOGV("Slot %d returned, matches handle = %p", id,
                      mSlots[id].mGraphicBuffer->handle);
  
+diff --git a/media/libstagefright/VideoFrameScheduler.cpp b/media/libstagefright/VideoFrameScheduler.cpp
+index 03226c7..6819bba 100644
+--- a/media/libstagefright/VideoFrameScheduler.cpp
++++ b/media/libstagefright/VideoFrameScheduler.cpp
+@@ -129,6 +129,11 @@ bool VideoFrameScheduler::PLL::fit(
+         numSamplesToUse = mNumSamples;
+     }
+ 
++    if ((period >> kPrecision) == 0 ) {
++        ALOGW("Period is 0, or after including precision is 0 - would cause div0, returning");
++        return false;
++    }
++
+     int64_t sumX = 0;
+     int64_t sumXX = 0;
+     int64_t sumXY = 0;
 diff --git a/media/libstagefright/avc_utils.cpp b/media/libstagefright/avc_utils.cpp
-index 763381e..e5819ed 100644
+index 763381e..78aae8c 100644
 --- a/media/libstagefright/avc_utils.cpp
 +++ b/media/libstagefright/avc_utils.cpp
+@@ -330,7 +330,7 @@ static sp<ABuffer> FindNAL(const uint8_t *data, size_t size, unsigned nalType) {
+     const uint8_t *nalStart;
+     size_t nalSize;
+     while (getNextNALUnit(&data, &size, &nalStart, &nalSize, true) == OK) {
+-        if ((nalStart[0] & 0x1f) == nalType) {
++        if (nalSize > 0 && (nalStart[0] & 0x1f) == nalType) {
+             sp<ABuffer> buffer = new ABuffer(nalSize);
+             memcpy(buffer->data(), nalStart, nalSize);
+             return buffer;
 @@ -479,7 +479,10 @@ bool IsAVCReferenceFrame(const sp<ABuffer> &accessUnit) {
      const uint8_t *nalStart;
      size_t nalSize;
@@ -1485,6 +2122,19 @@ index d5a26d3..7d2131d 100644
              const uint8_t *inputData = NULL;
              if (mInputDataIsMeta) {
                  inputData =
+diff --git a/media/libstagefright/codecs/mp3dec/src/pvmp3_decode_header.cpp b/media/libstagefright/codecs/mp3dec/src/pvmp3_decode_header.cpp
+index d443b7c..bc5fd79 100644
+--- a/media/libstagefright/codecs/mp3dec/src/pvmp3_decode_header.cpp
++++ b/media/libstagefright/codecs/mp3dec/src/pvmp3_decode_header.cpp
+@@ -184,7 +184,7 @@ ERROR_CODE pvmp3_decode_header(tmp3Bits  *inputStream,
+     info->emphasis           = (temp << 30) >> 30;  /* 2 */
+ 
+ 
+-    if (!info->bitrate_index || info->sampling_frequency == 3)
++    if (!info->bitrate_index || info->bitrate_index == 15 || info->sampling_frequency == 3)
+     {
+         err = UNSUPPORTED_FREE_BITRATE;
+     }
 diff --git a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp b/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp
 index 5ed037a..7297f40 100644
 --- a/media/libstagefright/codecs/mpeg2dec/SoftMPEG2.cpp
@@ -1764,6 +2414,24 @@ index c04549a..1242c95 100644
      return OK;
  }
  
+diff --git a/media/libstagefright/id3/ID3.cpp b/media/libstagefright/id3/ID3.cpp
+index 8b80ae9..c21097b 100644
+--- a/media/libstagefright/id3/ID3.cpp
++++ b/media/libstagefright/id3/ID3.cpp
+@@ -392,7 +392,12 @@ bool ID3::removeUnsynchronizationV2_4(bool iTunesHack) {
+                     --mSize;
+                     --dataSize;
+                 }
+-                mData[writeOffset++] = mData[readOffset++];
++                if (i + 1 < dataSize) {
++                    // Only move data if there's actually something to move.
++                    // This handles the special case of the data being only [0xff, 0x00]
++                    // which should be converted to just 0xff if unsynchronization is on.
++                    mData[writeOffset++] = mData[readOffset++];
++                }
+             }
+             // move the remaining data following this frame
+             if (readOffset <= oldSize) {
 diff --git a/media/libstagefright/include/OMXNodeInstance.h b/media/libstagefright/include/OMXNodeInstance.h
 index 94cf15a..dd396e8 100644
 --- a/media/libstagefright/include/OMXNodeInstance.h
@@ -4625,7 +5293,7 @@ index b3a11e0..cd543c8 100644
      void                sendStoreRemoved(MtpStorageID id);
      void                sendEvent(MtpEventCode code, uint32_t param1);
 diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
-index fec3a57..a0ef28c 100644
+index fec3a57..4aad2c2 100644
 --- a/services/audioflinger/AudioFlinger.cpp
 +++ b/services/audioflinger/AudioFlinger.cpp
 @@ -1509,7 +1509,8 @@ sp<IAudioRecord> AudioFlinger::openRecord(
@@ -4634,7 +5302,7 @@ index fec3a57..a0ef28c 100644
      // check calling permissions
 -    if (!recordingAllowed(opPackageName, tid, clientUid)) {
 +    if (!isTrustedCallingUid(callingUid) &&
-+		!recordingAllowed(opPackageName, tid, clientUid)) {
++                 !recordingAllowed(opPackageName, tid, callingUid)) {
          ALOGE("openRecord() permission denied: recording not allowed");
          lStatus = PERMISSION_DENIED;
          goto Exit;
@@ -4667,6 +5335,48 @@ index f908d6d..b588685 100644
      if (cmdCode == EFFECT_CMD_ENABLE) {
          if (*replySize < sizeof(int)) {
              android_errorWriteLog(0x534e4554, "32095713");
+diff --git a/services/audioflinger/Threads.cpp b/services/audioflinger/Threads.cpp
+index 7423ea9..1bc9516 100644
+--- a/services/audioflinger/Threads.cpp
++++ b/services/audioflinger/Threads.cpp
+@@ -1412,6 +1412,7 @@ sp<AudioFlinger::EffectHandle> AudioFlinger::ThreadBase::createEffect_l(
+     bool chainCreated = false;
+     bool effectCreated = false;
+     bool effectRegistered = false;
++    audio_unique_id_t effectId = AUDIO_UNIQUE_ID_USE_UNSPECIFIED;
+ 
+     lStatus = initCheck();
+     if (lStatus != NO_ERROR) {
+@@ -1445,15 +1446,17 @@ sp<AudioFlinger::EffectHandle> AudioFlinger::ThreadBase::createEffect_l(
+         ALOGV("createEffect_l() got effect %p on chain %p", effect.get(), chain.get());
+ 
+         if (effect == 0) {
+-            audio_unique_id_t id = mAudioFlinger->nextUniqueId(AUDIO_UNIQUE_ID_USE_EFFECT);
++            effectId = mAudioFlinger->nextUniqueId(AUDIO_UNIQUE_ID_USE_EFFECT);
+             // Check CPU and memory usage
+-            lStatus = AudioSystem::registerEffect(desc, mId, chain->strategy(), sessionId, id);
++            lStatus = AudioSystem::registerEffect(
++                    desc, mId, chain->strategy(), sessionId, effectId);
+             if (lStatus != NO_ERROR) {
+                 goto Exit;
+             }
+             effectRegistered = true;
+             // create a new effect module if none present in the chain
+-            lStatus = chain->createEffect_l(effect, this, desc, id, sessionId, pinned);
++            lStatus = chain->createEffect_l(
++                    effect, this, desc, effectId, sessionId, pinned);
+             if (lStatus != NO_ERROR) {
+                 goto Exit;
+             }
+@@ -1482,7 +1485,7 @@ Exit:
+             chain->removeEffect_l(effect);
+         }
+         if (effectRegistered) {
+-            AudioSystem::unregisterEffect(effect->id());
++            AudioSystem::unregisterEffect(effectId);
+         }
+         if (chainCreated) {
+             removeEffectChain_l(chain);
 diff --git a/services/audioflinger/Tracks.cpp b/services/audioflinger/Tracks.cpp
 index f18b88d..a3f3ea5 100644
 --- a/services/audioflinger/Tracks.cpp
