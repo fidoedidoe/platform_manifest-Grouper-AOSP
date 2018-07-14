@@ -113,10 +113,28 @@ index 271c75b..cadcd1e 100644
          }
      }
 diff --git a/include/binder/Parcel.h b/include/binder/Parcel.h
-index 2490b82..1e3d02f 100644
+index 2490b82..2b61151 100644
 --- a/include/binder/Parcel.h
 +++ b/include/binder/Parcel.h
-@@ -476,7 +476,13 @@ private:
+@@ -375,7 +375,8 @@ private:
+     void                freeDataNoInit();
+     void                initState();
+     void                scanForFds() const;
+-                        
++    status_t            validateReadData(size_t len) const;
++                    
+     template<class T>
+     status_t            readAligned(T *pArg) const;
+ 
+@@ -421,6 +422,7 @@ private:
+     size_t              mObjectsSize;
+     size_t              mObjectsCapacity;
+     mutable size_t      mNextObjectHint;
++    mutable bool        mObjectsSorted;
+ 
+     mutable bool        mFdsKnown;
+     mutable bool        mHasFds;
+@@ -476,7 +478,13 @@ private:
              return val.flatten(buffer, size, fds, count);
          }
          virtual status_t unflatten(void const* buffer, size_t size, int const* fds, size_t count) {
@@ -305,6 +323,151 @@ index eccc400..3efebf7 100644
          gHaveTLS = false;
      }
  }
+diff --git a/libs/binder/Parcel.cpp b/libs/binder/Parcel.cpp
+index 19ce3eb..e6630d5 100644
+--- a/libs/binder/Parcel.cpp
++++ b/libs/binder/Parcel.cpp
+@@ -459,6 +459,7 @@ void Parcel::setDataPosition(size_t pos) const
+ 
+     mDataPos = pos;
+     mNextObjectHint = 0;
++    mObjectsSorted = false;
+ }
+ 
+ status_t Parcel::setDataCapacity(size_t size)
+@@ -1363,6 +1364,59 @@ void Parcel::remove(size_t /*start*/, size_t /*amt*/)
+     LOG_ALWAYS_FATAL("Parcel::remove() not yet implemented!");
+ }
+ 
++status_t Parcel::validateReadData(size_t upperBound) const
++{
++    // Don't allow non-object reads on object data
++    if (mObjectsSorted || mObjectsSize <= 1) {
++data_sorted:
++        // Expect to check only against the next object
++        if (mNextObjectHint < mObjectsSize && upperBound > mObjects[mNextObjectHint]) {
++            // For some reason the current read position is greater than the next object
++            // hint. Iterate until we find the right object
++            size_t nextObject = mNextObjectHint;
++            do {
++                if (mDataPos < mObjects[nextObject] + sizeof(flat_binder_object)) {
++                    // Requested info overlaps with an object
++                    ALOGE("Attempt to read from protected data in Parcel %p", this);
++                    return PERMISSION_DENIED;
++                }
++                nextObject++;
++            } while (nextObject < mObjectsSize && upperBound > mObjects[nextObject]);
++            mNextObjectHint = nextObject;
++        }
++        return NO_ERROR;
++    }
++    // Quickly determine if mObjects is sorted.
++    binder_size_t* currObj = mObjects + mObjectsSize - 1;
++    binder_size_t* prevObj = currObj;
++    while (currObj > mObjects) {
++        prevObj--;
++        if(*prevObj > *currObj) {
++            goto data_unsorted;
++        }
++        currObj--;
++    }
++    mObjectsSorted = true;
++    goto data_sorted;
++
++data_unsorted:
++    // Insertion Sort mObjects
++    // Great for mostly sorted lists. If randomly sorted or reverse ordered mObjects become common,
++    // switch to std::sort(mObjects, mObjects + mObjectsSize);
++    for (binder_size_t* iter0 = mObjects + 1; iter0 < mObjects + mObjectsSize; iter0++) {
++        binder_size_t temp = *iter0;
++        binder_size_t* iter1 = iter0 - 1;
++        while (iter1 >= mObjects && *iter1 > temp) {
++            *(iter1 + 1) = *iter1;
++            iter1--;
++        }
++        *(iter1 + 1) = temp;
++    }
++    mNextObjectHint = 0;
++    mObjectsSorted = true;
++    goto data_sorted;
++}
++
+ status_t Parcel::read(void* outData, size_t len) const
+ {
+     if (len > INT32_MAX) {
+@@ -1373,6 +1427,15 @@ status_t Parcel::read(void* outData, size_t len) const
+ 
+     if ((mDataPos+pad_size(len)) >= mDataPos && (mDataPos+pad_size(len)) <= mDataSize
+             && len <= pad_size(len)) {
++        if (mObjectsSize > 0) {
++            status_t err = validateReadData(mDataPos + pad_size(len));
++            if(err != NO_ERROR) {
++                // Still increment the data position by the expected length
++                mDataPos += pad_size(len);
++                ALOGV("read Setting data pos of %p to %zu", this, mDataPos);
++                return err;
++            }
++        }
+         memcpy(outData, mData+mDataPos, len);
+         mDataPos += pad_size(len);
+         ALOGV("read Setting data pos of %p to %zu", this, mDataPos);
+@@ -1391,6 +1454,15 @@ const void* Parcel::readInplace(size_t len) const
+ 
+     if ((mDataPos+pad_size(len)) >= mDataPos && (mDataPos+pad_size(len)) <= mDataSize
+             && len <= pad_size(len)) {
++        if (mObjectsSize > 0) {
++            status_t err = validateReadData(mDataPos + pad_size(len));
++            if(err != NO_ERROR) {
++                // Still increment the data position by the expected length
++                mDataPos += pad_size(len);
++                ALOGV("readInplace Setting data pos of %p to %zu", this, mDataPos);
++                return NULL;
++            }
++        }
+         const void* data = mData+mDataPos;
+         mDataPos += pad_size(len);
+         ALOGV("readInplace Setting data pos of %p to %zu", this, mDataPos);
+@@ -1404,6 +1476,15 @@ status_t Parcel::readAligned(T *pArg) const {
+     COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
+ 
+     if ((mDataPos+sizeof(T)) <= mDataSize) {
++        if (mObjectsSize > 0) {
++            status_t err = validateReadData(mDataPos + sizeof(T));
++            if(err != NO_ERROR) {
++                // Still increment the data position by the expected length
++                mDataPos += sizeof(T);
++                return err;
++            }
++        }
++
+         const void* data = mData+mDataPos;
+         mDataPos += sizeof(T);
+         *pArg =  *reinterpret_cast<const T*>(data);
+@@ -2206,6 +2287,7 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
+     mObjects = const_cast<binder_size_t*>(objects);
+     mObjectsSize = mObjectsCapacity = objectsCount;
+     mNextObjectHint = 0;
++    mObjectsSorted = false;
+     mOwner = relFunc;
+     mOwnerCookie = relCookie;
+     for (size_t i = 0; i < mObjectsSize; i++) {
+@@ -2450,7 +2532,7 @@ status_t Parcel::continueWrite(size_t desired)
+         mDataCapacity = desired;
+         mObjectsSize = mObjectsCapacity = objectsSize;
+         mNextObjectHint = 0;
+-
++        mObjectsSorted = false;
+     } else if (mData) {
+         if (objectsSize < mObjectsSize) {
+             // Need to release refs on any objects we are dropping.
+@@ -2471,6 +2553,7 @@ status_t Parcel::continueWrite(size_t desired)
+             }
+             mObjectsSize = objectsSize;
+             mNextObjectHint = 0;
++            mObjectsSorted = false;
+         }
+ 
+         // We own the data, so we can just do a realloc().
 diff --git a/libs/binder/ProcessState.cpp b/libs/binder/ProcessState.cpp
 index f13f49f..e45b5f1 100644
 --- a/libs/binder/ProcessState.cpp
@@ -323,6 +486,36 @@ index f13f49f..e45b5f1 100644
  }
          
  }; // namespace android
+diff --git a/libs/binder/tests/binderDriverInterfaceTest.cpp b/libs/binder/tests/binderDriverInterfaceTest.cpp
+index 0277550..d8fd81c 100644
+--- a/libs/binder/tests/binderDriverInterfaceTest.cpp
++++ b/libs/binder/tests/binderDriverInterfaceTest.cpp
+@@ -77,6 +77,16 @@ class BinderDriverInterfaceTest : public ::testing::Test {
+         virtual void TearDown() {
+         }
+     protected:
++        /* The ioctl must either return 0, or if it doesn't errno should be accepted_errno */
++        void binderTestIoctlSuccessOrError(int cmd, void *arg, int accepted_errno) {
++            int ret;
++
++            ret = ioctl(m_binderFd, cmd, arg);
++            if (ret != 0) {
++                EXPECT_EQ(errno, accepted_errno);
++            }
++        }
++
+         void binderTestIoctlRetErr2(int cmd, void *arg, int expect_ret, int expect_errno, int accept_errno) {
+             int ret;
+ 
+@@ -248,7 +258,7 @@ TEST_F(BinderDriverInterfaceTest, Transaction) {
+ 
+     {
+         SCOPED_TRACE("1st WriteRead");
+-        binderTestIoctl(BINDER_WRITE_READ, &bwr);
++        binderTestIoctlSuccessOrError(BINDER_WRITE_READ, &bwr, EAGAIN);
+     }
+     EXPECT_EQ(sizeof(bc1), bwr.write_consumed);
+     if (bwr.read_consumed < offsetof(typeof(br), pad)) {
 diff --git a/libs/gui/Android.mk b/libs/gui/Android.mk
 index 9e2fc2b..12d2148 100644
 --- a/libs/gui/Android.mk
@@ -885,10 +1078,10 @@ index ee152bf..9c82295 100644
      result.mStorage.clear();
      for (size_t r = 0; r < numRects; ++r) {
 diff --git a/opengl/libs/Android.mk b/opengl/libs/Android.mk
-index 24e4c19..f56a346 100644
+index 24e4c19..54e9d59 100644
 --- a/opengl/libs/Android.mk
 +++ b/opengl/libs/Android.mk
-@@ -42,6 +42,9 @@ LOCAL_CFLAGS += -DLOG_TAG=\"libEGL\"
+@@ -42,9 +42,15 @@ LOCAL_CFLAGS += -DLOG_TAG=\"libEGL\"
  LOCAL_CFLAGS += -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES
  LOCAL_CFLAGS += -fvisibility=hidden
  
@@ -898,7 +1091,13 @@ index 24e4c19..f56a346 100644
  ifeq ($(BOARD_ALLOW_EGL_HIBERNATION),true)
    LOCAL_CFLAGS += -DBOARD_ALLOW_EGL_HIBERNATION
  endif
-@@ -77,7 +80,6 @@ LOCAL_SRC_FILES:= 		\
++ifeq ($(BOARD_EGL_WORKAROUND_BUG_10194508),true)
++  LOCAL_CFLAGS += -DWORKAROUND_BUG_10194508
++endif
+ ifneq ($(MAX_EGL_CACHE_ENTRY_SIZE),)
+   LOCAL_CFLAGS += -DMAX_EGL_CACHE_ENTRY_SIZE=$(MAX_EGL_CACHE_ENTRY_SIZE)
+ endif
+@@ -77,7 +83,6 @@ LOCAL_SRC_FILES:= 		\
  	GLES_CM/gl.cpp.arm 	\
  #
  
@@ -906,7 +1105,7 @@ index 24e4c19..f56a346 100644
  LOCAL_SHARED_LIBRARIES += libcutils liblog libEGL
  LOCAL_MODULE:= libGLESv1_CM
  
-@@ -105,7 +107,6 @@ LOCAL_SRC_FILES:= \
+@@ -105,7 +110,6 @@ LOCAL_SRC_FILES:= \
  	GLES2/gl2.cpp   \
  #
  
@@ -914,7 +1113,7 @@ index 24e4c19..f56a346 100644
  LOCAL_ARM_MODE := arm
  LOCAL_SHARED_LIBRARIES += libcutils libutils liblog libEGL
  LOCAL_MODULE:= libGLESv2
-@@ -133,7 +134,6 @@ LOCAL_SRC_FILES:= \
+@@ -133,7 +137,6 @@ LOCAL_SRC_FILES:= \
  	GLES2/gl2.cpp   \
  #
  
@@ -922,6 +1121,39 @@ index 24e4c19..f56a346 100644
  LOCAL_ARM_MODE := arm
  LOCAL_SHARED_LIBRARIES += libcutils libutils liblog libEGL
  LOCAL_MODULE:= libGLESv3
+diff --git a/opengl/libs/EGL/eglApi.cpp b/opengl/libs/EGL/eglApi.cpp
+index 436ea30..58b625e 100644
+--- a/opengl/libs/EGL/eglApi.cpp
++++ b/opengl/libs/EGL/eglApi.cpp
+@@ -487,11 +487,17 @@ EGLSurface eglCreateWindowSurface(  EGLDisplay dpy, EGLConfig config,
+         // of our native format. So if sRGB gamma is requested, we have to
+         // modify the EGLconfig's format before setting the native window's
+         // format.
+-
+-        // by default, just pick RGBA_8888
+-        EGLint format = HAL_PIXEL_FORMAT_RGBA_8888;
++        EGLint format;
+         android_dataspace dataSpace = HAL_DATASPACE_UNKNOWN;
+ 
++#ifdef WORKAROUND_BUG_10194508
++        if (!cnx->egl.eglGetConfigAttrib(iDpy, config, EGL_NATIVE_VISUAL_ID,
++                &format)) {
++            ALOGE("eglGetConfigAttrib(EGL_NATIVE_VISUAL_ID) failed: %#x",
++                    eglGetError());
++            format = 0;
++        }
++#else
+         EGLint a = 0;
+         cnx->egl.eglGetConfigAttrib(iDpy, config, EGL_ALPHA_SIZE, &a);
+         if (a > 0) {
+@@ -510,6 +516,7 @@ EGLSurface eglCreateWindowSurface(  EGLDisplay dpy, EGLConfig config,
+                 format = HAL_PIXEL_FORMAT_RGBX_8888;
+             }
+         }
++#endif
+ 
+         // now select a corresponding sRGB format if needed
+         if (attrib_list && dp->haveExtension("EGL_KHR_gl_colorspace")) {
 diff --git a/opengl/libs/EGL/egl_object.cpp b/opengl/libs/EGL/egl_object.cpp
 index cfecf77..4d9f77f 100644
 --- a/opengl/libs/EGL/egl_object.cpp
@@ -1848,6 +2080,46 @@ index 3f69d49..e48c53a 100644
                  }
              }
          }
+diff --git a/services/inputflinger/InputManager.cpp b/services/inputflinger/InputManager.cpp
+index 6a6547b..2ef25f3 100644
+--- a/services/inputflinger/InputManager.cpp
++++ b/services/inputflinger/InputManager.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include "InputManager.h"
+ 
++#include <cutils/iosched_policy.h>
+ #include <cutils/log.h>
+ 
+ namespace android {
+@@ -51,13 +52,15 @@ void InputManager::initialize() {
+ }
+ 
+ status_t InputManager::start() {
+-    status_t result = mDispatcherThread->run("InputDispatcher", PRIORITY_URGENT_DISPLAY);
++    status_t result = mDispatcherThread->run("InputDispatcher",
++            PRIORITY_URGENT_DISPLAY + PRIORITY_MORE_FAVORABLE);
+     if (result) {
+         ALOGE("Could not start InputDispatcher thread due to error %d.", result);
+         return result;
+     }
+ 
+-    result = mReaderThread->run("InputReader", PRIORITY_URGENT_DISPLAY);
++    result = mReaderThread->run("InputReader",
++            PRIORITY_URGENT_DISPLAY + PRIORITY_MORE_FAVORABLE);
+     if (result) {
+         ALOGE("Could not start InputReader thread due to error %d.", result);
+ 
+@@ -65,6 +68,9 @@ status_t InputManager::start() {
+         return result;
+     }
+ 
++    android_set_rt_ioprio(mDispatcherThread->getTid(), 1);
++    android_set_rt_ioprio(mReaderThread->getTid(), 1);
++
+     return OK;
+ }
+ 
 diff --git a/services/inputflinger/InputReader.cpp b/services/inputflinger/InputReader.cpp
 index b9be675..eff3deb 100644
 --- a/services/inputflinger/InputReader.cpp
@@ -2023,11 +2295,17 @@ index e243637..4794b47 100644
          LAST_SYSTEM_WINDOW      = 2999,
      };
 diff --git a/services/surfaceflinger/Android.mk b/services/surfaceflinger/Android.mk
-index ffda035..3f96b35 100644
+index ffda035..52d4a8b 100644
 --- a/services/surfaceflinger/Android.mk
 +++ b/services/surfaceflinger/Android.mk
-@@ -56,6 +56,9 @@ else
+@@ -54,8 +54,15 @@ else
+     LOCAL_SRC_FILES += \
+         SurfaceFlinger_hwc1.cpp \
          DisplayHardware/HWComposer_hwc1.cpp
++
++    ifeq ($(OMAP_ENHANCEMENT),true)
++        LOCAL_CFLAGS += -DOMAP_ENHANCEMENT
++    endif
  endif
  
 +ifeq ($(TARGET_FORCE_SCREENSHOT_CPU_PATH),true)
@@ -2036,7 +2314,7 @@ index ffda035..3f96b35 100644
  ifeq ($(TARGET_BOARD_PLATFORM),omap4)
      LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
  endif
-@@ -99,16 +102,28 @@ endif
+@@ -99,16 +106,28 @@ endif
  # [1] https://developer.android.com/studio/profile/systrace.html
  # [2] https://developer.android.com/training/testing/performance.html
  
@@ -2067,6 +2345,26 @@ index ffda035..3f96b35 100644
  endif
  
  ifneq ($(PRESENT_TIME_OFFSET_FROM_VSYNC_NS),)
+diff --git a/services/surfaceflinger/DispSync.cpp b/services/surfaceflinger/DispSync.cpp
+index 1a9820d..b45e00a 100644
+--- a/services/surfaceflinger/DispSync.cpp
++++ b/services/surfaceflinger/DispSync.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <math.h>
+ 
++#include <cutils/iosched_policy.h>
+ #include <cutils/log.h>
+ 
+ #include <ui/Fence.h>
+@@ -390,6 +391,7 @@ DispSync::DispSync(const char* name) :
+         ALOGE("Couldn't set SCHED_FIFO for DispSyncThread");
+     }
+ 
++    android_set_rt_ioprio(mThread->getTid(), 1);
+ 
+     reset();
+     beginResync();
 diff --git a/services/surfaceflinger/DisplayDevice.cpp b/services/surfaceflinger/DisplayDevice.cpp
 index 5c2c0ad..1f2e554 100644
 --- a/services/surfaceflinger/DisplayDevice.cpp
@@ -2081,10 +2379,67 @@ index 5c2c0ad..1f2e554 100644
  }
  
 diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
-index ef41658..086acc9 100644
+index ef41658..138d20a 100644
 --- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
 +++ b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
-@@ -1260,7 +1260,7 @@ void HWComposer::dump(String8& result) const {
+@@ -111,6 +111,10 @@ HWComposer::HWComposer(
+     int fberr = loadFbHalModule();
+     loadHwcModule();
+ 
++#ifdef OMAP_ENHANCEMENT
++    // FB HAL must stay open independent of HWC API version. Closing FB HAL will
++    // result in destruction of flip chain and de-allocation of framebuffer.
++#else
+     if (mFbDev && mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
+         // close FB HAL if we don't needed it.
+         // FIXME: this is temporary until we're not forced to open FB HAL
+@@ -118,6 +122,7 @@ HWComposer::HWComposer(
+         framebuffer_close(mFbDev);
+         mFbDev = NULL;
+     }
++#endif
+ 
+     // If we have no HWC, or a pre-1.1 HWC, an FB dev is mandatory.
+     if ((!mHwc || !hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1))
+@@ -166,7 +171,11 @@ HWComposer::HWComposer(
+         }
+     }
+ 
++#ifdef OMAP_ENHANCEMENT
++    if (!mHwc || !hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
++#else
+     if (mFbDev) {
++#endif
+         ALOG_ASSERT(!(mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)),
+                 "should only have fbdev if no hwc or hwc is 1.0");
+ 
+@@ -424,7 +433,12 @@ status_t HWComposer::queryDisplayProperties(int disp) {
+     }
+ 
+     // FIXME: what should we set the format to?
++#ifdef OMAP_ENHANCEMENT
++    // Use pixel format native to DSS HW
++    mDisplayData[disp].format = HAL_PIXEL_FORMAT_BGRA_8888;
++#else
+     mDisplayData[disp].format = HAL_PIXEL_FORMAT_RGBA_8888;
++#endif
+     mDisplayData[disp].connected = true;
+     return NO_ERROR;
+ }
+@@ -853,7 +867,12 @@ int HWComposer::getVisualID() const {
+         // FIXME: temporary hack until HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED
+         // is supported by the implementation. we can only be in this case
+         // if we have HWC 1.1
++#ifdef OMAP_ENHANCEMENT
++        // Use pixel format native to DSS HW
++        return HAL_PIXEL_FORMAT_BGRA_8888;
++#else
+         return HAL_PIXEL_FORMAT_RGBA_8888;
++#endif
+         //return HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
+     } else {
+         return mFbDev->format;
+@@ -1260,7 +1279,7 @@ void HWComposer::dump(String8& result) const {
      }
  
      if (mHwc && mHwc->dump) {
@@ -2125,6 +2480,26 @@ index 2190466..8c36d85 100644
      status_t result = mSource[source]->dequeueBuffer(sslot, fence,
              mSinkBufferWidth, mSinkBufferHeight, format, usage);
      if (result < 0)
+diff --git a/services/surfaceflinger/EventThread.cpp b/services/surfaceflinger/EventThread.cpp
+index dd88adb..2dacd87 100644
+--- a/services/surfaceflinger/EventThread.cpp
++++ b/services/surfaceflinger/EventThread.cpp
+@@ -20,6 +20,7 @@
+ #include <sys/types.h>
+ 
+ #include <cutils/compiler.h>
++#include <cutils/iosched_policy.h>
+ 
+ #include <gui/BitTube.h>
+ #include <gui/IDisplayEventConnection.h>
+@@ -92,6 +93,7 @@ void EventThread::sendVsyncHintOnLocked() {
+ 
+ void EventThread::onFirstRef() {
+     run("EventThread", PRIORITY_URGENT_DISPLAY + PRIORITY_MORE_FAVORABLE);
++    android_set_rt_ioprio(getTid(), 1);
+ }
+ 
+ sp<EventThread::Connection> EventThread::createEventConnection() const {
 diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
 index 3ffa655..f8de24d 100644
 --- a/services/surfaceflinger/Layer.cpp
@@ -2355,10 +2730,18 @@ index 7c3f9b5..b268119 100644
  public:
      GLES20RenderEngine();
 diff --git a/services/surfaceflinger/RenderEngine/RenderEngine.cpp b/services/surfaceflinger/RenderEngine/RenderEngine.cpp
-index d6a032f..d0df8ab 100644
+index d6a032f..28b3319 100644
 --- a/services/surfaceflinger/RenderEngine/RenderEngine.cpp
 +++ b/services/surfaceflinger/RenderEngine/RenderEngine.cpp
-@@ -262,9 +262,11 @@ void RenderEngine::dump(String8& result) {
+@@ -83,7 +83,6 @@ RenderEngine* RenderEngine::create(EGLDisplay display, int hwcFormat) {
+             EGL_CONTEXT_CLIENT_VERSION, contextClientVersion,      // MUST be first
+ #ifdef EGL_IMG_context_priority
+ #ifdef HAS_CONTEXT_PRIORITY
+-#warning "using EGL_IMG_context_priority"
+             EGL_CONTEXT_PRIORITY_LEVEL_IMG, EGL_CONTEXT_PRIORITY_HIGH_IMG,
+ #endif
+ #endif
+@@ -262,9 +261,11 @@ void RenderEngine::dump(String8& result) {
  // ---------------------------------------------------------------------------
  
  RenderEngine::BindImageAsFramebuffer::BindImageAsFramebuffer(
@@ -2372,7 +2755,7 @@ index d6a032f..d0df8ab 100644
  
      ALOGE_IF(mStatus != GL_FRAMEBUFFER_COMPLETE_OES,
              "glCheckFramebufferStatusOES error %d", mStatus);
-@@ -272,7 +274,7 @@ RenderEngine::BindImageAsFramebuffer::BindImageAsFramebuffer(
+@@ -272,7 +273,7 @@ RenderEngine::BindImageAsFramebuffer::BindImageAsFramebuffer(
  
  RenderEngine::BindImageAsFramebuffer::~BindImageAsFramebuffer() {
      // back to main framebuffer
@@ -2408,10 +2791,26 @@ index 0259881..5a5910a 100644
          int getStatus() const;
      };
 diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
-index 8e7e577..a04684c 100644
+index 8e7e577..f1104a0 100644
 --- a/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger.cpp
-@@ -3437,7 +3437,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -27,6 +27,7 @@
+ 
+ #include <EGL/egl.h>
+ 
++#include <cutils/iosched_policy.h>
+ #include <cutils/log.h>
+ #include <cutils/properties.h>
+ 
+@@ -501,6 +502,7 @@ void SurfaceFlinger::init() {
+ 
+     mEventControlThread = new EventControlThread(this);
+     mEventControlThread->run("EventControl", PRIORITY_URGENT_DISPLAY);
++    android_set_rt_ioprio(mEventControlThread->getTid(), 1);
+ 
+     // initialize our drawing state
+     mDrawingState = mCurrentState;
+@@ -3437,7 +3439,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          const sp<IGraphicBufferProducer>& producer,
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
@@ -2421,7 +2820,7 @@ index 8e7e577..a04684c 100644
  
      if (CC_UNLIKELY(display == 0))
          return BAD_VALUE;
-@@ -3481,6 +3482,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3481,6 +3484,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          bool useIdentityTransform;
          Transform::orientation_flags rotation;
          status_t result;
@@ -2429,7 +2828,7 @@ index 8e7e577..a04684c 100644
          bool isLocalScreenshot;
      public:
          MessageCaptureScreen(SurfaceFlinger* flinger,
-@@ -3490,12 +3492,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3490,12 +3494,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
                  uint32_t minLayerZ, uint32_t maxLayerZ,
                  bool useIdentityTransform,
                  Transform::orientation_flags rotation,
@@ -2444,7 +2843,7 @@ index 8e7e577..a04684c 100644
                isLocalScreenshot(isLocalScreenshot)
          {
          }
-@@ -3505,9 +3508,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3505,9 +3510,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          virtual bool handler() {
              Mutex::Autolock _l(flinger->mStateLock);
              sp<const DisplayDevice> hw(flinger->getDisplayDevice(display));
@@ -2456,7 +2855,7 @@ index 8e7e577..a04684c 100644
              static_cast<GraphicProducerWrapper*>(IInterface::asBinder(producer).get())->exit(result);
              return true;
          }
-@@ -3523,7 +3527,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3523,7 +3529,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
      sp<MessageBase> msg = new MessageCaptureScreen(this,
              display, IGraphicBufferProducer::asInterface( wrapper ),
              sourceCrop, reqWidth, reqHeight, minLayerZ, maxLayerZ,
@@ -2465,7 +2864,7 @@ index 8e7e577..a04684c 100644
  
      status_t res = postMessageAsync(msg);
      if (res == NO_ERROR) {
-@@ -3606,7 +3610,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3606,7 +3612,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
          bool useIdentityTransform, Transform::orientation_flags rotation,
@@ -2474,7 +2873,7 @@ index 8e7e577..a04684c 100644
  {
      ATRACE_CALL();
  
-@@ -3684,7 +3688,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3684,7 +3690,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                  if (image != EGL_NO_IMAGE_KHR) {
                      // this binds the given EGLImage as a framebuffer for the
                      // duration of this scope.
@@ -2483,7 +2882,7 @@ index 8e7e577..a04684c 100644
                      if (imageBond.getStatus() == NO_ERROR) {
                          // this will in fact render into our dequeued buffer
                          // via an FBO, which means we didn't have to create
-@@ -3731,6 +3735,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3731,6 +3737,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                                  ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                              }
                          }
@@ -2568,10 +2967,18 @@ index e0e4c61..6f2520b 100644
  #ifdef USE_HWC2
      err = updateAndReleaseLocked(item, &mPendingRelease);
 diff --git a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-index b32f652..b5b9697 100644
+index b32f652..3d9c80f 100644
 --- a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-@@ -185,6 +185,10 @@ SurfaceFlinger::SurfaceFlinger()
+@@ -26,6 +26,7 @@
+ 
+ #include <EGL/egl.h>
+ 
++#include <cutils/iosched_policy.h>
+ #include <cutils/log.h>
+ #include <cutils/properties.h>
+ 
+@@ -185,6 +186,10 @@ SurfaceFlinger::SurfaceFlinger()
      property_get("debug.sf.disable_hwc_vds", value, "0");
      mUseHwcVirtualDisplays = !atoi(value);
      ALOGI_IF(!mUseHwcVirtualDisplays, "Disabling HWC virtual displays");
@@ -2582,7 +2989,7 @@ index b32f652..b5b9697 100644
  }
  
  void SurfaceFlinger::onFirstRef()
-@@ -457,19 +461,28 @@ void SurfaceFlinger::init() {
+@@ -457,19 +462,28 @@ void SurfaceFlinger::init() {
      eglInitialize(mEGLDisplay, NULL, NULL);
  
      // start the EventThread
@@ -2622,7 +3029,15 @@ index b32f652..b5b9697 100644
      }
  
  
-@@ -635,10 +648,18 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
+@@ -526,6 +540,7 @@ void SurfaceFlinger::init() {
+ 
+     mEventControlThread = new EventControlThread(this);
+     mEventControlThread->run("EventControl", PRIORITY_URGENT_DISPLAY);
++    android_set_rt_ioprio(mEventControlThread->getTid(), 1);
+ 
+     // set a fake vsync period if there is no HWComposer
+     if (mHwc->initCheck() != NO_ERROR) {
+@@ -635,10 +650,18 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
              info.orientation = 0;
          }
  
@@ -2645,7 +3060,7 @@ index b32f652..b5b9697 100644
          info.fps = float(1e9 / hwConfig.refresh);
          info.appVsyncOffset = VSYNC_EVENT_PHASE_OFFSET_NS;
  
-@@ -3186,12 +3207,14 @@ status_t SurfaceFlinger::onTransact(
+@@ -3186,12 +3209,14 @@ status_t SurfaceFlinger::onTransact(
              }
              case 1018: { // Modify Choreographer's phase offset
                  n = data.readInt32();
@@ -2662,7 +3077,7 @@ index b32f652..b5b9697 100644
                  return NO_ERROR;
              }
              case 1021: { // Disable HWC virtual displays
-@@ -3330,7 +3353,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3330,7 +3355,8 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          const sp<IGraphicBufferProducer>& producer,
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
@@ -2672,7 +3087,7 @@ index b32f652..b5b9697 100644
  
      if (CC_UNLIKELY(display == 0))
          return BAD_VALUE;
-@@ -3374,6 +3398,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3374,6 +3400,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          bool useIdentityTransform;
          Transform::orientation_flags rotation;
          status_t result;
@@ -2680,7 +3095,7 @@ index b32f652..b5b9697 100644
          bool isLocalScreenshot;
      public:
          MessageCaptureScreen(SurfaceFlinger* flinger,
-@@ -3383,12 +3408,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3383,12 +3410,13 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
                  uint32_t minLayerZ, uint32_t maxLayerZ,
                  bool useIdentityTransform,
                  Transform::orientation_flags rotation,
@@ -2695,7 +3110,7 @@ index b32f652..b5b9697 100644
                isLocalScreenshot(isLocalScreenshot)
          {
          }
-@@ -3398,9 +3424,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3398,9 +3426,10 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
          virtual bool handler() {
              Mutex::Autolock _l(flinger->mStateLock);
              sp<const DisplayDevice> hw(flinger->getDisplayDevice(display));
@@ -2707,7 +3122,7 @@ index b32f652..b5b9697 100644
              static_cast<GraphicProducerWrapper*>(IInterface::asBinder(producer).get())->exit(result);
              return true;
          }
-@@ -3416,7 +3443,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
+@@ -3416,7 +3445,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
      sp<MessageBase> msg = new MessageCaptureScreen(this,
              display, IGraphicBufferProducer::asInterface( wrapper ),
              sourceCrop, reqWidth, reqHeight, minLayerZ, maxLayerZ,
@@ -2716,7 +3131,7 @@ index b32f652..b5b9697 100644
  
      status_t res = postMessageAsync(msg);
      if (res == NO_ERROR) {
-@@ -3501,7 +3528,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3501,7 +3530,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
          Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
          uint32_t minLayerZ, uint32_t maxLayerZ,
          bool useIdentityTransform, Transform::orientation_flags rotation,
@@ -2725,7 +3140,7 @@ index b32f652..b5b9697 100644
  {
      ATRACE_CALL();
  
-@@ -3571,7 +3598,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3571,7 +3600,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                  if (image != EGL_NO_IMAGE_KHR) {
                      // this binds the given EGLImage as a framebuffer for the
                      // duration of this scope.
@@ -2734,7 +3149,7 @@ index b32f652..b5b9697 100644
                      if (imageBond.getStatus() == NO_ERROR) {
                          // this will in fact render into our dequeued buffer
                          // via an FBO, which means we didn't have to create
-@@ -3618,6 +3645,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
+@@ -3618,6 +3647,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                                  ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                              }
                          }

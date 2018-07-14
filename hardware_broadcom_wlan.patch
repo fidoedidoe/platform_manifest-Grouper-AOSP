@@ -1,3 +1,35 @@
+diff --git a/bcmdhd/firmware/bcm4339/fw_bcmdhd.bin b/bcmdhd/firmware/bcm4339/fw_bcmdhd.bin
+index bc8316d..af2c885 100644
+Binary files a/bcmdhd/firmware/bcm4339/fw_bcmdhd.bin and b/bcmdhd/firmware/bcm4339/fw_bcmdhd.bin differ
+diff --git a/bcmdhd/firmware/bcm4339/fw_bcmdhd_apsta.bin b/bcmdhd/firmware/bcm4339/fw_bcmdhd_apsta.bin
+index 11cf14b..4f5f105 100644
+Binary files a/bcmdhd/firmware/bcm4339/fw_bcmdhd_apsta.bin and b/bcmdhd/firmware/bcm4339/fw_bcmdhd_apsta.bin differ
+diff --git a/bcmdhd/firmware/bcm4354/fw_bcm4354.bin b/bcmdhd/firmware/bcm4354/fw_bcm4354.bin
+index 724b1fa..213fdad 100644
+Binary files a/bcmdhd/firmware/bcm4354/fw_bcm4354.bin and b/bcmdhd/firmware/bcm4354/fw_bcm4354.bin differ
+diff --git a/bcmdhd/firmware/bcm4354/fw_bcm4354_ap.bin b/bcmdhd/firmware/bcm4354/fw_bcm4354_ap.bin
+index 9c95b5c..cef8fc8 100644
+Binary files a/bcmdhd/firmware/bcm4354/fw_bcm4354_ap.bin and b/bcmdhd/firmware/bcm4354/fw_bcm4354_ap.bin differ
+diff --git a/bcmdhd/firmware/bcm4356/fw_bcm4356_ap_pcie.bin b/bcmdhd/firmware/bcm4356/fw_bcm4356_ap_pcie.bin
+old mode 100755
+new mode 100644
+index f25ff54..0462a6e
+Binary files a/bcmdhd/firmware/bcm4356/fw_bcm4356_ap_pcie.bin and b/bcmdhd/firmware/bcm4356/fw_bcm4356_ap_pcie.bin differ
+diff --git a/bcmdhd/firmware/bcm4356/fw_bcm4356_pcie.bin b/bcmdhd/firmware/bcm4356/fw_bcm4356_pcie.bin
+old mode 100755
+new mode 100644
+index 2544f66..2b89ae8
+Binary files a/bcmdhd/firmware/bcm4356/fw_bcm4356_pcie.bin and b/bcmdhd/firmware/bcm4356/fw_bcm4356_pcie.bin differ
+diff --git a/bcmdhd/firmware/bcm4358/fw_bcm4358.bin b/bcmdhd/firmware/bcm4358/fw_bcm4358.bin
+old mode 100755
+new mode 100644
+index 2ae8dab..1bc8bb0
+Binary files a/bcmdhd/firmware/bcm4358/fw_bcm4358.bin and b/bcmdhd/firmware/bcm4358/fw_bcm4358.bin differ
+diff --git a/bcmdhd/firmware/bcm4358/fw_bcm4358_ap.bin b/bcmdhd/firmware/bcm4358/fw_bcm4358_ap.bin
+old mode 100755
+new mode 100644
+index 19c26a8..8f49a70
+Binary files a/bcmdhd/firmware/bcm4358/fw_bcm4358_ap.bin and b/bcmdhd/firmware/bcm4358/fw_bcm4358_ap.bin differ
 diff --git a/bcmdhd/wifi_hal/gscan.cpp b/bcmdhd/wifi_hal/gscan.cpp
 index 07155e2..73bfe8c 100644
 --- a/bcmdhd/wifi_hal/gscan.cpp

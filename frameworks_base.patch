@@ -36,6 +36,20 @@ index aed7a36..bf96926 100644
              // if canceling out of addAccount and the original state caused us to skip this,
              // finish this activity
              if (mAccounts.isEmpty()) {
+diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
+index 5cfcac3..010b871 100644
+--- a/core/java/android/app/ActivityThread.java
++++ b/core/java/android/app/ActivityThread.java
+@@ -911,7 +911,8 @@ public final class ActivityThread {
+         }
+ 
+         public void setHttpProxy(String host, String port, String exclList, Uri pacFileUrl) {
+-            final ConnectivityManager cm = ConnectivityManager.from(getSystemContext());
++            final ConnectivityManager cm = ConnectivityManager.from(
++                getApplication() != null ? getApplication() : getSystemContext());
+             final Network network = cm.getBoundNetworkForProcess();
+             if (network != null) {
+                 Proxy.setHttpProxySystemProperty(cm.getDefaultProxy());
 diff --git a/core/java/android/app/Notification.java b/core/java/android/app/Notification.java
 index 0dd9c63..bcdf3f4 100644
 --- a/core/java/android/app/Notification.java
@@ -98,6 +112,23 @@ index 5cc064e..4916c1c 100644
                  if (impl != null && key.mResDir.equals(assetPath)) {
                      if (!ArrayUtils.contains(key.mLibDirs, libAsset)) {
                          final int newLibAssetCount = 1 +
+diff --git a/core/java/android/bluetooth/BluetoothDevice.java b/core/java/android/bluetooth/BluetoothDevice.java
+index cd5eff2..d329175 100644
+--- a/core/java/android/bluetooth/BluetoothDevice.java
++++ b/core/java/android/bluetooth/BluetoothDevice.java
+@@ -727,7 +727,11 @@ public final class BluetoothDevice implements Parcelable {
+             return null;
+         }
+         try {
+-            return sService.getRemoteName(this);
++            String name = sService.getRemoteName(this);
++            if (name != null) {
++                return name.replaceAll("[\\t\\n\\r]+", " ");
++            }
++            return null;
+         } catch (RemoteException e) {Log.e(TAG, "", e);}
+         return null;
+     }
 diff --git a/core/java/android/content/PermissionChecker.java b/core/java/android/content/PermissionChecker.java
 new file mode 100644
 index 0000000..a4b2fe0
@@ -477,6 +508,30 @@ index 46a0194..ecc9025 100644
       * Tell the policy if anyone is requesting that keyguard not come on.
       *
       * @param enabled Whether keyguard can be on or not.  does not actually
+diff --git a/core/java/com/android/internal/app/ChooserActivity.java b/core/java/com/android/internal/app/ChooserActivity.java
+index a5b2a91..cdf83d3 100644
+--- a/core/java/com/android/internal/app/ChooserActivity.java
++++ b/core/java/com/android/internal/app/ChooserActivity.java
+@@ -83,7 +83,7 @@ public class ChooserActivity extends ResolverActivity {
+ 
+     private static final boolean DEBUG = false;
+ 
+-    private static final int QUERY_TARGET_SERVICE_LIMIT = 5;
++    private static final int QUERY_TARGET_SERVICE_LIMIT = 3;
+     private static final int WATCHDOG_TIMEOUT_MILLIS = 5000;
+ 
+     private Bundle mReplacementExtras;
+@@ -799,8 +799,8 @@ public class ChooserActivity extends ResolverActivity {
+         public static final int TARGET_SERVICE = 1;
+         public static final int TARGET_STANDARD = 2;
+ 
+-        private static final int MAX_SERVICE_TARGETS = 8;
+-        private static final int MAX_TARGETS_PER_SERVICE = 4;
++        private static final int MAX_SERVICE_TARGETS = 4;
++        private static final int MAX_TARGETS_PER_SERVICE = 2;
+ 
+         private final List<ChooserTargetInfo> mServiceTargets = new ArrayList<>();
+         private final List<TargetInfo> mCallerTargets = new ArrayList<>();
 diff --git a/core/java/com/android/internal/app/procstats/ProcessState.java b/core/java/com/android/internal/app/procstats/ProcessState.java
 index 8c5df08..8c2c236 100644
 --- a/core/java/com/android/internal/app/procstats/ProcessState.java
@@ -1089,6 +1144,21 @@ index 0fa9a85..925f368 100644
      </string>
  
      <!-- The tiles to display in QuickSettings -->
+diff --git a/packages/SystemUI/res/values/strings.xml b/packages/SystemUI/res/values/strings.xml
+index 4a51329..aa6b3e0 100644
+--- a/packages/SystemUI/res/values/strings.xml
++++ b/packages/SystemUI/res/values/strings.xml
+@@ -1700,5 +1700,9 @@
+     <string name="high_temp_notif_message">Some features limited while phone cools down</string>
+     <!-- Text body for dialog alerting user that their phone has reached a certain temperature and may start to slow down in order to cool down. [CHAR LIMIT=300] -->
+     <string name="high_temp_dialog_message">Your phone will automatically try to cool down. You can still use your phone, but it may run slower.\n\nOnce your phone has cooled down, it will run normally.</string>
+-
++    <!-- Warning shown when user input has been blocked due to another app overlaying screen
++         content. Since we don't know what the app is showing on top of the input target, we
++         can't verify user consent. [CHAR LIMIT=NONE] -->
++    <string name="touch_filtered_warning">Because an app is obscuring a permission request, Settings
++        can’t verify your response.</string>
+ </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java b/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
 index 851ab77..a384641 100644
 --- a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
@@ -1527,7 +1597,7 @@ index 2a6f9d2..7ba1fe4 100644
                  case MESSAGE_GET_NAME_AND_ADDRESS:
                      if (DBG) Slog.d(TAG, "MESSAGE_GET_NAME_AND_ADDRESS");
 diff --git a/services/core/java/com/android/server/ConnectivityService.java b/services/core/java/com/android/server/ConnectivityService.java
-index 2693272..f2368ed 100644
+index 2693272..903dc40 100644
 --- a/services/core/java/com/android/server/ConnectivityService.java
 +++ b/services/core/java/com/android/server/ConnectivityService.java
 @@ -3007,6 +3007,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
@@ -1556,7 +1626,26 @@ index 2693272..f2368ed 100644
              return status;
          } else {
              return ConnectivityManager.TETHER_ERROR_UNSUPPORTED;
-@@ -4924,6 +4936,13 @@ public class ConnectivityService extends IConnectivityManager.Stub
+@@ -4458,7 +4470,7 @@ public class ConnectivityService extends IConnectivityManager.Stub
+     }
+ 
+     private void updateLinkProperties(NetworkAgentInfo networkAgent, LinkProperties oldLp) {
+-        LinkProperties newLp = networkAgent.linkProperties;
++        LinkProperties newLp = new LinkProperties(networkAgent.linkProperties);
+         int netId = networkAgent.network.netId;
+ 
+         // The NetworkAgentInfo does not know whether clatd is running on its network or not. Before
+@@ -4486,6 +4498,9 @@ public class ConnectivityService extends IConnectivityManager.Stub
+         }
+         // TODO - move this check to cover the whole function
+         if (!Objects.equals(newLp, oldLp)) {
++            synchronized (networkAgent) {
++                networkAgent.linkProperties = newLp;
++            }
+             notifyIfacesChangedForNetworkStats();
+             notifyNetworkCallbacks(networkAgent, ConnectivityManager.CALLBACK_IP_CHANGED);
+         }
+@@ -4924,6 +4939,13 @@ public class ConnectivityService extends IConnectivityManager.Stub
              // check if it satisfies the NetworkCapabilities
              if (VDBG) log("  checking if request is satisfied: " + nri.request);
              if (satisfies) {
@@ -1599,31 +1688,23 @@ index a7a79cd..a085b71 100644
              try {
                  PackageManager pm = mContext.getPackageManager();
 diff --git a/services/core/java/com/android/server/am/ActivityStackSupervisor.java b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
-index c6ab918..d848081 100644
+index c6ab918..8ba368b 100644
 --- a/services/core/java/com/android/server/am/ActivityStackSupervisor.java
 +++ b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
-@@ -2747,6 +2747,9 @@ public final class ActivityStackSupervisor implements DisplayListener {
-             }
+@@ -2855,10 +2855,10 @@ public final class ActivityStackSupervisor implements DisplayListener {
          }
-         checkReadyForSleepLocked();
-+        if (mGoingToSleep.isHeld()) {
-+            mGoingToSleep.release();
-+        }
-     }
- 
-     boolean shutdownLocked(int timeout) {
-@@ -2856,9 +2859,6 @@ public final class ActivityStackSupervisor implements DisplayListener {
  
          removeSleepTimeouts();
- 
--        if (mGoingToSleep.isHeld()) {
--            mGoingToSleep.release();
--        }
+-
+         if (mGoingToSleep.isHeld()) {
+             mGoingToSleep.release();
+         }
++
          if (mService.mShuttingDown) {
              mService.notifyAll();
          }
 diff --git a/services/core/java/com/android/server/clipboard/ClipboardService.java b/services/core/java/com/android/server/clipboard/ClipboardService.java
-index 66aa403..bdd2d2b 100644
+index 66aa403..6f59e84 100644
 --- a/services/core/java/com/android/server/clipboard/ClipboardService.java
 +++ b/services/core/java/com/android/server/clipboard/ClipboardService.java
 @@ -20,6 +20,7 @@ import android.app.ActivityManagerNative;
@@ -1670,13 +1751,19 @@ index 66aa403..bdd2d2b 100644
                  return false;
              }
              PerUserClipboard clipboard = getClipboard();
-@@ -313,6 +314,11 @@ public class ClipboardService extends IClipboard.Stub {
+@@ -313,6 +314,17 @@ public class ClipboardService extends IClipboard.Stub {
          }
      }
  
 +    private boolean isDeviceLocked() {
-+        final KeyguardManager keyguardManager = mContext.getSystemService(KeyguardManager.class);
-+        return keyguardManager != null && keyguardManager.isDeviceLocked();
++        final long token = Binder.clearCallingIdentity();
++        try {
++            final KeyguardManager keyguardManager = mContext.getSystemService(
++                    KeyguardManager.class);
++            return keyguardManager != null && keyguardManager.isDeviceLocked();
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
 +    }
 +
      private final void checkUriOwnerLocked(Uri uri, int uid) {

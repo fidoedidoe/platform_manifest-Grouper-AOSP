@@ -46,3 +46,16 @@ index 89aabcf..7802b3d 100644
                          mIpManager.confirmConfiguration();
                      }
                      break;
+diff --git a/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java b/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
+index c1d9445..b19af54 100644
+--- a/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
++++ b/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
+@@ -2026,7 +2026,7 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
+                         final String ifname = mGroup.getInterface();
+                         mNwService.addInterfaceToLocalNetwork(
+                                 ifname, mDhcpResults.getRoutes(ifname));
+-                    } catch (RemoteException e) {
++                    } catch (Exception e) {
+                         loge("Failed to add iface to local network " + e);
+                     }
+                     break;

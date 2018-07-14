@@ -3954,6 +3954,19 @@ index e9b69c1..1f99ff8 100644
      ldmfd       sp!,{r4-r12,r15}            @reload the registers from sp
  
  
+diff --git a/common/ihevc_defs.h b/common/ihevc_defs.h
+index a2b7eda..c4e34ba 100644
+--- a/common/ihevc_defs.h
++++ b/common/ihevc_defs.h
+@@ -274,7 +274,7 @@ typedef enum {
+ #define SPS_MAX_SUB_LAYERS  7
+ 
+ /* Maximum long term reference pics */
+-#define MAX_LTREF_PICS_SPS 16
++#define MAX_LTREF_PICS_SPS 32
+ 
+ #define MAX_STREF_PICS_SPS 64
+ 
 diff --git a/common/ihevc_structs.h b/common/ihevc_structs.h
 index 93d2ad4..baa6375 100644
 --- a/common/ihevc_structs.h
@@ -4169,7 +4182,7 @@ index d656519..d2ea7a5 100644
  
      if(1 == ps_codec->i4_pic_present)
 diff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c
-index c0f1564..8348fc6 100644
+index c0f1564..90b341a 100644
 --- a/decoder/ihevcd_parse_headers.c
 +++ b/decoder/ihevcd_parse_headers.c
 @@ -1272,12 +1272,6 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
@@ -4228,7 +4241,33 @@ index c0f1564..8348fc6 100644
      {
          return IHEVCD_INVALID_PARAMETER;
      }
-@@ -1797,6 +1809,19 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
+@@ -1461,10 +1473,12 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+ 
+     }
+     UEV_PARSE("num_short_term_ref_pic_sets", value, ps_bitstrm);
++    if(value < 0 || value > MAX_STREF_PICS_SPS)
++    {
++        return IHEVCD_INVALID_PARAMETER;
++    }
+     ps_sps->i1_num_short_term_ref_pic_sets = value;
+ 
+-    ps_sps->i1_num_short_term_ref_pic_sets = CLIP3(ps_sps->i1_num_short_term_ref_pic_sets, 0, MAX_STREF_PICS_SPS);
+-
+     for(i = 0; i < ps_sps->i1_num_short_term_ref_pic_sets; i++)
+         ihevcd_short_term_ref_pic_set(ps_bitstrm, &ps_sps->as_stref_picset[0], ps_sps->i1_num_short_term_ref_pic_sets, i, &ps_sps->as_stref_picset[i]);
+ 
+@@ -1474,6 +1488,10 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+     if(ps_sps->i1_long_term_ref_pics_present_flag)
+     {
+         UEV_PARSE("num_long_term_ref_pics_sps", value, ps_bitstrm);
++        if(value < 0 || value > MAX_LTREF_PICS_SPS)
++        {
++            return IHEVCD_INVALID_PARAMETER;
++        }
+         ps_sps->i1_num_long_term_ref_pics_sps = value;
+ 
+         for(i = 0; i < ps_sps->i1_num_long_term_ref_pics_sps; i++)
+@@ -1797,6 +1815,19 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
      BITS_PARSE("tiles_enabled_flag", value, ps_bitstrm, 1);
      ps_pps->i1_tiles_enabled_flag = value;
  

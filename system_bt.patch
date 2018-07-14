@@ -135,6 +135,33 @@ index 1995478..4367fce 100644
      fixed_queue_enqueue(p_scb->data_queue, p_new_buf);
      BT_HDR *p_event = (BT_HDR *)osi_malloc(sizeof(BT_HDR));
      p_event->layer_specific = handle;
+diff --git a/btif/src/btif_rc.c b/btif/src/btif_rc.c
+index 6572fd7..1e0fce6 100644
+--- a/btif/src/btif_rc.c
++++ b/btif/src/btif_rc.c
+@@ -42,6 +42,7 @@
+ #include "btif_util.h"
+ #include "bt_common.h"
+ #include "device/include/interop.h"
++#include "log/log.h"
+ #include "uinput.h"
+ #include "bdaddr.h"
+ #include "osi/include/list.h"
+@@ -2762,8 +2763,13 @@ static void handle_app_cur_val_response (tBTA_AV_META_MSG *pmeta_msg, tAVRC_GET_
+     }
+ 
+     bdcpy(rc_addr.address, btif_rc_cb.rc_addr);
+-
+     app_settings.num_attr = p_rsp->num_val;
++
++    if (app_settings.num_attr > BTRC_MAX_APP_SETTINGS) {
++        android_errorWriteLog(0x534e4554, "73824150");
++        app_settings.num_attr = BTRC_MAX_APP_SETTINGS;
++    }
++
+     for (xx = 0; xx < app_settings.num_attr; xx++)
+     {
+         app_settings.attr_ids[xx] = p_rsp->p_vals[xx].attr_id;
 diff --git a/btif/src/btif_sdp_server.c b/btif/src/btif_sdp_server.c
 index d02dfa0..90d74cf 100644
 --- a/btif/src/btif_sdp_server.c
@@ -149,6 +176,21 @@ index d02dfa0..90d74cf 100644
          APPL_TRACE_ERROR("%s() failed - id %d is invalid", __func__, id);
          return handle;
      }
+diff --git a/btif/src/btif_storage.c b/btif/src/btif_storage.c
+index 83dcc8c..9abfe45 100644
+--- a/btif/src/btif_storage.c
++++ b/btif/src/btif_storage.c
+@@ -229,6 +229,10 @@ static int prop2cfg(bt_bdaddr_t *remote_bd_addr, bt_property_t *prop)
+                 bt_uuid_t *p_uuid = (bt_uuid_t*)prop->val + i;
+                 memset(buf, 0, sizeof(buf));
+                 uuid_to_string_legacy(p_uuid, buf);
++                if (strlen(value) + strlen(buf) + 1 > (int) sizeof(value) - 1) {
++                    android_errorWriteLog(0x534e4554, "73963551");
++                    return false;
++                }
+                 strcat(value, buf);
+                 //strcat(value, ";");
+                 strcat(value, " ");
 diff --git a/osi/src/alarm.c b/osi/src/alarm.c
 index 69ded69..5f9e42c 100644
 --- a/osi/src/alarm.c
@@ -252,7 +294,7 @@ index 98ef5f7..5201054 100644
              p_pkt->offset = L2CAP_MIN_OFFSET;
              p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
 diff --git a/stack/avrc/avrc_pars_ct.c b/stack/avrc/avrc_pars_ct.c
-index 63cc384..bd96d6c 100644
+index 63cc384..92bda6b 100644
 --- a/stack/avrc/avrc_pars_ct.c
 +++ b/stack/avrc/avrc_pars_ct.c
 @@ -22,6 +22,7 @@
@@ -263,7 +305,18 @@ index 63cc384..bd96d6c 100644
  
  /*****************************************************************************
  **  Global data
-@@ -241,6 +242,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -121,6 +122,10 @@ void avrc_parse_notification_rsp (UINT8 *p_stream, tAVRC_REG_NOTIF_RSP *p_rsp)
+ 
+         case AVRC_EVT_APP_SETTING_CHANGE:
+             BE_STREAM_TO_UINT8(p_rsp->param.player_setting.num_attr, p_stream);
++            if (p_rsp->param.player_setting.num_attr > AVRC_MAX_APP_SETTINGS) {
++                android_errorWriteLog(0x534e4554, "73782082");
++                p_rsp->param.player_setting.num_attr = AVRC_MAX_APP_SETTINGS;
++            }
+             for (int index = 0; index < p_rsp->param.player_setting.num_attr; index++)
+             {
+                 BE_STREAM_TO_UINT8(p_rsp->param.player_setting.attr_id[index], p_stream);
+@@ -241,6 +246,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
          }
          BE_STREAM_TO_UINT8(p_result->list_app_values.num_val, p);
          AVRC_TRACE_DEBUG("%s value count = %d ", __func__, p_result->list_app_values.num_val);
@@ -276,7 +329,7 @@ index 63cc384..bd96d6c 100644
          for(int xx = 0; xx < p_result->list_app_values.num_val; xx++)
          {
              BE_STREAM_TO_UINT8(p_result->list_app_values.vals[xx], p);
-@@ -258,6 +265,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -258,6 +269,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
          tAVRC_APP_SETTING *app_sett =
              (tAVRC_APP_SETTING*)osi_malloc(p_result->get_cur_app_val.num_val*sizeof(tAVRC_APP_SETTING));
          AVRC_TRACE_DEBUG("%s attr count = %d ", __func__, p_result->get_cur_app_val.num_val);
@@ -289,7 +342,7 @@ index 63cc384..bd96d6c 100644
          for (int xx = 0; xx < p_result->get_cur_app_val.num_val; xx++)
          {
              BE_STREAM_TO_UINT8(app_sett[xx].attr_id, p);
-@@ -269,7 +282,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -269,7 +286,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
  
      case AVRC_PDU_GET_PLAYER_APP_ATTR_TEXT:
      {
@@ -297,7 +350,7 @@ index 63cc384..bd96d6c 100644
          UINT8                    num_attrs;
  
          if (len == 0)
-@@ -278,9 +290,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -278,9 +294,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
              break;
          }
          BE_STREAM_TO_UINT8(num_attrs, p);
@@ -311,7 +364,7 @@ index 63cc384..bd96d6c 100644
          for (int xx = 0; xx < num_attrs; xx++)
          {
              BE_STREAM_TO_UINT8(p_result->get_app_attr_txt.p_attrs[xx].attr_id, p);
-@@ -300,7 +315,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -300,7 +319,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
  
      case AVRC_PDU_GET_PLAYER_APP_VALUE_TEXT:
      {
@@ -319,7 +372,7 @@ index 63cc384..bd96d6c 100644
          UINT8                    num_vals;
  
          if (len == 0)
-@@ -309,10 +323,13 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -309,10 +327,13 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
              break;
          }
          BE_STREAM_TO_UINT8(num_vals, p);
@@ -741,6 +794,29 @@ index 11ef79c..c2cdb88 100644
      UNUSED(len);
  
      if (op_code == GATT_REQ_READ_BLOB)
+diff --git a/stack/l2cap/l2c_ble.c b/stack/l2cap/l2c_ble.c
+index 95de4e3..f61416c 100644
+--- a/stack/l2cap/l2c_ble.c
++++ b/stack/l2cap/l2c_ble.c
+@@ -27,6 +27,7 @@
+ #include "bt_utils.h"
+ #include "l2cdefs.h"
+ #include "l2c_int.h"
++#include "log/log.h"
+ #include "btu.h"
+ #include "btm_int.h"
+ #include "hcimsgs.h"
+@@ -808,6 +809,10 @@ void l2cble_process_sig_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
+             break;
+ 
+         case L2CAP_CMD_DISC_REQ:
++            if (p + 4 > p_pkt_end) {
++                android_errorWriteLog(0x534e4554, "74121659");
++                return;
++            }
+             STREAM_TO_UINT16 (lcid, p);
+             STREAM_TO_UINT16 (rcid, p);
+ 
 diff --git a/stack/l2cap/l2c_fcr.c b/stack/l2cap/l2c_fcr.c
 index 5ba8b56..282b171 100644
 --- a/stack/l2cap/l2c_fcr.c
@@ -1574,6 +1650,32 @@ index 05414cd..71dab92 100644
  extern void     sdp_disconnect (tCONN_CB*p_ccb, UINT16 reason);
  
  #if (defined(SDP_DEBUG) && SDP_DEBUG == TRUE)
+diff --git a/stack/smp/smp_main.c b/stack/smp/smp_main.c
+index c3709f8..96cf555 100644
+--- a/stack/smp/smp_main.c
++++ b/stack/smp/smp_main.c
+@@ -17,6 +17,7 @@
+  ******************************************************************************/
+ 
+ #include "bt_target.h"
++#include <cutils/log.h>
+ 
+ #if SMP_INCLUDED == TRUE
+ 
+@@ -770,6 +771,13 @@ void smp_sm_event(tSMP_CB *p_cb, tSMP_EVENT event, void *p_data)
+     UINT8           curr_state = p_cb->state;
+     tSMP_SM_TBL     state_table;
+     UINT8           action, entry, i;
++
++    if (p_cb->role >= 2) {
++      SMP_TRACE_DEBUG("Invalid role: %d", p_cb->role);
++      android_errorWriteLog(0x534e4554, "74121126");
++      return;
++    }
++
+     tSMP_ENTRY_TBL  entry_table =  smp_entry_table[p_cb->role];
+ 
+     SMP_TRACE_EVENT("main smp_sm_event");
 diff --git a/stack/smp/smp_utils.c b/stack/smp/smp_utils.c
 index a7357db..93c9a23 100644
 --- a/stack/smp/smp_utils.c
