@@ -2321,6 +2321,18 @@ index 56e1f77..04d8dda 100644
              if (mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar) {
                  ConvertYUV420SemiPlanarToYUV420Planar(
                          source, mConversionBuffer, mWidth, mHeight);
+diff --git a/media/libstagefright/foundation/MediaBuffer.cpp b/media/libstagefright/foundation/MediaBuffer.cpp
+index 16000ef..82b989c 100644
+--- a/media/libstagefright/foundation/MediaBuffer.cpp
++++ b/media/libstagefright/foundation/MediaBuffer.cpp
+@@ -155,6 +155,7 @@ size_t MediaBuffer::range_length() const {
+ void MediaBuffer::set_range(size_t offset, size_t length) {
+     if ((mGraphicBuffer == NULL) && (offset + length > mSize)) {
+         ALOGE("offset = %zu, length = %zu, mSize = %zu", offset, length, mSize);
++	offset = 0;
+     }
+     CHECK((mGraphicBuffer != NULL) || (offset + length <= mSize));
+ 
 diff --git a/media/libstagefright/foundation/MediaBufferGroup.cpp b/media/libstagefright/foundation/MediaBufferGroup.cpp
 index 8e4d064..66992d7 100644
 --- a/media/libstagefright/foundation/MediaBufferGroup.cpp

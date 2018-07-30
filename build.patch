@@ -352,6 +352,18 @@ index 0a4e0fd..5508c12 100644
      VpnDialogs \
      MmsService
  
+diff --git a/target/product/generic_no_telephony.mk b/target/product/generic_no_telephony.mk
+index 5c48358..c655d50 100644
+--- a/target/product/generic_no_telephony.mk
++++ b/target/product/generic_no_telephony.mk
+@@ -48,7 +48,6 @@ PRODUCT_PACKAGES += \
+     audio.primary.default \
+     audio_policy.default \
+     local_time.default \
+-    vibrator.default \
+     power.default
+ 
+ PRODUCT_COPY_FILES := \
 diff --git a/tools/releasetools/ota_from_target_files.py b/tools/releasetools/ota_from_target_files.py
 index d409d94..6aa14d2 100755
 --- a/tools/releasetools/ota_from_target_files.py
