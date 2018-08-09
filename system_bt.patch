@@ -293,6 +293,74 @@ index 98ef5f7..5201054 100644
  
              p_pkt->offset = L2CAP_MIN_OFFSET;
              p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
+diff --git a/stack/avdt/avdt_msg.c b/stack/avdt/avdt_msg.c
+index adc1ae7..9697a59 100644
+--- a/stack/avdt/avdt_msg.c
++++ b/stack/avdt/avdt_msg.c
+@@ -26,6 +26,7 @@
+  *
+  ******************************************************************************/
+ 
++#include <log/log.h>
+ #include <string.h>
+ #include "bt_types.h"
+ #include "bt_target.h"
+@@ -673,6 +674,11 @@ static UINT8 avdt_msg_prs_cfg(tAVDT_CFG *p_cfg, UINT8 *p, UINT16 len, UINT8* p_e
+ 
+             case AVDT_CAT_PROTECT:
+                 p_cfg->psc_mask &= ~AVDT_PSC_PROTECT;
++                if (p + elem_len > p_end) {
++                    err = AVDT_ERR_LENGTH;
++                    android_errorWriteLog(0x534e4554, "78288378");
++                    break;
++                }
+                 if ((elem_len + protect_offset) < AVDT_PROTECT_SIZE)
+                 {
+                     p_cfg->num_protect++;
+@@ -747,6 +753,11 @@ static UINT8 avdt_msg_prs_cfg(tAVDT_CFG *p_cfg, UINT8 *p, UINT16 len, UINT8* p_e
+                 {
+                     tmp = AVDT_CODEC_SIZE - 1;
+                 }
++                if (p + tmp > p_end) {
++                    err = AVDT_ERR_LENGTH;
++                    android_errorWriteLog(0x534e4554, "78288378");
++                    break;
++                }
+                 p_cfg->num_codec++;
+                 p_cfg->codec_info[0] = elem_len;
+                 memcpy(&p_cfg->codec_info[1], p, tmp);
+diff --git a/stack/avrc/avrc_api.c b/stack/avrc/avrc_api.c
+index 77ca7d4..ffd690a 100644
+--- a/stack/avrc/avrc_api.c
++++ b/stack/avrc/avrc_api.c
+@@ -316,15 +316,15 @@ static BT_HDR * avrc_proc_vendor_command(UINT8 handle, UINT8 label,
+ 
+     if (status != AVRC_STS_NO_ERROR)
+     {
+-        /* use the current GKI buffer to build/send the reject message */
+-        p_data = (UINT8 *)(p_pkt+1) + p_pkt->offset;
++        p_rsp = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
++        p_rsp->offset = p_pkt->offset;
++        p_data = (uint8_t*)(p_rsp + 1) + p_pkt->offset;
+         *p_data++ = AVRC_RSP_REJ;
+         p_data += AVRC_VENDOR_HDR_SIZE; /* pdu */
+         *p_data++ = 0;                  /* pkt_type */
+         UINT16_TO_BE_STREAM(p_data, 1); /* len */
+         *p_data++ = status;             /* error code */
+-        p_pkt->len = AVRC_VENDOR_HDR_SIZE + 5;
+-        p_rsp = p_pkt;
++        p_rsp->len = AVRC_VENDOR_HDR_SIZE + 5;
+     }
+ 
+     return p_rsp;
+@@ -472,6 +472,7 @@ static UINT8 avrc_proc_far_msg(UINT8 handle, UINT8 label, UINT8 cr, BT_HDR **pp_
+             if (p_rsp)
+             {
+                 AVCT_MsgReq( handle, label, AVCT_RSP, p_rsp);
++                osi_free_and_reset((void**)pp_pkt);
+                 drop_code = 3;
+             }
+             else if (p_msg->hdr.opcode == AVRC_OP_DROP)
 diff --git a/stack/avrc/avrc_pars_ct.c b/stack/avrc/avrc_pars_ct.c
 index 63cc384..92bda6b 100644
 --- a/stack/avrc/avrc_pars_ct.c
@@ -459,7 +527,7 @@ index 9a7b5d9..3e866d1 100644
                  p_data[3] = 0;
              }
 diff --git a/stack/bnep/bnep_main.c b/stack/bnep/bnep_main.c
-index 078a72e..534c470 100644
+index 078a72e..f1ad2c9 100644
 --- a/stack/bnep/bnep_main.c
 +++ b/stack/bnep/bnep_main.c
 @@ -35,6 +35,7 @@
@@ -470,7 +538,19 @@ index 078a72e..534c470 100644
  
  #include "btu.h"
  #include "btm_api.h"
-@@ -495,6 +496,12 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+@@ -477,6 +478,11 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+     tBNEP_CONN    *p_bcb;
+     UINT8         *p = (UINT8 *)(p_buf + 1) + p_buf->offset;
+     UINT16        rem_len = p_buf->len;
++    if (rem_len == 0) {
++        android_errorWriteLog(0x534e4554, "78286118");
++        osi_free(p_buf);
++        return;
++    }
+     UINT8         type, ctrl_type, ext_type = 0;
+     BOOLEAN       extension_present, fw_ext_present;
+     UINT16        protocol = 0;
+@@ -495,6 +501,12 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
      type = *p++;
      extension_present = type >> 7;
      type &= 0x7f;
@@ -483,34 +563,53 @@ index 078a72e..534c470 100644
      if ((rem_len <= bnep_frame_hdr_sizes[type]) || (rem_len > BNEP_MTU_SIZE))
      {
          BNEP_TRACE_EVENT ("BNEP - rcvd frame, bad len: %d  type: 0x%02x", p_buf->len, type);
-@@ -524,20 +531,21 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+@@ -522,24 +534,36 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+             UINT16      org_len, new_len;
+             /* parse the extension headers and process unknown control headers */
              org_len = rem_len;
-             new_len = 0;
+-            new_len = 0;
              do {
 -
-+		if (org_len < 2) break;
++                if (org_len < 2) {
++                    android_errorWriteLog(0x534e4554, "67863755");
++                    break;
++                }
                  ext     = *p++;
                  length  = *p++;
-                 p += length;
- 
-+                new_len = (length + 2);
-+                if (new_len > org_len) break;
-+
-                 if ((!(ext & 0x7F)) && (*p > BNEP_FILTER_MULTI_ADDR_RESPONSE_MSG))
-                     bnep_send_command_not_understood (p_bcb, *p);
+-                p += length;
+-
+-                if ((!(ext & 0x7F)) && (*p > BNEP_FILTER_MULTI_ADDR_RESPONSE_MSG))
+-                    bnep_send_command_not_understood (p_bcb, *p);
  
 -                new_len += (length + 2);
--
++                new_len = (length + 2);
+ 
 -                if (new_len > org_len)
--                    break;
++                if (new_len > org_len) {
++                    android_errorWriteLog(0x534e4554, "67863755");
+                     break;
++                }
++
++                if ((ext & 0x7F) == BNEP_EXTENSION_FILTER_CONTROL) {
++                    if (length == 0) {
++                        android_errorWriteLog(0x534e4554, "79164722");
++                        break;
++                    }
++                    if (*p > BNEP_FILTER_MULTI_ADDR_RESPONSE_MSG) {
++                        bnep_send_command_not_understood(p_bcb, *p);
++                    }
++                }
++
++                p += length;
+ 
 +		org_len -= new_len;
- 
              } while (ext & 0x80);
-+            android_errorWriteLog(0x534e4554, "67863755");
          }
- 
+-
          osi_free(p_buf);
-@@ -575,7 +583,8 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+         return;
+     }
+@@ -575,7 +599,8 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
              p_bcb->con_state != BNEP_STATE_CONNECTED &&
              extension_present && p && rem_len)
          {
@@ -520,15 +619,24 @@ index 078a72e..534c470 100644
              memcpy((UINT8 *)(p_bcb->p_pending_data + 1), p, rem_len);
              p_bcb->p_pending_data->len    = rem_len;
              p_bcb->p_pending_data->offset = 0;
-@@ -585,6 +594,8 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
+@@ -585,13 +610,14 @@ static void bnep_data_ind (UINT16 l2cap_cid, BT_HDR *p_buf)
              while (extension_present && p && rem_len)
              {
                  ext_type = *p++;
 +                rem_len--;
-+                android_errorWriteLog(0x534e4554, "69271284");
                  extension_present = ext_type >> 7;
                  ext_type &= 0x7F;
  
+                 /* if unknown extension present stop processing */
+-                if (ext_type)
+-                    break;
+-
++		if (ext_type != BNEP_EXTENSION_FILTER_CONTROL) break;
++ 
++                android_errorWriteLog(0x534e4554, "69271284");
+                 p = bnep_process_control_packet (p_bcb, p, &rem_len, TRUE);
+             }
+         }
 diff --git a/stack/bnep/bnep_utils.c b/stack/bnep/bnep_utils.c
 index 13fb189..05bcdda 100644
 --- a/stack/bnep/bnep_utils.c
@@ -1266,6 +1374,36 @@ index 5c3a367..7d56ee7 100644
      return;
  }
  
+diff --git a/stack/sdp/sdp_discovery.c b/stack/sdp/sdp_discovery.c
+index ec20689..de4e7ff 100644
+--- a/stack/sdp/sdp_discovery.c
++++ b/stack/sdp/sdp_discovery.c
+@@ -343,7 +343,7 @@ static void process_service_search_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
+ #if (SDP_RAW_DATA_INCLUDED == TRUE)
+ static void sdp_copy_raw_data (tCONN_CB *p_ccb, BOOLEAN offset)
+ {
+-    unsigned int    cpy_len;
++    unsigned int    cpy_len, rem_len;
+     UINT32          list_len;
+     UINT8           *p;
+     UINT8           type;
+@@ -370,10 +370,15 @@ static void sdp_copy_raw_data (tCONN_CB *p_ccb, BOOLEAN offset)
+             type = *p++;
+             p = sdpu_get_len_from_type (p, type, &list_len);
+         }
+-        if(list_len && list_len < cpy_len )
++        if (list_len < cpy_len )
+         {
+             cpy_len = list_len;
+         }
++        rem_len = SDP_MAX_LIST_BYTE_COUNT - (unsigned int)(p - &p_ccb->rsp_list[0]);
++        if (cpy_len > rem_len) {
++            SDP_TRACE_WARNING("rem_len :%d less than cpy_len:%d", rem_len, cpy_len);
++            cpy_len = rem_len;
++        }
+         SDP_TRACE_WARNING(
+           "%s: list_len:%d cpy_len:%d p:%p p_ccb:%p p_db:%p raw_size:%d "
+           "raw_used:%d raw_data:%p",
 diff --git a/stack/sdp/sdp_main.c b/stack/sdp/sdp_main.c
 index c888817..7cbe2d3 100644
 --- a/stack/sdp/sdp_main.c
@@ -1296,7 +1434,7 @@ index c888817..7cbe2d3 100644
  /*******************************************************************************
  **
 diff --git a/stack/sdp/sdp_server.c b/stack/sdp/sdp_server.c
-index 627f4cf..ba9e8fd 100644
+index 627f4cf..d680180 100644
 --- a/stack/sdp/sdp_server.c
 +++ b/stack/sdp/sdp_server.c
 @@ -23,6 +23,7 @@
@@ -1375,7 +1513,7 @@ index 627f4cf..ba9e8fd 100644
          {
              sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_CONT_STATE,
                                       SDP_TEXT_BAD_CONT_INX);
-@@ -327,15 +339,15 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -327,25 +339,27 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
      BOOLEAN         is_cont = FALSE;
      UINT16          attr_len;
  
@@ -1392,11 +1530,14 @@ index 627f4cf..ba9e8fd 100644
  
 +    /* Extract the record handle */
 +    BE_STREAM_TO_UINT32(rec_handle, p_req);
++    param_len -= sizeof(rec_handle);
 +
      /* Get the max list length we can send. Cap it at MTU size minus overhead */
      BE_STREAM_TO_UINT16 (max_list_len, p_req);
++    param_len -= sizeof(max_list_len);
  
-@@ -344,8 +356,8 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+     if (max_list_len > (p_ccb->rem_mtu_size - SDP_MAX_ATTR_RSPHDR_LEN))
+         max_list_len = p_ccb->rem_mtu_size - SDP_MAX_ATTR_RSPHDR_LEN;
  
      p_req = sdpu_extract_attr_seq (p_req, param_len, &attr_seq);
  
@@ -1407,7 +1548,7 @@ index 627f4cf..ba9e8fd 100644
          sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_ATTR_LIST);
          return;
      }
-@@ -360,13 +372,19 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -360,13 +374,19 @@ static void process_service_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
          return;
      }
  
@@ -1428,7 +1569,7 @@ index 627f4cf..ba9e8fd 100644
              sdpu_build_n_send_error(p_ccb, trans_num, SDP_INVALID_CONT_STATE,
                                      SDP_TEXT_BAD_CONT_LEN);
              return;
-@@ -562,8 +580,8 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -562,8 +582,8 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
      /* Extract the UUID sequence to search for */
      p_req = sdpu_extract_uid_seq (p_req, param_len, &uid_seq);
  
@@ -1439,7 +1580,7 @@ index 627f4cf..ba9e8fd 100644
          sdpu_build_n_send_error (p_ccb, trans_num, SDP_INVALID_REQ_SYNTAX, SDP_TEXT_BAD_UUID_LIST);
          return;
      }
-@@ -576,21 +594,27 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
+@@ -576,21 +596,27 @@ static void process_service_search_attr_req (tCONN_CB *p_ccb, UINT16 trans_num,
  
      p_req = sdpu_extract_attr_seq (p_req, param_len, &attr_seq);
  
@@ -1650,6 +1791,31 @@ index 05414cd..71dab92 100644
  extern void     sdp_disconnect (tCONN_CB*p_ccb, UINT16 reason);
  
  #if (defined(SDP_DEBUG) && SDP_DEBUG == TRUE)
+diff --git a/stack/smp/smp_br_main.c b/stack/smp/smp_br_main.c
+index 11039ec..87ae24b 100644
+--- a/stack/smp/smp_br_main.c
++++ b/stack/smp/smp_br_main.c
+@@ -19,6 +19,7 @@
+ #include "bt_target.h"
+ 
+ #include <string.h>
++#include "log/log.h"
+ #include "smp_int.h"
+ 
+ #if BLE_INCLUDED == TRUE
+@@ -344,6 +345,12 @@ void smp_br_state_machine_event(tSMP_CB *p_cb, tSMP_BR_EVENT event, void *p_data
+         return;
+     }
+ 
++    if (p_cb->role > HCI_ROLE_SLAVE) {
++        SMP_TRACE_ERROR("%s: invalid role %d", __func__, p_cb->role);
++        android_errorWriteLog(0x534e4554, "80145946");
++        return;
++    }
++
+     SMP_TRACE_DEBUG( "SMP Role: %s State: [%s (%d)], Event: [%s (%d)]",
+                       (p_cb->role == HCI_ROLE_SLAVE) ? "Slave" : "Master",
+                       smp_get_br_state_name( p_cb->br_state),
 diff --git a/stack/smp/smp_main.c b/stack/smp/smp_main.c
 index c3709f8..96cf555 100644
 --- a/stack/smp/smp_main.c

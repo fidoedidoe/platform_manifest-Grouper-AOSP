@@ -882,7 +882,7 @@ index 6fa28b1..ea0347d 100644
  
      @SmallTest
 diff --git a/libs/androidfw/ResourceTypes.cpp b/libs/androidfw/ResourceTypes.cpp
-index ceeb12b..803f635 100644
+index ceeb12b..d9efe2b 100644
 --- a/libs/androidfw/ResourceTypes.cpp
 +++ b/libs/androidfw/ResourceTypes.cpp
 @@ -457,6 +457,22 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
@@ -891,7 +891,7 @@ index ceeb12b..803f635 100644
  
 +    // The chunk must be at least the size of the string pool header.
 +    if (size < sizeof(ResStringPool_header)) {
-+        LOG_ALWAYS_FATAL("Bad string block: data size %zu is too small to be a string block", size);
++        ALOGW("Bad string block: data size %zu is too small to be a string block", size);
 +        return (mError=BAD_TYPE);
 +    }
 +
@@ -901,7 +901,7 @@ index ceeb12b..803f635 100644
 +    if (validate_chunk(reinterpret_cast<const ResChunk_header*>(data), sizeof(ResStringPool_header),
 +                       reinterpret_cast<const uint8_t*>(data) + size,
 +                       "ResStringPool_header") != NO_ERROR) {
-+        LOG_ALWAYS_FATAL("Bad string block: malformed block dimensions");
++        ALOGW("Bad string block: malformed block dimensions");
 +        return (mError=BAD_TYPE);
 +    }
 +
@@ -917,6 +917,24 @@ index ceeb12b..803f635 100644
      mHeader = (const ResStringPool_header*)data;
  
      if (notDeviceEndian) {
+@@ -6391,8 +6409,16 @@ status_t ResTable::parsePackage(const ResTable_package* const pkg,
+             }
+ 
+         } else if (ctype == RES_TABLE_LIBRARY_TYPE) {
++
+             if (group->dynamicRefTable.entries().size() == 0) {
+-                status_t err = group->dynamicRefTable.load((const ResTable_lib_header*) chunk);
++                const ResTable_lib_header* lib = (const ResTable_lib_header*) chunk;
++                status_t err = validate_chunk(&lib->header, sizeof(*lib),
++                                              endPos, "ResTable_lib_header");
++                if (err != NO_ERROR) {
++                    return (mError=err);
++                }
++
++                err = group->dynamicRefTable.load(lib);
+                 if (err != NO_ERROR) {
+                     return (mError=err);
+                 }
 diff --git a/libs/hwui/Android.mk b/libs/hwui/Android.mk
 index cacfce1..0b177b9 100644
 --- a/libs/hwui/Android.mk
@@ -13756,7 +13774,7 @@ index 450653c..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java b/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java
 deleted file mode 100644
-index bce5787..0000000
+index bce5787e..0000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java
 +++ /dev/null
 @@ -1,349 +0,0 @@
