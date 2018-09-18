@@ -46,6 +46,57 @@ index 5d5317a..04de751 100644
 +        assertEquals(symlinkFile.getCanonicalPath(), f2.getCanonicalPath());
 +    }
  }
+diff --git a/luni/src/test/java/libcore/java/net/URLTest.java b/luni/src/test/java/libcore/java/net/URLTest.java
+index 0eee1f8..410f3fb 100644
+--- a/luni/src/test/java/libcore/java/net/URLTest.java
++++ b/luni/src/test/java/libcore/java/net/URLTest.java
+@@ -409,6 +409,46 @@ public final class URLTest extends TestCase {
+         assertEquals("http://host/a/c", url.toString()); // RI doesn't canonicalize
+     }
+ 
++    public void testPathContainsBackslash() throws Exception {
++        URL url = new URL("http://host\\path@foo");
++        assertEquals("\\path@foo", url.getPath());
++        assertEquals("host", url.getHost());
++    }
++
++    public void testQueryContainsForwardSlash() throws Exception {
++        URL url = new URL("http://host?query/foo");
++        assertEquals("", url.getPath());
++        assertEquals("host", url.getHost());
++        assertEquals("query/foo", url.getQuery());
++    }
++
++    public void testFragmentContainsForwardSlash() throws Exception {
++        URL url = new URL("http://host#fragment/foo");
++        assertEquals("", url.getPath());
++        assertEquals("host", url.getHost());
++        assertEquals("fragment/foo", url.getRef());
++    }
++
++    public void testPathContainsBackslash() throws Exception {
++        URL url = new URL("http://host\\path@foo");
++        assertEquals("\\path@foo", url.getPath());
++        assertEquals("host", url.getHost());
++    }
++
++    public void testQueryContainsForwardSlash() throws Exception {
++        URL url = new URL("http://host?query/foo");
++        assertEquals("", url.getPath());
++        assertEquals("host", url.getHost());
++        assertEquals("query/foo", url.getQuery());
++    }
++
++    public void testFragmentContainsForwardSlash() throws Exception {
++        URL url = new URL("http://host#fragment/foo");
++        assertEquals("", url.getPath());
++        assertEquals("host", url.getHost());
++        assertEquals("fragment/foo", url.getRef());
++    }
++
+     public void testRelativePathAndFragment() throws Exception {
+         URL base = new URL("http://host/file");
+         assertEquals("http://host/another#fragment", new URL(base, "another#fragment").toString());
 diff --git a/ojluni/src/main/java/java/io/FileSystem.java b/ojluni/src/main/java/java/io/FileSystem.java
 index aa00fa9..7db1651 100755
 --- a/ojluni/src/main/java/java/io/FileSystem.java
@@ -64,3 +115,44 @@ index aa00fa9..7db1651 100755
  
      private static boolean getBooleanProperty(String prop, boolean defaultVal) {
          String val = System.getProperty(prop);
+diff --git a/ojluni/src/main/java/java/net/URLStreamHandler.java b/ojluni/src/main/java/java/net/URLStreamHandler.java
+index 0892d67..49a84a9 100755
+--- a/ojluni/src/main/java/java/net/URLStreamHandler.java
++++ b/ojluni/src/main/java/java/net/URLStreamHandler.java
+@@ -168,12 +168,25 @@ public abstract class URLStreamHandler {
+         if (!isUNCName && (start <= limit - 2) && (spec.charAt(start) == '/') &&
+             (spec.charAt(start + 1) == '/')) {
+             start += 2;
++            // BEGIN Android-changed: Check for all hostname termination chars. http://b/110955991
++            /*
+             i = spec.indexOf('/', start);
+             if (i < 0 || i > limit) {
+                 i = spec.indexOf('?', start);
+                 if (i < 0 || i > limit)
+                     i = limit;
+             }
++            */
++            LOOP: for (i = start; i < limit; i++) {
++                switch (spec.charAt(i)) {
++                    case '/':  // Start of path
++                    case '\\': // Start of path - see https://url.spec.whatwg.org/#host-state
++                    case '?':  // Start of query
++                    case '#':  // Start of fragment
++                        break LOOP;
++                }
++            }
++            // END Android-changed: Check for all hostname termination chars. http://b/110955991
+ 
+             host = authority = spec.substring(start, i);
+ 
+@@ -267,7 +280,9 @@ public abstract class URLStreamHandler {
+ 
+         // Parse the file path if any
+         if (start < limit) {
+-            if (spec.charAt(start) == '/') {
++            // Android-changed: Check for all hostname termination chars. http://b/110955991
++            // if (spec.charAt(start) == '/') {
++            if (spec.charAt(start) == '/' || spec.charAt(start) == '\\') {
+                 path = spec.substring(start, limit);
+             } else if (path != null && path.length() > 0) {
+                 isRelPath = true;

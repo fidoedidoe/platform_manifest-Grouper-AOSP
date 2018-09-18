@@ -322,6 +322,27 @@ index a110383..aea843a 100644
              }
          }
          return false;
+diff --git a/core/java/android/hardware/location/NanoAppFilter.java b/core/java/android/hardware/location/NanoAppFilter.java
+index bf35a3d..c440949 100644
+--- a/core/java/android/hardware/location/NanoAppFilter.java
++++ b/core/java/android/hardware/location/NanoAppFilter.java
+@@ -83,7 +83,7 @@ public class NanoAppFilter {
+         mAppId = in.readLong();
+         mAppVersion = in.readInt();
+         mVersionRestrictionMask = in.readInt();
+-        mAppIdVendorMask = in.readInt();
++        mAppIdVendorMask = in.readLong();
+     }
+ 
+     public int describeContents() {
+@@ -91,7 +91,6 @@ public class NanoAppFilter {
+     }
+ 
+     public void writeToParcel(Parcel out, int flags) {
+-
+         out.writeLong(mAppId);
+         out.writeInt(mAppVersion);
+         out.writeInt(mVersionRestrictionMask);
 diff --git a/core/java/android/net/Uri.java b/core/java/android/net/Uri.java
 index 09af05c..6c069be 100644
 --- a/core/java/android/net/Uri.java
@@ -960,6 +981,22 @@ index 2c9c9d9..7c187fb 100644
  }
  
  /**
+diff --git a/media/java/android/media/MediaPlayer.java b/media/java/android/media/MediaPlayer.java
+index e5f7527..679a27e 100644
+--- a/media/java/android/media/MediaPlayer.java
++++ b/media/java/android/media/MediaPlayer.java
+@@ -2025,10 +2025,10 @@ public class MediaPlayer extends PlayerBase
+         @Override
+         public void writeToParcel(Parcel dest, int flags) {
+             dest.writeInt(mTrackType);
++            dest.writeString(mFormat.getString(MediaFormat.KEY_MIME));
+             dest.writeString(getLanguage());
+ 
+             if (mTrackType == MEDIA_TRACK_TYPE_SUBTITLE) {
+-                dest.writeString(mFormat.getString(MediaFormat.KEY_MIME));
+                 dest.writeInt(mFormat.getInteger(MediaFormat.KEY_IS_AUTOSELECT));
+                 dest.writeInt(mFormat.getInteger(MediaFormat.KEY_IS_DEFAULT));
+                 dest.writeInt(mFormat.getInteger(MediaFormat.KEY_IS_FORCED_SUBTITLE));
 diff --git a/media/java/android/media/MediaScanner.java b/media/java/android/media/MediaScanner.java
 index 0fafe4b..4c113d9 100644
 --- a/media/java/android/media/MediaScanner.java
@@ -1978,6 +2015,67 @@ index b6a9940..11b5832a 100644
  
      /**
       * Whether verification is enabled by default.
+diff --git a/services/core/java/com/android/server/pm/ShortcutService.java b/services/core/java/com/android/server/pm/ShortcutService.java
+index 6e8799e..b33cbfd 100644
+--- a/services/core/java/com/android/server/pm/ShortcutService.java
++++ b/services/core/java/com/android/server/pm/ShortcutService.java
+@@ -124,6 +124,7 @@ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.List;
++import java.util.Objects;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.function.Consumer;
+ import java.util.function.Predicate;
+@@ -1523,6 +1524,24 @@ public class ShortcutService extends IShortcutService.Stub {
+         throw new SecurityException("Calling package name mismatch");
+     }
+ 
++    private void verifyShortcutInfoPackage(String callerPackage, ShortcutInfo si) {
++        if (si == null) {
++            return;
++        }
++        if (!Objects.equals(callerPackage, si.getPackage())) {
++            android.util.EventLog.writeEvent(0x534e4554, "109824443", -1, "");
++            throw new SecurityException("Shortcut package name mismatch");
++        }
++    }
++
++    private void verifyShortcutInfoPackages(
++            String callerPackage, List<ShortcutInfo> list) {
++        final int size = list.size();
++        for (int i = 0; i < size; i++) {
++            verifyShortcutInfoPackage(callerPackage, list.get(i));
++        }
++    }
++
+     // Overridden in unit tests to execute r synchronously.
+     void injectPostToHandler(Runnable r) {
+         mHandler.post(r);
+@@ -1651,6 +1670,7 @@ public class ShortcutService extends IShortcutService.Stub {
+         verifyCaller(packageName, userId);
+ 
+         final List<ShortcutInfo> newShortcuts = (List<ShortcutInfo>) shortcutInfoList.getList();
++        verifyShortcutInfoPackages(packageName, newShortcuts);
+         final int size = newShortcuts.size();
+ 
+         synchronized (mLock) {
+@@ -1702,6 +1722,7 @@ public class ShortcutService extends IShortcutService.Stub {
+         verifyCaller(packageName, userId);
+ 
+         final List<ShortcutInfo> newShortcuts = (List<ShortcutInfo>) shortcutInfoList.getList();
++        verifyShortcutInfoPackages(packageName, newShortcuts);
+         final int size = newShortcuts.size();
+ 
+         synchronized (mLock) {
+@@ -1782,6 +1803,7 @@ public class ShortcutService extends IShortcutService.Stub {
+         verifyCaller(packageName, userId);
+ 
+         final List<ShortcutInfo> newShortcuts = (List<ShortcutInfo>) shortcutInfoList.getList();
++        verifyShortcutInfoPackages(packageName, newShortcuts);
+         final int size = newShortcuts.size();
+ 
+         synchronized (mLock) {
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 index 889c52a..872b03d 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
