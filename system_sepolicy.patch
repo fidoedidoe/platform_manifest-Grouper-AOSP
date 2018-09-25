@@ -1,5 +1,5 @@
 diff --git a/Android.mk b/Android.mk
-index 0bfa54d..886e081 100644
+index 0bfa54d3..886e0816 100644
 --- a/Android.mk
 +++ b/Android.mk
 @@ -95,7 +95,10 @@ $(sepolicy_policy.conf): $(call build_policy, $(sepolicy_build_files))
@@ -22,7 +22,7 @@ index 0bfa54d..886e081 100644
  
  $(LOCAL_BUILT_MODULE): $(sepolicy_policy_recovery.conf) $(HOST_OUT_EXECUTABLES)/checkpolicy $(HOST_OUT_EXECUTABLES)/sepolicy-analyze
 diff --git a/app.te b/app.te
-index e9dd7b3..ef2bd9d 100644
+index e9dd7b39..ef2bd9d8 100644
 --- a/app.te
 +++ b/app.te
 @@ -274,7 +274,7 @@ allow appdomain cache_file:dir getattr;
@@ -35,7 +35,7 @@ index e9dd7b3..ef2bd9d 100644
  
  # Block device access.
 diff --git a/attributes b/attributes
-index a846c34..e8fe3ae 100644
+index a846c347..e8fe3aea 100644
 --- a/attributes
 +++ b/attributes
 @@ -113,3 +113,5 @@ attribute boot_control_hal;
@@ -45,7 +45,7 @@ index a846c34..e8fe3ae 100644
 +
 +attribute tracefs_type;
 diff --git a/domain.te b/domain.te
-index 45569de..5013ad3 100644
+index 45569de4..5013ad30 100644
 --- a/domain.te
 +++ b/domain.te
 @@ -62,7 +62,7 @@ allow domain debuggerd:unix_stream_socket connectto;
@@ -155,7 +155,7 @@ index 45569de..5013ad3 100644
  neverallow {
    domain
 diff --git a/file.te b/file.te
-index 87cec82..bdc7cbe 100644
+index 87cec829..bdc7cbe6 100644
 --- a/file.te
 +++ b/file.te
 @@ -46,6 +46,8 @@ type devpts, fs_type, mlstrustedobject;
@@ -168,7 +168,7 @@ index 87cec82..bdc7cbe 100644
  type sdcardfs, sdcard_type, fs_type, mlstrustedobject;
  type vfat, sdcard_type, fs_type, mlstrustedobject;
 diff --git a/mediaserver.te b/mediaserver.te
-index 5fbaa30..dc05e14 100644
+index 5fbaa303..dc05e14b 100644
 --- a/mediaserver.te
 +++ b/mediaserver.te
 @@ -94,6 +94,12 @@ allow mediaserver processinfo_service:service_manager find;
@@ -185,7 +185,7 @@ index 5fbaa30..dc05e14 100644
  allow mediaserver oemfs:dir search;
  allow mediaserver oemfs:file r_file_perms;
 diff --git a/priv_app.te b/priv_app.te
-index 85516a6..e1f96d5 100644
+index 85516a6e..e1f96d5d 100644
 --- a/priv_app.te
 +++ b/priv_app.te
 @@ -112,7 +112,7 @@ neverallow priv_app domain:netlink_socket *;
@@ -198,7 +198,7 @@ index 85516a6..e1f96d5 100644
  # Do not allow privileged apps to register services.
  # Only trusted components of Android should be registering
 diff --git a/untrusted_app.te b/untrusted_app.te
-index 35c811c..19cfc64 100644
+index 35c811c5..19cfc64f 100644
 --- a/untrusted_app.te
 +++ b/untrusted_app.te
 @@ -62,7 +62,7 @@ allow untrusted_app media_rw_data_file:file create_file_perms;

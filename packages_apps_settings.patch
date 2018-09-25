@@ -1,5 +1,5 @@
 diff --git a/AndroidManifest.xml b/AndroidManifest.xml
-index 2ec976d..c155cf7 100644
+index 2ec976dd35..c155cf79c3 100644
 --- a/AndroidManifest.xml
 +++ b/AndroidManifest.xml
 @@ -86,6 +86,7 @@
@@ -11,7 +11,7 @@ index 2ec976d..c155cf7 100644
      <application android:label="@string/settings_label"
              android:icon="@mipmap/ic_launcher_settings"
 diff --git a/res/values/strings.xml b/res/values/strings.xml
-index c731267..9ec0584 100644
+index c731267b94..9ec0584795 100644
 --- a/res/values/strings.xml
 +++ b/res/values/strings.xml
 @@ -1348,7 +1348,7 @@
@@ -24,7 +24,7 @@ index c731267..9ec0584 100644
      <!-- Title for BT error dialogs. -->
      <string name="bluetooth_error_title"></string>
 diff --git a/src/com/android/settings/ActivityPicker.java b/src/com/android/settings/ActivityPicker.java
-index 2c3436f..ae61944 100644
+index 2c3436fc70..ae61944cbe 100644
 --- a/src/com/android/settings/ActivityPicker.java
 +++ b/src/com/android/settings/ActivityPicker.java
 @@ -78,6 +78,10 @@ public class ActivityPicker extends AlertActivity implements
@@ -39,7 +39,7 @@ index 2c3436f..ae61944 100644
              mBaseIntent = new Intent(Intent.ACTION_MAIN, null);
              mBaseIntent.addCategory(Intent.CATEGORY_DEFAULT);
 diff --git a/src/com/android/settings/DeviceAdminAdd.java b/src/com/android/settings/DeviceAdminAdd.java
-index 9d4d895..2f6afd7 100644
+index 9d4d895330..2f6afd790f 100644
 --- a/src/com/android/settings/DeviceAdminAdd.java
 +++ b/src/com/android/settings/DeviceAdminAdd.java
 @@ -16,6 +16,8 @@
@@ -108,7 +108,7 @@ index 9d4d895..2f6afd7 100644
              ActivityManagerNative.getDefault().resumeAppSwitches();
          } catch (RemoteException e) {
 diff --git a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
-index 196a4ab..1f69768 100644
+index 196a4ab372..1f69768c0d 100644
 --- a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
 +++ b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
 @@ -39,6 +39,8 @@ import android.view.MenuInflater;

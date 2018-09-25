@@ -1,5 +1,5 @@
 diff --git a/bta/dm/bta_dm_act.c b/bta/dm/bta_dm_act.c
-index 1bf741d..a8d92e0 100644
+index 1bf741d92..a8d92e0d3 100644
 --- a/bta/dm/bta_dm_act.c
 +++ b/bta/dm/bta_dm_act.c
 @@ -26,6 +26,7 @@
@@ -59,7 +59,7 @@ index 1bf741d..a8d92e0 100644
                  }
              } while (p_sdp_rec);
 diff --git a/bta/gatt/bta_gattc_cache.c b/bta/gatt/bta_gattc_cache.c
-index 63c4246..45d2588 100644
+index 63c424696..45d258824 100644
 --- a/bta/gatt/bta_gattc_cache.c
 +++ b/bta/gatt/bta_gattc_cache.c
 @@ -1551,7 +1551,7 @@ bool bta_gattc_cache_load(tBTA_GATTC_CLCB *p_clcb)
@@ -72,7 +72,7 @@ index 63c4246..45d2588 100644
          goto done;
      }
 diff --git a/bta/pan/bta_pan_act.c b/bta/pan/bta_pan_act.c
-index 1995478..4367fce 100644
+index 199547817..4367fce68 100644
 --- a/bta/pan/bta_pan_act.c
 +++ b/bta/pan/bta_pan_act.c
 @@ -26,6 +26,8 @@
@@ -136,7 +136,7 @@ index 1995478..4367fce 100644
      BT_HDR *p_event = (BT_HDR *)osi_malloc(sizeof(BT_HDR));
      p_event->layer_specific = handle;
 diff --git a/btif/src/btif_rc.c b/btif/src/btif_rc.c
-index 6572fd7..133277a 100644
+index 6572fd74e..133277a35 100644
 --- a/btif/src/btif_rc.c
 +++ b/btif/src/btif_rc.c
 @@ -42,6 +42,7 @@
@@ -161,7 +161,7 @@ index 6572fd7..133277a 100644
      {
          app_settings.attr_ids[xx] = p_rsp->p_vals[xx].attr_id;
 diff --git a/btif/src/btif_sdp_server.c b/btif/src/btif_sdp_server.c
-index d02dfa0..90d74cf 100644
+index d02dfa0b8..90d74cf53 100644
 --- a/btif/src/btif_sdp_server.c
 +++ b/btif/src/btif_sdp_server.c
 @@ -215,7 +215,8 @@ static int alloc_sdp_slot(bluetooth_sdp_record* in_record) {
@@ -175,7 +175,7 @@ index d02dfa0..90d74cf 100644
          return handle;
      }
 diff --git a/btif/src/btif_storage.c b/btif/src/btif_storage.c
-index 83dcc8c..d02b09a 100644
+index 83dcc8c47..d02b09a55 100644
 --- a/btif/src/btif_storage.c
 +++ b/btif/src/btif_storage.c
 @@ -229,6 +229,10 @@ static int prop2cfg(bt_bdaddr_t *remote_bd_addr, bt_property_t *prop)
@@ -190,7 +190,7 @@ index 83dcc8c..d02b09a 100644
                  //strcat(value, ";");
                  strcat(value, " ");
 diff --git a/osi/src/alarm.c b/osi/src/alarm.c
-index 69ded69..5f9e42c 100644
+index 69ded69e4..5f9e42ce3 100644
 --- a/osi/src/alarm.c
 +++ b/osi/src/alarm.c
 @@ -64,7 +64,6 @@ typedef struct {
@@ -267,7 +267,7 @@ index 69ded69..5f9e42c 100644
                "    Overdue scheduling time in ms (total/max/avg)");
  
 diff --git a/osi/src/config.c b/osi/src/config.c
-index 345f907..b38977f 100644
+index 345f907d5..b38977f07 100644
 --- a/osi/src/config.c
 +++ b/osi/src/config.c
 @@ -34,6 +34,7 @@
@@ -319,7 +319,7 @@ index 345f907..b38977f 100644
  }
  
 diff --git a/stack/avdt/avdt_api.c b/stack/avdt/avdt_api.c
-index 98ef5f7..5201054 100644
+index 98ef5f755..52010541d 100644
 --- a/stack/avdt/avdt_api.c
 +++ b/stack/avdt/avdt_api.c
 @@ -1208,7 +1208,7 @@ UINT16 AVDT_SendReport(UINT8 handle, AVDT_REPORT_TYPE type,
@@ -332,7 +332,7 @@ index 98ef5f7..5201054 100644
              p_pkt->offset = L2CAP_MIN_OFFSET;
              p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
 diff --git a/stack/avrc/avrc_pars_ct.c b/stack/avrc/avrc_pars_ct.c
-index 63cc384..1818c52 100644
+index 63cc38407..1818c522f 100644
 --- a/stack/avrc/avrc_pars_ct.c
 +++ b/stack/avrc/avrc_pars_ct.c
 @@ -22,6 +22,7 @@
@@ -426,7 +426,7 @@ index 63cc384..1818c52 100644
              BE_STREAM_TO_UINT8(p_result->get_app_val_txt.p_attrs[i].attr_id, p);
              BE_STREAM_TO_UINT16(p_result->get_app_val_txt.p_attrs[i].charset_id, p);
 diff --git a/stack/avrc/avrc_pars_tg.c b/stack/avrc/avrc_pars_tg.c
-index 3f3fe93..6d3c67e 100644
+index 3f3fe9385..6d3c67e3f 100644
 --- a/stack/avrc/avrc_pars_tg.c
 +++ b/stack/avrc/avrc_pars_tg.c
 @@ -21,6 +21,7 @@
@@ -463,7 +463,7 @@ index 3f3fe93..6d3c67e 100644
                      for (xx=0; xx< p_result->get_app_val_txt.num_val; xx++)
                      {
 diff --git a/stack/bnep/bnep_api.c b/stack/bnep/bnep_api.c
-index 9a7b5d9..3e866d1 100644
+index 9a7b5d944..3e866d100 100644
 --- a/stack/bnep/bnep_api.c
 +++ b/stack/bnep/bnep_api.c
 @@ -24,6 +24,7 @@
@@ -497,7 +497,7 @@ index 9a7b5d9..3e866d1 100644
                  p_data[3] = 0;
              }
 diff --git a/stack/bnep/bnep_main.c b/stack/bnep/bnep_main.c
-index 078a72e..8edb712 100644
+index 078a72ebd..8edb712ac 100644
 --- a/stack/bnep/bnep_main.c
 +++ b/stack/bnep/bnep_main.c
 @@ -35,6 +35,7 @@
@@ -568,7 +568,7 @@ index 078a72e..8edb712 100644
                  ext_type &= 0x7F;
  
 diff --git a/stack/bnep/bnep_utils.c b/stack/bnep/bnep_utils.c
-index 13fb189..65acd33 100644
+index 13fb189e7..65acd33f6 100644
 --- a/stack/bnep/bnep_utils.c
 +++ b/stack/bnep/bnep_utils.c
 @@ -22,6 +22,8 @@
@@ -780,7 +780,7 @@ index 13fb189..65acd33 100644
  
  
 diff --git a/stack/btu/btu_init.c b/stack/btu/btu_init.c
-index 688ed88..9f9ed0a 100644
+index 688ed889d..9f9ed0a50 100644
 --- a/stack/btu/btu_init.c
 +++ b/stack/btu/btu_init.c
 @@ -115,6 +115,8 @@ void btu_free_core(void)
@@ -793,7 +793,7 @@ index 688ed88..9f9ed0a 100644
        gatt_free();
  #endif
 diff --git a/stack/gatt/gatt_sr.c b/stack/gatt/gatt_sr.c
-index 11ef79c..c2cdb88 100644
+index 11ef79c83..c2cdb885d 100644
 --- a/stack/gatt/gatt_sr.c
 +++ b/stack/gatt/gatt_sr.c
 @@ -22,6 +22,7 @@
@@ -834,7 +834,7 @@ index 11ef79c..c2cdb88 100644
  
      if (op_code == GATT_REQ_READ_BLOB)
 diff --git a/stack/l2cap/l2c_ble.c b/stack/l2cap/l2c_ble.c
-index 95de4e3..b2f196c 100644
+index 95de4e34c..b2f196c3c 100644
 --- a/stack/l2cap/l2c_ble.c
 +++ b/stack/l2cap/l2c_ble.c
 @@ -31,6 +31,7 @@
@@ -858,7 +858,7 @@ index 95de4e3..b2f196c 100644
              STREAM_TO_UINT16 (rcid, p);
  
 diff --git a/stack/l2cap/l2c_fcr.c b/stack/l2cap/l2c_fcr.c
-index 5ba8b56..282b171 100644
+index 5ba8b5619..282b1716f 100644
 --- a/stack/l2cap/l2c_fcr.c
 +++ b/stack/l2cap/l2c_fcr.c
 @@ -24,6 +24,7 @@
@@ -907,7 +907,7 @@ index 5ba8b56..282b171 100644
      osi_free(p_buf);
      return;
 diff --git a/stack/l2cap/l2c_main.c b/stack/l2cap/l2c_main.c
-index 3c48d69..cef488c 100644
+index 3c48d6974..cef488cb9 100644
 --- a/stack/l2cap/l2c_main.c
 +++ b/stack/l2cap/l2c_main.c
 @@ -339,9 +339,17 @@ static void process_l2cap_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
@@ -1181,7 +1181,7 @@ index 3c48d69..cef488c 100644
  
  #if (L2CAP_NUM_FIXED_CHNLS > 0)
 diff --git a/stack/l2cap/l2cap_client.c b/stack/l2cap/l2cap_client.c
-index 7e8b3cb..cd7edfe 100644
+index 7e8b3cb6f..cd7edfe1f 100644
 --- a/stack/l2cap/l2cap_client.c
 +++ b/stack/l2cap/l2cap_client.c
 @@ -370,7 +370,8 @@ static void fragment_packet(l2cap_client_t *client, buffer_t *packet) {
@@ -1205,7 +1205,7 @@ index 7e8b3cb..cd7edfe 100644
      fragment->len = client->remote_mtu;
      memcpy(fragment->data + fragment->offset, bt_packet->data + bt_packet->offset, client->remote_mtu);
 diff --git a/stack/mcap/mca_cact.c b/stack/mcap/mca_cact.c
-index 583a342..483169a 100644
+index 583a34215..483169ad6 100644
 --- a/stack/mcap/mca_cact.c
 +++ b/stack/mcap/mca_cact.c
 @@ -122,7 +122,7 @@ void mca_ccb_snd_req(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
@@ -1227,7 +1227,7 @@ index 583a342..483169a 100644
      MCA_TRACE_DEBUG("%s cong=%d req=%d", __func__, p_ccb->cong, p_msg->op_code);
      /* assume that API functions verified the parameters */
 diff --git a/stack/pan/pan_main.c b/stack/pan/pan_main.c
-index 5c3a367..9c90e58 100644
+index 5c3a36739..9c90e5834 100644
 --- a/stack/pan/pan_main.c
 +++ b/stack/pan/pan_main.c
 @@ -222,6 +222,39 @@ void pan_conn_ind_cb (UINT16 handle,
@@ -1299,7 +1299,7 @@ index 5c3a367..9c90e58 100644
  }
  
 diff --git a/stack/sdp/sdp_discovery.c b/stack/sdp/sdp_discovery.c
-index ec20689..7a5333e 100644
+index ec20689e3..7a5333eda 100644
 --- a/stack/sdp/sdp_discovery.c
 +++ b/stack/sdp/sdp_discovery.c
 @@ -29,6 +29,7 @@
@@ -1452,7 +1452,7 @@ index ec20689..7a5333e 100644
          else
              UINT8_TO_BE_STREAM (p, 0);
 diff --git a/stack/sdp/sdp_main.c b/stack/sdp/sdp_main.c
-index c888817..7cbe2d3 100644
+index c88881799..7cbe2d37b 100644
 --- a/stack/sdp/sdp_main.c
 +++ b/stack/sdp/sdp_main.c
 @@ -85,6 +85,10 @@ void sdp_init (void)
@@ -1481,7 +1481,7 @@ index c888817..7cbe2d3 100644
  /*******************************************************************************
  **
 diff --git a/stack/sdp/sdp_server.c b/stack/sdp/sdp_server.c
-index 627f4cf..993e0a1 100644
+index 627f4cf18..993e0a1f4 100644
 --- a/stack/sdp/sdp_server.c
 +++ b/stack/sdp/sdp_server.c
 @@ -23,6 +23,7 @@
@@ -1658,7 +1658,7 @@ index 627f4cf..993e0a1 100644
                                      SDP_TEXT_BAD_CONT_LEN);
              return;
 diff --git a/stack/sdp/sdp_utils.c b/stack/sdp/sdp_utils.c
-index a6f0ba6..6b503cb 100644
+index a6f0ba6a9..6b503cb70 100644
 --- a/stack/sdp/sdp_utils.c
 +++ b/stack/sdp/sdp_utils.c
 @@ -120,8 +120,9 @@ tCONN_CB *sdpu_allocate_ccb (void)
@@ -1826,7 +1826,7 @@ index a6f0ba6..6b503cb 100644
          {
              BE_STREAM_TO_UINT16 (p_seq->attr_entry[p_seq->num_attr].start, p);
 diff --git a/stack/sdp/sdpint.h b/stack/sdp/sdpint.h
-index 05414cd..71dab92 100644
+index 05414cd3c..71dab9265 100644
 --- a/stack/sdp/sdpint.h
 +++ b/stack/sdp/sdpint.h
 @@ -246,6 +246,7 @@ extern tSDP_CB *sdp_cb_ptr;
@@ -1838,7 +1838,7 @@ index 05414cd..71dab92 100644
  
  #if (defined(SDP_DEBUG) && SDP_DEBUG == TRUE)
 diff --git a/stack/smp/p_256_ecc_pp.c b/stack/smp/p_256_ecc_pp.c
-index 2eaebd4..832ce11 100644
+index 2eaebd4eb..832ce11e7 100644
 --- a/stack/smp/p_256_ecc_pp.c
 +++ b/stack/smp/p_256_ecc_pp.c
 @@ -259,4 +259,25 @@ void ECC_PointMult_Bin_NAF(Point *q, Point *p, DWORD *n, uint32_t keyLength)
@@ -1868,7 +1868,7 @@ index 2eaebd4..832ce11 100644
 +    return multiprecision_compare(rhs, y2_mod, kl) == 0;
 +}
 diff --git a/stack/smp/p_256_ecc_pp.h b/stack/smp/p_256_ecc_pp.h
-index fd3dc64..49f2d11 100644
+index fd3dc64fe..49f2d1104 100644
 --- a/stack/smp/p_256_ecc_pp.h
 +++ b/stack/smp/p_256_ecc_pp.h
 @@ -24,6 +24,7 @@
@@ -1889,7 +1889,7 @@ index fd3dc64..49f2d11 100644
  
  #define ECC_PointMult(q, p, n, keyLength)  ECC_PointMult_Bin_NAF(q, p, n, keyLength)
 diff --git a/stack/smp/smp_act.c b/stack/smp/smp_act.c
-index e4152a4..9e0246c 100644
+index e4152a478..9e0246c97 100644
 --- a/stack/smp/smp_act.c
 +++ b/stack/smp/smp_act.c
 @@ -16,11 +16,13 @@
@@ -1926,7 +1926,7 @@ index e4152a4..9e0246c 100644
  
      smp_wait_for_both_public_keys(p_cb, NULL);
 diff --git a/stack/smp/smp_main.c b/stack/smp/smp_main.c
-index c3709f8..67a2b39 100644
+index c3709f8a3..67a2b397a 100644
 --- a/stack/smp/smp_main.c
 +++ b/stack/smp/smp_main.c
 @@ -20,6 +20,7 @@
@@ -1952,7 +1952,7 @@ index c3709f8..67a2b39 100644
  
      SMP_TRACE_EVENT("main smp_sm_event");
 diff --git a/stack/smp/smp_utils.c b/stack/smp/smp_utils.c
-index a7357db..675cb42 100644
+index a7357db05..675cb4251 100644
 --- a/stack/smp/smp_utils.c
 +++ b/stack/smp/smp_utils.c
 @@ -297,8 +297,7 @@ BOOLEAN  smp_send_msg_to_L2CAP(BD_ADDR rem_bda, BT_HDR *p_toL2CAP)

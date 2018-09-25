@@ -4502,10 +4502,14 @@ diff --git a/decoder/ihevcd_utils.c b/decoder/ihevcd_utils.c
 index 7d76577..14c36ba 100755
 --- a/decoder/ihevcd_utils.c
 +++ b/decoder/ihevcd_utils.c
-@@ -662,6 +662,106 @@ IHEVCD_ERROR_T ihevcd_mv_buf_mgr_add_bufs(codec_t *ps_codec)
- *******************************************************************************
- *
- * @brief
+@@ -658,6 +658,106 @@ IHEVCD_ERROR_T ihevcd_mv_buf_mgr_add_bufs(codec_t *ps_codec)
+     }
+     return ret;
+ }
++/**
++*******************************************************************************
++*
++* @brief
 +*  Output buffer check
 +*
 +* @par Description:
@@ -4602,13 +4606,9 @@ index 7d76577..14c36ba 100755
 +    return (IHEVCD_ERROR_T)IHEVCD_SUCCESS;
 +}
 +
-+/**
-+*******************************************************************************
-+*
-+* @brief
- *  Picture level initializations required during parsing
+ /**
+ *******************************************************************************
  *
- * @par Description:
 @@ -713,6 +813,10 @@ IHEVCD_ERROR_T ihevcd_parse_pic_init(codec_t *ps_codec)
          ps_codec->s_parse.i4_first_pic_init = 1;
      }

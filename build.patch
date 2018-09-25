@@ -1,5 +1,5 @@
 diff --git a/core/Makefile b/core/Makefile
-index d8b4ef8..2f962aa 100644
+index d8b4ef89b..2f962aa7d 100644
 --- a/core/Makefile
 +++ b/core/Makefile
 @@ -247,6 +247,7 @@ endif
@@ -11,7 +11,7 @@ index d8b4ef8..2f962aa 100644
  	$(hide) $(foreach file,$(system_prop_file), \
  		if [ -f "$(file)" ]; then \
 diff --git a/core/combo/arch/arm/armv7-a-neon.mk b/core/combo/arch/arm/armv7-a-neon.mk
-index 5d5b050..b0e1e25 100644
+index 5d5b05009..b0e1e25c8 100644
 --- a/core/combo/arch/arm/armv7-a-neon.mk
 +++ b/core/combo/arch/arm/armv7-a-neon.mk
 @@ -8,36 +8,48 @@ ARCH_ARM_HAVE_NEON              := true
@@ -82,7 +82,7 @@ index 5d5b050..b0e1e25 100644
 +	-mfpu=$(TARGET_$(combo_2nd_arch_prefix)FPU_VARIANT)
 +endif
 diff --git a/core/main.mk b/core/main.mk
-index a612f83..921eb32 100644
+index a612f835d..921eb3274 100644
 --- a/core/main.mk
 +++ b/core/main.mk
 @@ -215,7 +215,7 @@ endif
@@ -95,7 +95,7 @@ index a612f83..921eb32 100644
  
  
 diff --git a/core/product.mk b/core/product.mk
-index 332b015..447ebbc 100644
+index 332b015fd..447ebbcfa 100644
 --- a/core/product.mk
 +++ b/core/product.mk
 @@ -73,6 +73,7 @@ endef
@@ -107,7 +107,7 @@ index 332b015..447ebbc 100644
      PRODUCT_MODEL \
      PRODUCT_LOCALES \
 diff --git a/core/product_config.mk b/core/product_config.mk
-index 6438d51..2204f78 100644
+index 6438d51be..2204f7800 100644
 --- a/core/product_config.mk
 +++ b/core/product_config.mk
 @@ -363,6 +363,9 @@ endif
@@ -122,7 +122,7 @@ index 6438d51..2204f78 100644
      $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGE_OVERLAYS))
 diff --git a/core/tasks/kernel.mk b/core/tasks/kernel.mk
 new file mode 100644
-index 0000000..80664fa
+index 000000000..80664faf2
 --- /dev/null
 +++ b/core/tasks/kernel.mk
 @@ -0,0 +1,196 @@
@@ -323,7 +323,7 @@ index 0000000..80664fa
 +ALL_PREBUILT += $(INSTALLED_KERNEL_TARGET)
 +endif
 diff --git a/core/version_defaults.mk b/core/version_defaults.mk
-index 7c96344..662cd08 100644
+index 7c9634490..662cd0807 100644
 --- a/core/version_defaults.mk
 +++ b/core/version_defaults.mk
 @@ -131,7 +131,7 @@ ifeq "" "$(PLATFORM_SECURITY_PATCH)"
@@ -336,7 +336,7 @@ index 7c96344..662cd08 100644
  
  ifeq "" "$(PLATFORM_BASE_OS)"
 diff --git a/target/product/core.mk b/target/product/core.mk
-index 0a4e0fd..5508c12 100644
+index 0a4e0fdfe..5508c12e7 100644
 --- a/target/product/core.mk
 +++ b/target/product/core.mk
 @@ -1,3 +1,4 @@
@@ -353,7 +353,7 @@ index 0a4e0fd..5508c12 100644
      MmsService
  
 diff --git a/tools/releasetools/ota_from_target_files.py b/tools/releasetools/ota_from_target_files.py
-index d409d94..6aa14d2 100755
+index d409d94f9..6aa14d284 100755
 --- a/tools/releasetools/ota_from_target_files.py
 +++ b/tools/releasetools/ota_from_target_files.py
 @@ -1284,6 +1284,11 @@ def WriteABOTAPackageWithBrilloScript(target_file, output_file,

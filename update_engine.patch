@@ -1,5 +1,5 @@
 diff --git a/common/error_code.h b/common/error_code.h
-index 32155f2..3800bf0 100644
+index 32155f27..3800bf0f 100644
 --- a/common/error_code.h
 +++ b/common/error_code.h
 @@ -72,6 +72,9 @@ enum class ErrorCode : int {
@@ -13,7 +13,7 @@ index 32155f2..3800bf0 100644
    // VERY IMPORTANT! When adding new error codes:
    //
 diff --git a/common/error_code_utils.cc b/common/error_code_utils.cc
-index dc9eaf4..0a015eb 100644
+index dc9eaf4a..0a015eb2 100644
 --- a/common/error_code_utils.cc
 +++ b/common/error_code_utils.cc
 @@ -142,6 +142,10 @@ string ErrorCodeToString(ErrorCode code) {
@@ -28,7 +28,7 @@ index dc9eaf4..0a015eb 100644
      // error codes which should be added here.
    }
 diff --git a/common/fake_hardware.h b/common/fake_hardware.h
-index 0bd297b..25324ae 100644
+index 0bd297bf..25324aec 100644
 --- a/common/fake_hardware.h
 +++ b/common/fake_hardware.h
 @@ -82,6 +82,8 @@ class FakeHardware : public HardwareInterface {
@@ -60,7 +60,7 @@ index 0bd297b..25324ae 100644
    DISALLOW_COPY_AND_ASSIGN(FakeHardware);
  };
 diff --git a/common/hardware_interface.h b/common/hardware_interface.h
-index c2d4296..d5f73f7 100644
+index c2d42964..d5f73f78 100644
 --- a/common/hardware_interface.h
 +++ b/common/hardware_interface.h
 @@ -17,6 +17,8 @@
@@ -83,7 +83,7 @@ index c2d4296..d5f73f7 100644
  
  }  // namespace chromeos_update_engine
 diff --git a/hardware_android.cc b/hardware_android.cc
-index 778f8ad..9490c24 100644
+index 778f8ad9..9490c24a 100644
 --- a/hardware_android.cc
 +++ b/hardware_android.cc
 @@ -25,6 +25,7 @@
@@ -172,7 +172,7 @@ index 778f8ad..9490c24 100644
 +
  }  // namespace chromeos_update_engine
 diff --git a/hardware_android.h b/hardware_android.h
-index 4ea3404..6561377 100644
+index 4ea34042..65613774 100644
 --- a/hardware_android.h
 +++ b/hardware_android.h
 @@ -45,6 +45,7 @@ class HardwareAndroid final : public HardwareInterface {
@@ -184,7 +184,7 @@ index 4ea3404..6561377 100644
   private:
    DISALLOW_COPY_AND_ASSIGN(HardwareAndroid);
 diff --git a/hardware_chromeos.cc b/hardware_chromeos.cc
-index 85131fc..f0f3ea9 100644
+index 85131fc4..f0f3ea98 100644
 --- a/hardware_chromeos.cc
 +++ b/hardware_chromeos.cc
 @@ -16,22 +16,27 @@
@@ -340,7 +340,7 @@ index 85131fc..f0f3ea9 100644
 +
  }  // namespace chromeos_update_engine
 diff --git a/hardware_chromeos.h b/hardware_chromeos.h
-index 221f12c..e3f086f 100644
+index 221f12c8..e3f086f3 100644
 --- a/hardware_chromeos.h
 +++ b/hardware_chromeos.h
 @@ -46,6 +46,7 @@ class HardwareChromeOS final : public HardwareInterface {
@@ -352,7 +352,7 @@ index 221f12c..e3f086f 100644
   private:
    DISALLOW_COPY_AND_ASSIGN(HardwareChromeOS);
 diff --git a/metrics_utils.cc b/metrics_utils.cc
-index 11260fc..433ca1e 100644
+index 11260fc6..433ca1e7 100644
 --- a/metrics_utils.cc
 +++ b/metrics_utils.cc
 @@ -74,6 +74,7 @@ metrics::AttemptResult GetAttemptResult(ErrorCode code) {
@@ -372,7 +372,7 @@ index 11260fc..433ca1e 100644
  
      // Special flags. These can't happen (we mask them out above) but
 diff --git a/payload_consumer/delta_performer.cc b/payload_consumer/delta_performer.cc
-index a156132..b338d34 100644
+index a1561327..b338d344 100644
 --- a/payload_consumer/delta_performer.cc
 +++ b/payload_consumer/delta_performer.cc
 @@ -1502,6 +1502,14 @@ ErrorCode DeltaPerformer::ValidateManifest() {
@@ -391,7 +391,7 @@ index a156132..b338d34 100644
    // partition boundaries etc (see chromium-os:37661).
  
 diff --git a/payload_consumer/delta_performer_unittest.cc b/payload_consumer/delta_performer_unittest.cc
-index d1918b7..2ee4516 100644
+index d1918b71..2ee4516d 100644
 --- a/payload_consumer/delta_performer_unittest.cc
 +++ b/payload_consumer/delta_performer_unittest.cc
 @@ -638,6 +638,20 @@ TEST_F(DeltaPerformerTest, ValidateManifestBadMinorVersion) {
@@ -416,7 +416,7 @@ index d1918b7..2ee4516 100644
    EXPECT_TRUE(performer_.Write(kDeltaMagic, sizeof(kDeltaMagic)));
  
 diff --git a/payload_generator/generate_delta_main.cc b/payload_generator/generate_delta_main.cc
-index 0716c1f..85785c5 100644
+index 0716c1f1..85785c55 100644
 --- a/payload_generator/generate_delta_main.cc
 +++ b/payload_generator/generate_delta_main.cc
 @@ -322,6 +322,10 @@ int Main(int argc, char** argv) {
@@ -440,7 +440,7 @@ index 0716c1f..85785c5 100644
      LOG(INFO) << "Generating delta update";
    } else {
 diff --git a/payload_generator/payload_file.cc b/payload_generator/payload_file.cc
-index 2f95b21..d2ae706 100644
+index 2f95b21c..d2ae7062 100644
 --- a/payload_generator/payload_file.cc
 +++ b/payload_generator/payload_file.cc
 @@ -70,6 +70,7 @@ bool PayloadFile::Init(const PayloadGenerationConfig& config) {
@@ -452,7 +452,7 @@ index 2f95b21..d2ae706 100644
  }
  
 diff --git a/payload_generator/payload_generation_config.h b/payload_generator/payload_generation_config.h
-index 8617d14..dd3242a 100644
+index 8617d14d..dd3242ac 100644
 --- a/payload_generator/payload_generation_config.h
 +++ b/payload_generator/payload_generation_config.h
 @@ -190,6 +190,9 @@ struct PayloadGenerationConfig {
@@ -466,7 +466,7 @@ index 8617d14..dd3242a 100644
  
  }  // namespace chromeos_update_engine
 diff --git a/payload_state.cc b/payload_state.cc
-index 04b6579..7859420 100644
+index 04b6579b..78594201 100644
 --- a/payload_state.cc
 +++ b/payload_state.cc
 @@ -295,6 +295,7 @@ void PayloadState::UpdateFailed(ErrorCode error) {
@@ -478,7 +478,7 @@ index 04b6579..7859420 100644
        break;
  
 diff --git a/scripts/brillo_update_payload b/scripts/brillo_update_payload
-index 8d51118..9b599d4 100755
+index 8d51118b..9b599d41 100755
 --- a/scripts/brillo_update_payload
 +++ b/scripts/brillo_update_payload
 @@ -143,6 +143,10 @@ if [[ "${COMMAND}" == "generate" ]]; then
@@ -504,7 +504,7 @@ index 8d51118..9b599d4 100755
      GENERATOR_ARGS+=(
        --new_postinstall_config_file="${POSTINSTALL_CONFIG_FILE}"
 diff --git a/update_attempter_android.cc b/update_attempter_android.cc
-index 1269cef..0fa1fa1 100644
+index 1269cefd..0fa1fa1b 100644
 --- a/update_attempter_android.cc
 +++ b/update_attempter_android.cc
 @@ -26,6 +26,7 @@
@@ -528,7 +528,7 @@ index 1269cef..0fa1fa1 100644
        // Ignore all other error codes.
        break;
 diff --git a/update_manager/chromeos_policy.cc b/update_manager/chromeos_policy.cc
-index aed2aaa..02ec19f 100644
+index aed2aaab..02ec19f3 100644
 --- a/update_manager/chromeos_policy.cc
 +++ b/update_manager/chromeos_policy.cc
 @@ -76,6 +76,7 @@ bool HandleErrorCode(ErrorCode err_code, int* url_num_error_p) {
@@ -540,7 +540,7 @@ index aed2aaa..02ec19f 100644
                  << chromeos_update_engine::utils::ErrorCodeToString(err_code)
                  << " (" << static_cast<int>(err_code) << ")";
 diff --git a/update_metadata.proto b/update_metadata.proto
-index 454c736..596a04e 100644
+index 454c7368..596a04ef 100644
 --- a/update_metadata.proto
 +++ b/update_metadata.proto
 @@ -281,4 +281,8 @@ message DeltaArchiveManifest {

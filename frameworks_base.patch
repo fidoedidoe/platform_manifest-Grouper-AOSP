@@ -1,5 +1,5 @@
 diff --git a/api/system-current.txt b/api/system-current.txt
-index 0fe164a..6b6f7e9 100644
+index 0fe164a269c..6b6f7e99e4b 100644
 --- a/api/system-current.txt
 +++ b/api/system-current.txt
 @@ -112,6 +112,7 @@ package android {
@@ -11,7 +11,7 @@ index 0fe164a..6b6f7e9 100644
      field public static final java.lang.String INSTALL_GRANT_RUNTIME_PERMISSIONS = "android.permission.INSTALL_GRANT_RUNTIME_PERMISSIONS";
      field public static final java.lang.String INSTALL_LOCATION_PROVIDER = "android.permission.INSTALL_LOCATION_PROVIDER";
 diff --git a/core/java/android/accounts/ChooseTypeAndAccountActivity.java b/core/java/android/accounts/ChooseTypeAndAccountActivity.java
-index aed7a36..bf96926 100644
+index aed7a369371..bf969266257 100644
 --- a/core/java/android/accounts/ChooseTypeAndAccountActivity.java
 +++ b/core/java/android/accounts/ChooseTypeAndAccountActivity.java
 @@ -250,6 +250,10 @@ public class ChooseTypeAndAccountActivity extends Activity
@@ -37,7 +37,7 @@ index aed7a36..bf96926 100644
              // finish this activity
              if (mAccounts.isEmpty()) {
 diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
-index 5cfcac3..010b871 100644
+index 5cfcac33050..010b871c1d4 100644
 --- a/core/java/android/app/ActivityThread.java
 +++ b/core/java/android/app/ActivityThread.java
 @@ -911,7 +911,8 @@ public final class ActivityThread {
@@ -51,7 +51,7 @@ index 5cfcac3..010b871 100644
              if (network != null) {
                  Proxy.setHttpProxySystemProperty(cm.getDefaultProxy());
 diff --git a/core/java/android/app/Notification.java b/core/java/android/app/Notification.java
-index 0dd9c63..bcdf3f4 100644
+index 0dd9c63c40c..bcdf3f49251 100644
 --- a/core/java/android/app/Notification.java
 +++ b/core/java/android/app/Notification.java
 @@ -1761,7 +1761,9 @@ public class Notification implements Parcelable
@@ -88,7 +88,7 @@ index 0dd9c63..bcdf3f4 100644
              return this;
          }
 diff --git a/core/java/android/app/ResourcesManager.java b/core/java/android/app/ResourcesManager.java
-index 5cc064e..4916c1c 100644
+index 5cc064e5d17..4916c1c1f5c 100644
 --- a/core/java/android/app/ResourcesManager.java
 +++ b/core/java/android/app/ResourcesManager.java
 @@ -826,7 +826,8 @@ public class ResourcesManager {
@@ -113,7 +113,7 @@ index 5cc064e..4916c1c 100644
                      if (!ArrayUtils.contains(key.mLibDirs, libAsset)) {
                          final int newLibAssetCount = 1 +
 diff --git a/core/java/android/bluetooth/BluetoothDevice.java b/core/java/android/bluetooth/BluetoothDevice.java
-index cd5eff2..d329175 100644
+index cd5eff29237..d329175646e 100644
 --- a/core/java/android/bluetooth/BluetoothDevice.java
 +++ b/core/java/android/bluetooth/BluetoothDevice.java
 @@ -727,7 +727,11 @@ public final class BluetoothDevice implements Parcelable {
@@ -131,7 +131,7 @@ index cd5eff2..d329175 100644
      }
 diff --git a/core/java/android/content/PermissionChecker.java b/core/java/android/content/PermissionChecker.java
 new file mode 100644
-index 0000000..a4b2fe0
+index 00000000000..a4b2fe0c10e
 --- /dev/null
 +++ b/core/java/android/content/PermissionChecker.java
 @@ -0,0 +1,157 @@
@@ -293,7 +293,7 @@ index 0000000..a4b2fe0
 +    }
 +}
 diff --git a/core/java/android/content/pm/RegisteredServicesCache.java b/core/java/android/content/pm/RegisteredServicesCache.java
-index a110383..aea843a 100644
+index a1103838280..aea843adbd4 100644
 --- a/core/java/android/content/pm/RegisteredServicesCache.java
 +++ b/core/java/android/content/pm/RegisteredServicesCache.java
 @@ -390,15 +390,17 @@ public abstract class RegisteredServicesCache<V> {
@@ -323,7 +323,7 @@ index a110383..aea843a 100644
          }
          return false;
 diff --git a/core/java/android/hardware/location/NanoAppFilter.java b/core/java/android/hardware/location/NanoAppFilter.java
-index bf35a3d..c440949 100644
+index bf35a3d6fbd..c44094908f3 100644
 --- a/core/java/android/hardware/location/NanoAppFilter.java
 +++ b/core/java/android/hardware/location/NanoAppFilter.java
 @@ -83,7 +83,7 @@ public class NanoAppFilter {
@@ -344,7 +344,7 @@ index bf35a3d..c440949 100644
          out.writeInt(mAppVersion);
          out.writeInt(mVersionRestrictionMask);
 diff --git a/core/java/android/net/Uri.java b/core/java/android/net/Uri.java
-index 09af05c..6c069be 100644
+index 09af05c0dfb..6c069be07e3 100644
 --- a/core/java/android/net/Uri.java
 +++ b/core/java/android/net/Uri.java
 @@ -719,6 +719,10 @@ public abstract class Uri implements Parcelable, Comparable<Uri> {
@@ -397,7 +397,7 @@ index 09af05c..6c069be 100644
  
              if (portSeparator == NOT_FOUND) {
 diff --git a/core/java/android/provider/MediaStore.java b/core/java/android/provider/MediaStore.java
-index de19f81..b17657b 100644
+index de19f819295..b17657b43db 100644
 --- a/core/java/android/provider/MediaStore.java
 +++ b/core/java/android/provider/MediaStore.java
 @@ -678,8 +678,8 @@ public final class MediaStore {
@@ -412,24 +412,24 @@ index de19f81..b17657b 100644
              try {
                  long magic = thumbFile.getMagic(origId);
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index a8209af..4766d33 100755
+index a8209af6aa2..4766d33846d 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -3559,6 +3559,12 @@ public final class Settings {
+@@ -3558,6 +3558,12 @@ public final class Settings {
+         /** @hide */
          public static final Validator LOCK_TO_APP_ENABLED_VALIDATOR = sBooleanValidator;
  
-         /**
++        /**
 +         * Whether to wake the screen with the home key, the value is boolean.
 +         * @hide
 +         */
 +        public static final String HOME_WAKE_SCREEN = "home_wake_screen";
 +
-+        /**
+         /**
           * I am the lolrus.
           * <p>
-          * Nonzero values indicate that the user has a bukkit.
 diff --git a/core/java/android/service/gatekeeper/GateKeeperResponse.java b/core/java/android/service/gatekeeper/GateKeeperResponse.java
-index a512957..6ca6d8a 100644
+index a512957d604..6ca6d8ac710 100644
 --- a/core/java/android/service/gatekeeper/GateKeeperResponse.java
 +++ b/core/java/android/service/gatekeeper/GateKeeperResponse.java
 @@ -85,6 +85,8 @@ public final class GateKeeperResponse implements Parcelable {
@@ -442,7 +442,7 @@ index a512957..6ca6d8a 100644
          }
      }
 diff --git a/core/java/android/speech/RecognitionService.java b/core/java/android/speech/RecognitionService.java
-index 674f809..70dfef5 100644
+index 674f809ef0f..70dfef574ca 100644
 --- a/core/java/android/speech/RecognitionService.java
 +++ b/core/java/android/speech/RecognitionService.java
 @@ -20,7 +20,7 @@ import android.annotation.SdkConstant;
@@ -466,7 +466,7 @@ index 674f809..70dfef5 100644
          }
          try {
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
-index 395f738..169f7e1 100644
+index 395f73844b0..169f7e170dd 100644
 --- a/core/java/android/view/WindowManager.java
 +++ b/core/java/android/view/WindowManager.java
 @@ -655,6 +655,25 @@ public interface WindowManager extends ViewManager {
@@ -495,10 +495,11 @@ index 395f738..169f7e1 100644
          /** @deprecated this is ignored, this value is set automatically when needed. */
          @Deprecated
          public static final int MEMORY_TYPE_NORMAL = 0;
-@@ -1263,6 +1282,15 @@ public interface WindowManager extends ViewManager {
+@@ -1262,6 +1281,15 @@ public interface WindowManager extends ViewManager {
+          */
          public static final int PRIVATE_FLAG_SUSTAINED_PERFORMANCE_MODE = 0x00040000;
  
-         /**
++        /**
 +         * Flag to indicate that any window added by an application process that is of type
 +         * {@link #TYPE_TOAST} or that requires
 +         * {@link android.app.AppOpsManager#OP_SYSTEM_ALERT_WINDOW} permission should be hidden when
@@ -507,30 +508,29 @@ index 395f738..169f7e1 100644
 +         */
 +        public static final int PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS = 0x00080000;
 +
-+        /**
+         /**
           * Control flags that are private to the platform.
           * @hide
-          */
 diff --git a/core/java/android/view/WindowManagerPolicy.java b/core/java/android/view/WindowManagerPolicy.java
-index 46a0194..ecc9025 100644
+index 46a0194b1b0..ecc9025774a 100644
 --- a/core/java/android/view/WindowManagerPolicy.java
 +++ b/core/java/android/view/WindowManagerPolicy.java
-@@ -1100,6 +1100,13 @@ public interface WindowManagerPolicy {
+@@ -1099,6 +1099,13 @@ public interface WindowManagerPolicy {
+      */
      public void notifyCameraLensCoverSwitchChanged(long whenNanos, boolean lensCovered);
  
-     /**
++    /**
 +     * Tell the policy that the rotation lock switch has changed state.
 +     * @param whenNanos The time when the change occurred in uptime nanoseconds.
 +     * @param isLocked True if the rotation is now locked.
 +     */
 +    public void notifyRotateLockSwitchChanged(long whenNanos, boolean isLocked);
 +
-+    /**
+     /**
       * Tell the policy if anyone is requesting that keyguard not come on.
       *
-      * @param enabled Whether keyguard can be on or not.  does not actually
 diff --git a/core/java/com/android/internal/app/ChooserActivity.java b/core/java/com/android/internal/app/ChooserActivity.java
-index a5b2a91..cdf83d3 100644
+index a5b2a9194fd..cdf83d3f728 100644
 --- a/core/java/com/android/internal/app/ChooserActivity.java
 +++ b/core/java/com/android/internal/app/ChooserActivity.java
 @@ -83,7 +83,7 @@ public class ChooserActivity extends ResolverActivity {
@@ -554,7 +554,7 @@ index a5b2a91..cdf83d3 100644
          private final List<ChooserTargetInfo> mServiceTargets = new ArrayList<>();
          private final List<TargetInfo> mCallerTargets = new ArrayList<>();
 diff --git a/core/java/com/android/internal/app/procstats/ProcessState.java b/core/java/com/android/internal/app/procstats/ProcessState.java
-index 8c5df08..8c2c236 100644
+index 8c5df08f549..8c2c2362f99 100644
 --- a/core/java/com/android/internal/app/procstats/ProcessState.java
 +++ b/core/java/com/android/internal/app/procstats/ProcessState.java
 @@ -379,7 +379,7 @@ public final class ProcessState {
@@ -567,7 +567,7 @@ index 8c5df08..8c2c236 100644
              commitStateTime(now);
              mCurState = state;
 diff --git a/core/java/com/android/internal/app/procstats/SparseMappingTable.java b/core/java/com/android/internal/app/procstats/SparseMappingTable.java
-index f941836..6d79d3b 100644
+index f941836d2c0..6d79d3bd32a 100644
 --- a/core/java/com/android/internal/app/procstats/SparseMappingTable.java
 +++ b/core/java/com/android/internal/app/procstats/SparseMappingTable.java
 @@ -18,6 +18,7 @@ package com.android.internal.app.procstats;
@@ -592,7 +592,7 @@ index f941836..6d79d3b 100644
  
      /**
 diff --git a/core/java/com/android/internal/os/ZygoteInit.java b/core/java/com/android/internal/os/ZygoteInit.java
-index e4f573b..0d3f50c 100644
+index e4f573b7b8a..0d3f50cb93b 100644
 --- a/core/java/com/android/internal/os/ZygoteInit.java
 +++ b/core/java/com/android/internal/os/ZygoteInit.java
 @@ -245,8 +245,8 @@ public class ZygoteInit {
@@ -607,7 +607,7 @@ index e4f573b..0d3f50c 100644
          }
      }
 diff --git a/core/java/com/android/internal/widget/VerifyCredentialResponse.java b/core/java/com/android/internal/widget/VerifyCredentialResponse.java
-index 48109ca..c4d91e0 100644
+index 48109ca347a..c4d91e021af 100644
 --- a/core/java/com/android/internal/widget/VerifyCredentialResponse.java
 +++ b/core/java/com/android/internal/widget/VerifyCredentialResponse.java
 @@ -95,6 +95,8 @@ public final class VerifyCredentialResponse implements Parcelable {
@@ -620,7 +620,7 @@ index 48109ca..c4d91e0 100644
          }
      }
 diff --git a/core/java/com/android/internal/widget/ViewPager.java b/core/java/com/android/internal/widget/ViewPager.java
-index d5b6def..df1ed7d 100644
+index d5b6def9742..df1ed7d392b 100644
 --- a/core/java/com/android/internal/widget/ViewPager.java
 +++ b/core/java/com/android/internal/widget/ViewPager.java
 @@ -31,6 +31,7 @@ import android.os.Parcelable;
@@ -676,7 +676,7 @@ index d5b6def..df1ed7d 100644
                  loader = getClass().getClassLoader();
              }
 diff --git a/core/jni/android/graphics/BitmapFactory.cpp b/core/jni/android/graphics/BitmapFactory.cpp
-index 4001283..0a14361 100644
+index 4001283c4c6..0a143610ebd 100644
 --- a/core/jni/android/graphics/BitmapFactory.cpp
 +++ b/core/jni/android/graphics/BitmapFactory.cpp
 @@ -587,8 +587,7 @@ static jobject nativeDecodeFileDescriptor(JNIEnv* env, jobject clazz, jobject fi
@@ -690,7 +690,7 @@ index 4001283..0a14361 100644
      // If there is no offset for the file descriptor, we use SkFILEStream directly.
      if (::lseek(descriptor, 0, SEEK_CUR) == 0) {
 diff --git a/core/jni/android_util_Binder.cpp b/core/jni/android_util_Binder.cpp
-index 5559d48..bee11db 100644
+index 5559d48a58b..bee11dbe600 100644
 --- a/core/jni/android_util_Binder.cpp
 +++ b/core/jni/android_util_Binder.cpp
 @@ -132,6 +132,14 @@ static struct strict_mode_callback_offsets_t
@@ -757,7 +757,7 @@ index 5559d48..bee11db 100644
      return 0;
  }
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
-index 011884c..8403e80 100644
+index 011884cb549..8403e80ae31 100644
 --- a/core/res/AndroidManifest.xml
 +++ b/core/res/AndroidManifest.xml
 @@ -1223,6 +1223,13 @@
@@ -792,7 +792,7 @@ index 011884c..8403e80 100644
           <p>Not for use by third-party applications.
 diff --git a/core/res/res/values-mcc310-mnc490-fr/strings.xml b/core/res/res/values-mcc310-mnc490-fr/strings.xml
 deleted file mode 100644
-index 33e0c97..0000000
+index 33e0c97b2fb..00000000000
 --- a/core/res/res/values-mcc310-mnc490-fr/strings.xml
 +++ /dev/null
 @@ -1,32 +0,0 @@
@@ -829,7 +829,7 @@ index 33e0c97..0000000
 -    <string name="wfcSpnFormat" msgid="1518868466785799436">"Appels Wi-Fi %s"</string>
 -</resources>
 diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
-index 7baed78..a0fbdac 100644
+index 7baed78a51b..a0fbdac7360 100644
 --- a/core/res/res/values/config.xml
 +++ b/core/res/res/values/config.xml
 @@ -2710,4 +2710,6 @@
@@ -840,7 +840,7 @@ index 7baed78..a0fbdac 100644
 +    <bool name="config_HICEnabledDefault">true</bool>
  </resources>
 diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
-index 08ac043..9e6f3b8 100644
+index 08ac0436d63..9e6f3b8b83f 100644
 --- a/core/res/res/values/symbols.xml
 +++ b/core/res/res/values/symbols.xml
 @@ -2749,4 +2749,7 @@
@@ -852,7 +852,7 @@ index 08ac043..9e6f3b8 100644
 +  <java-symbol type="bool" name="config_HICEnabledDefault" />
  </resources>
 diff --git a/core/res/res/xml/config_webview_packages.xml b/core/res/res/xml/config_webview_packages.xml
-index f062b59..574f7c1 100644
+index f062b59a008..574f7c15fc2 100644
 --- a/core/res/res/xml/config_webview_packages.xml
 +++ b/core/res/res/xml/config_webview_packages.xml
 @@ -15,7 +15,22 @@
@@ -881,7 +881,7 @@ index f062b59..574f7c1 100644
 +    <webviewprovider description="AOSP WebView" packageName="com.android.webview" availableByDefault="true" isFallback="true" />
  </webviewproviders>
 diff --git a/core/tests/coretests/src/android/net/UriTest.java b/core/tests/coretests/src/android/net/UriTest.java
-index 6fa28b1..ea0347d 100644
+index 6fa28b1ccda..ea0347d67ad 100644
 --- a/core/tests/coretests/src/android/net/UriTest.java
 +++ b/core/tests/coretests/src/android/net/UriTest.java
 @@ -187,6 +187,17 @@ public class UriTest extends TestCase {
@@ -903,7 +903,7 @@ index 6fa28b1..ea0347d 100644
  
      @SmallTest
 diff --git a/libs/androidfw/ResourceTypes.cpp b/libs/androidfw/ResourceTypes.cpp
-index ceeb12b..d9efe2b 100644
+index ceeb12bab20..d9efe2b6739 100644
 --- a/libs/androidfw/ResourceTypes.cpp
 +++ b/libs/androidfw/ResourceTypes.cpp
 @@ -457,6 +457,22 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
@@ -957,7 +957,7 @@ index ceeb12b..d9efe2b 100644
                      return (mError=err);
                  }
 diff --git a/libs/hwui/Android.mk b/libs/hwui/Android.mk
-index cacfce1..0b177b9 100644
+index cacfce16ab9..0b177b96430 100644
 --- a/libs/hwui/Android.mk
 +++ b/libs/hwui/Android.mk
 @@ -149,7 +149,7 @@ endif
@@ -970,7 +970,7 @@ index cacfce1..0b177b9 100644
  
  # This has to be lazy-resolved because it depends on the LOCAL_MODULE_CLASS
 diff --git a/libs/hwui/Snapshot.cpp b/libs/hwui/Snapshot.cpp
-index 2c9c9d9..7c187fb 100644
+index 2c9c9d90f68..7c187fbda45 100644
 --- a/libs/hwui/Snapshot.cpp
 +++ b/libs/hwui/Snapshot.cpp
 @@ -38,6 +38,7 @@ Snapshot::Snapshot()
@@ -982,7 +982,7 @@ index 2c9c9d9..7c187fb 100644
  
  /**
 diff --git a/media/java/android/media/MediaPlayer.java b/media/java/android/media/MediaPlayer.java
-index e5f7527..679a27e 100644
+index e5f7527c9db..679a27e9f42 100644
 --- a/media/java/android/media/MediaPlayer.java
 +++ b/media/java/android/media/MediaPlayer.java
 @@ -2025,10 +2025,10 @@ public class MediaPlayer extends PlayerBase
@@ -998,7 +998,7 @@ index e5f7527..679a27e 100644
                  dest.writeInt(mFormat.getInteger(MediaFormat.KEY_IS_DEFAULT));
                  dest.writeInt(mFormat.getInteger(MediaFormat.KEY_IS_FORCED_SUBTITLE));
 diff --git a/media/java/android/media/MediaScanner.java b/media/java/android/media/MediaScanner.java
-index 0fafe4b..4c113d9 100644
+index 0fafe4b19a4..4c113d946d1 100644
 --- a/media/java/android/media/MediaScanner.java
 +++ b/media/java/android/media/MediaScanner.java
 @@ -323,7 +323,6 @@ public class MediaScanner implements AutoCloseable {
@@ -1082,7 +1082,7 @@ index 0fafe4b..4c113d9 100644
          mPlayLists.clear();
      }
 diff --git a/media/java/android/media/MiniThumbFile.java b/media/java/android/media/MiniThumbFile.java
-index 664308c..4f9dc68 100644
+index 664308c45bf..4f9dc6817ad 100644
 --- a/media/java/android/media/MiniThumbFile.java
 +++ b/media/java/android/media/MiniThumbFile.java
 @@ -51,6 +51,7 @@ public class MiniThumbFile {
@@ -1161,7 +1161,7 @@ index 664308c..4f9dc68 100644
              throws IOException {
          RandomAccessFile r = miniThumbDataFile();
 diff --git a/media/jni/android_media_ExifInterface.cpp b/media/jni/android_media_ExifInterface.cpp
-index 731deae..20f9ef6 100644
+index 731deae1460..20f9ef6d6a4 100644
 --- a/media/jni/android_media_ExifInterface.cpp
 +++ b/media/jni/android_media_ExifInterface.cpp
 @@ -390,8 +390,7 @@ static jobject ExifInterface_getRawAttributesFromFileDescriptor(
@@ -1175,7 +1175,7 @@ index 731deae..20f9ef6 100644
  }
  
 diff --git a/media/jni/android_mtp_MtpDatabase.cpp b/media/jni/android_mtp_MtpDatabase.cpp
-index 7217832..feff102 100644
+index 7217832bac6..feff102850f 100644
 --- a/media/jni/android_mtp_MtpDatabase.cpp
 +++ b/media/jni/android_mtp_MtpDatabase.cpp
 @@ -948,6 +948,7 @@ void* MyMtpDatabase::getThumbnail(MtpObjectHandle handle, size_t& outThumbSize)
@@ -1187,7 +1187,7 @@ index 7217832..feff102 100644
                  }
                  break;
 diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
-index 0fa9a85..925f368 100644
+index 0fa9a85f412..925f3681c73 100644
 --- a/packages/SystemUI/res/values/config.xml
 +++ b/packages/SystemUI/res/values/config.xml
 @@ -105,7 +105,7 @@
@@ -1200,7 +1200,7 @@ index 0fa9a85..925f368 100644
  
      <!-- The tiles to display in QuickSettings -->
 diff --git a/packages/SystemUI/res/values/strings.xml b/packages/SystemUI/res/values/strings.xml
-index 4a51329..aa6b3e0 100644
+index 4a51329215e..aa6b3e0435c 100644
 --- a/packages/SystemUI/res/values/strings.xml
 +++ b/packages/SystemUI/res/values/strings.xml
 @@ -1700,5 +1700,9 @@
@@ -1215,7 +1215,7 @@ index 4a51329..aa6b3e0 100644
 +        can’t verify your response.</string>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java b/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
-index 851ab77..a384641 100644
+index 851ab771882..a384641e16d 100644
 --- a/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
 +++ b/packages/SystemUI/src/com/android/systemui/classifier/HumanInteractionClassifier.java
 @@ -36,9 +36,6 @@ public class HumanInteractionClassifier extends Classifier {
@@ -1242,7 +1242,7 @@ index 851ab77..a384641 100644
  
      public void setType(int type) {
 diff --git a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
-index dd80750..005206f 100644
+index dd8075057e1..005206fcd14 100644
 --- a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
 +++ b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
 @@ -22,39 +22,93 @@ import android.content.Context;
@@ -1360,7 +1360,7 @@ index dd80750..005206f 100644
 +    }
  }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java b/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
-index 9d22b4a..7639b3d 100644
+index 9d22b4a9f28..7639b3d32aa 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/BaseStatusBar.java
 @@ -2679,4 +2679,23 @@ public abstract class BaseStatusBar extends SystemUI implements
@@ -1388,7 +1388,7 @@ index 9d22b4a..7639b3d 100644
 +    }
  }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
-index 63d2891..1829e59 100644
+index 63d28910393..1829e592546 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationGuts.java
 @@ -235,7 +235,7 @@ public class NotificationGuts extends LinearLayout implements TunerService.Tunab
@@ -1401,7 +1401,7 @@ index 63d2891..1829e59 100644
                  return mSeekBar.getProgress();
              } else {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
-index 4d0e5d3..c674a82 100644
+index 4d0e5d34761..c674a82d609 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBottomAreaView.java
 @@ -305,7 +305,10 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
@@ -1442,7 +1442,7 @@ index 4d0e5d3..c674a82 100644
          final IntentFilter filter = new IntentFilter();
          filter.addAction(DevicePolicyManager.ACTION_DEVICE_POLICY_MANAGER_STATE_CHANGED);
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
-index 9c700b4..ca08ab1 100644
+index 9c700b4280e..ca08ab15e65 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelView.java
 @@ -31,6 +31,7 @@ import android.graphics.Paint;
@@ -1465,7 +1465,7 @@ index 9c700b4..ca08ab1 100644
          String packageToLaunch = (resolveInfo == null || resolveInfo.activityInfo == null)
                  ? null : resolveInfo.activityInfo.packageName;
 diff --git a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java b/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
-index 70f2fdc..ba50161 100644
+index 70f2fdcfa8d..ba50161aae9 100644
 --- a/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
 +++ b/packages/SystemUI/src/com/android/systemui/tuner/TunerFragment.java
 @@ -59,7 +59,10 @@ public class TunerFragment extends PreferenceFragment {
@@ -1481,7 +1481,7 @@ index 70f2fdc..ba50161 100644
  
      @Override
 diff --git a/services/core/java/com/android/server/AppOpsService.java b/services/core/java/com/android/server/AppOpsService.java
-index 4caeba8..c95b9d5 100644
+index 4caeba84b20..c95b9d52ad8 100644
 --- a/services/core/java/com/android/server/AppOpsService.java
 +++ b/services/core/java/com/android/server/AppOpsService.java
 @@ -597,7 +597,6 @@ public class AppOpsService extends IAppOpsService.Stub {
@@ -1547,7 +1547,7 @@ index 4caeba8..c95b9d5 100644
                          out.startTag(null, "uid");
                          out.attribute(null, "n", Integer.toString(uidState.uid));
 diff --git a/services/core/java/com/android/server/BluetoothManagerService.java b/services/core/java/com/android/server/BluetoothManagerService.java
-index 2a6f9d2..7ba1fe4 100644
+index 2a6f9d2b856..7ba1fe40b4c 100644
 --- a/services/core/java/com/android/server/BluetoothManagerService.java
 +++ b/services/core/java/com/android/server/BluetoothManagerService.java
 @@ -55,6 +55,7 @@ import android.os.UserManager;
@@ -1652,7 +1652,7 @@ index 2a6f9d2..7ba1fe4 100644
                  case MESSAGE_GET_NAME_AND_ADDRESS:
                      if (DBG) Slog.d(TAG, "MESSAGE_GET_NAME_AND_ADDRESS");
 diff --git a/services/core/java/com/android/server/ConnectivityService.java b/services/core/java/com/android/server/ConnectivityService.java
-index 2693272..903dc40 100644
+index 269327201d5..903dc400741 100644
 --- a/services/core/java/com/android/server/ConnectivityService.java
 +++ b/services/core/java/com/android/server/ConnectivityService.java
 @@ -3007,6 +3007,12 @@ public class ConnectivityService extends IConnectivityManager.Stub
@@ -1715,7 +1715,7 @@ index 2693272..903dc40 100644
                  // this request
                  if (VDBG) {
 diff --git a/services/core/java/com/android/server/NetworkManagementService.java b/services/core/java/com/android/server/NetworkManagementService.java
-index bdbd066..aebe77a 100644
+index bdbd06640e4..aebe77a0849 100644
 --- a/services/core/java/com/android/server/NetworkManagementService.java
 +++ b/services/core/java/com/android/server/NetworkManagementService.java
 @@ -1864,6 +1864,8 @@ public class NetworkManagementService extends INetworkManagementService.Stub
@@ -1728,7 +1728,7 @@ index bdbd066..aebe77a 100644
              mNetdService.networkRejectNonSecureVpn(add, uidRanges);
          } catch (ServiceSpecificException e) {
 diff --git a/services/core/java/com/android/server/accounts/AccountManagerService.java b/services/core/java/com/android/server/accounts/AccountManagerService.java
-index a7a79cd..a085b71 100644
+index a7a79cd5b3e..a085b716bd8 100644
 --- a/services/core/java/com/android/server/accounts/AccountManagerService.java
 +++ b/services/core/java/com/android/server/accounts/AccountManagerService.java
 @@ -4184,6 +4184,10 @@ public class AccountManagerService
@@ -1743,7 +1743,7 @@ index a7a79cd..a085b71 100644
              try {
                  PackageManager pm = mContext.getPackageManager();
 diff --git a/services/core/java/com/android/server/am/ActivityStackSupervisor.java b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
-index c6ab918..8ba368b 100644
+index c6ab9186456..8ba368b0b00 100644
 --- a/services/core/java/com/android/server/am/ActivityStackSupervisor.java
 +++ b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
 @@ -2855,10 +2855,10 @@ public final class ActivityStackSupervisor implements DisplayListener {
@@ -1759,7 +1759,7 @@ index c6ab918..8ba368b 100644
              mService.notifyAll();
          }
 diff --git a/services/core/java/com/android/server/clipboard/ClipboardService.java b/services/core/java/com/android/server/clipboard/ClipboardService.java
-index 66aa403..6f59e84 100644
+index 66aa40325a4..6f59e845219 100644
 --- a/services/core/java/com/android/server/clipboard/ClipboardService.java
 +++ b/services/core/java/com/android/server/clipboard/ClipboardService.java
 @@ -20,6 +20,7 @@ import android.app.ActivityManagerNative;
@@ -1825,7 +1825,7 @@ index 66aa403..6f59e84 100644
          if (!"content".equals(uri.getScheme())) {
              return;
 diff --git a/services/core/java/com/android/server/content/SyncStorageEngine.java b/services/core/java/com/android/server/content/SyncStorageEngine.java
-index 069ae73..f804fa1 100644
+index 069ae739431..f804fa1cff3 100644
 --- a/services/core/java/com/android/server/content/SyncStorageEngine.java
 +++ b/services/core/java/com/android/server/content/SyncStorageEngine.java
 @@ -18,6 +18,7 @@ package com.android.server.content;
@@ -1960,7 +1960,7 @@ index 069ae73..f804fa1 100644
                  }
              }
 diff --git a/services/core/java/com/android/server/input/InputManagerService.java b/services/core/java/com/android/server/input/InputManagerService.java
-index 719ce76..df2c00b 100644
+index 719ce7618fd..df2c00be83d 100644
 --- a/services/core/java/com/android/server/input/InputManagerService.java
 +++ b/services/core/java/com/android/server/input/InputManagerService.java
 @@ -286,6 +286,9 @@ public class InputManagerService extends IInputManager.Stub
@@ -2003,7 +2003,7 @@ index 719ce76..df2c00b 100644
  
          public long notifyANR(InputApplicationHandle inputApplicationHandle,
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index b6a9940..11b5832a 100644
+index b6a99408122..11b5832ad6a 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -423,7 +423,7 @@ public class PackageManagerService extends IPackageManager.Stub {
@@ -2016,7 +2016,7 @@ index b6a9940..11b5832a 100644
      /**
       * Whether verification is enabled by default.
 diff --git a/services/core/java/com/android/server/pm/ShortcutService.java b/services/core/java/com/android/server/pm/ShortcutService.java
-index 6e8799e..b33cbfd 100644
+index 6e8799e8132..b33cbfd6b0c 100644
 --- a/services/core/java/com/android/server/pm/ShortcutService.java
 +++ b/services/core/java/com/android/server/pm/ShortcutService.java
 @@ -124,6 +124,7 @@ import java.nio.charset.StandardCharsets;
@@ -2077,7 +2077,7 @@ index 6e8799e..b33cbfd 100644
  
          synchronized (mLock) {
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 889c52a..872b03d 100644
+index 889c52afa37..872b03d2f09 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -491,6 +491,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -2155,7 +2155,7 @@ index 889c52a..872b03d 100644
                  result &= ~ACTION_PASS_TO_USER;
                  if (down) {
 diff --git a/services/core/java/com/android/server/wm/InputMonitor.java b/services/core/java/com/android/server/wm/InputMonitor.java
-index be9fb26..d835e88 100644
+index be9fb26bb28..d835e884615 100644
 --- a/services/core/java/com/android/server/wm/InputMonitor.java
 +++ b/services/core/java/com/android/server/wm/InputMonitor.java
 @@ -392,6 +392,12 @@ final class InputMonitor implements InputManagerService.WindowManagerCallbacks {
@@ -2172,7 +2172,7 @@ index be9fb26..d835e88 100644
       * processing as soon as the key has been read from the device. */
      @Override
 diff --git a/services/core/java/com/android/server/wm/Session.java b/services/core/java/com/android/server/wm/Session.java
-index 08c0a4b..b5c4202 100644
+index 08c0a4b0135..b5c4202dc10 100644
 --- a/services/core/java/com/android/server/wm/Session.java
 +++ b/services/core/java/com/android/server/wm/Session.java
 @@ -16,6 +16,9 @@
@@ -2206,7 +2206,7 @@ index 08c0a4b..b5c4202 100644
          StringBuilder sb = new StringBuilder();
          sb.append("Session{");
 diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
-index ca2610a..0d97059 100644
+index ca2610af3f6..0d970591cb5 100644
 --- a/services/core/java/com/android/server/wm/WindowManagerService.java
 +++ b/services/core/java/com/android/server/wm/WindowManagerService.java
 @@ -490,6 +490,9 @@ public class WindowManagerService extends IWindowManager.Stub
@@ -2273,7 +2273,7 @@ index ca2610a..0d97059 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/wm/WindowState.java b/services/core/java/com/android/server/wm/WindowState.java
-index fbef2c6..228ef1a 100644
+index fbef2c626a9..228ef1afb2a 100644
 --- a/services/core/java/com/android/server/wm/WindowState.java
 +++ b/services/core/java/com/android/server/wm/WindowState.java
 @@ -79,6 +79,7 @@ import static android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
@@ -2372,7 +2372,7 @@ index fbef2c6..228ef1a 100644
          return Integer.toHexString(System.identityHashCode(this))
              + " " + getWindowTag();
 diff --git a/services/core/java/com/android/server/wm/WindowStateAnimator.java b/services/core/java/com/android/server/wm/WindowStateAnimator.java
-index aa8e781..ec3208b 100644
+index aa8e781b1c0..ec3208b3cc6 100644
 --- a/services/core/java/com/android/server/wm/WindowStateAnimator.java
 +++ b/services/core/java/com/android/server/wm/WindowStateAnimator.java
 @@ -582,6 +582,7 @@ class WindowStateAnimator {
@@ -2392,7 +2392,7 @@ index aa8e781..ec3208b 100644
              if (DEBUG_VISIBILITY) Slog.v(TAG, "Show surface turning screen on: " + mWin);
              mWin.mTurnOnScreen = false;
 diff --git a/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java b/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
-index e3b6ecc..ff63b08 100644
+index e3b6ecc749c..ff63b08e96e 100644
 --- a/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
 +++ b/services/devicepolicy/java/com/android/server/devicepolicy/DevicePolicyManagerService.java
 @@ -71,6 +71,7 @@ import android.content.pm.PackageManager;
@@ -2446,7 +2446,7 @@ index e3b6ecc..ff63b08 100644
      public boolean isProvisioningAllowed(String action) {
          if (!mHasFeature) {
 diff --git a/services/net/java/android/net/dhcp/DhcpClient.java b/services/net/java/android/net/dhcp/DhcpClient.java
-index ffbea9f..8dd05b1 100644
+index ffbea9fce27..8dd05b19ea7 100644
 --- a/services/net/java/android/net/dhcp/DhcpClient.java
 +++ b/services/net/java/android/net/dhcp/DhcpClient.java
 @@ -40,6 +40,7 @@ import android.os.SystemClock;
@@ -2473,7 +2473,7 @@ index ffbea9f..8dd05b1 100644
              }
 diff --git a/services/tests/Android.mk b/services/tests/Android.mk
 deleted file mode 100644
-index 40369ee..0000000
+index 40369ee2ec5..00000000000
 --- a/services/tests/Android.mk
 +++ /dev/null
 @@ -1,3 +0,0 @@
@@ -2482,7 +2482,7 @@ index 40369ee..0000000
 -include $(call all-makefiles-under, $(LOCAL_PATH))
 diff --git a/services/tests/servicestests/Android.mk b/services/tests/servicestests/Android.mk
 deleted file mode 100644
-index 7886b5e..0000000
+index 7886b5e9e39..00000000000
 --- a/services/tests/servicestests/Android.mk
 +++ /dev/null
 @@ -1,87 +0,0 @@
@@ -2575,7 +2575,7 @@ index 7886b5e..0000000
 -include $(BUILD_SHARED_LIBRARY)
 diff --git a/services/tests/servicestests/AndroidManifest.xml b/services/tests/servicestests/AndroidManifest.xml
 deleted file mode 100644
-index b8ace28..0000000
+index b8ace28fc09..00000000000
 --- a/services/tests/servicestests/AndroidManifest.xml
 +++ /dev/null
 @@ -1,164 +0,0 @@
@@ -2745,7 +2745,7 @@ index b8ace28..0000000
 -</manifest>
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_owner.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_owner.xml
 deleted file mode 100644
-index 9564969..0000000
+index 9564969ab57..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_owner.xml
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -2755,7 +2755,7 @@ index 9564969..0000000
 -<profile-owner package="com.android.frameworks.servicestests" name="0" userId="11" component="com.android.frameworks.servicestests/com.android.server.devicepolicy.DummyDeviceAdmins$Admin3" />
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies.xml
 deleted file mode 100644
-index 48cb814..0000000
+index 48cb814fa90..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies.xml
 +++ /dev/null
 @@ -1,7 +0,0 @@
@@ -2768,7 +2768,7 @@ index 48cb814..0000000
 -</policies>
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_10.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_10.xml
 deleted file mode 100644
-index 6b53840..0000000
+index 6b53840434c..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_10.xml
 +++ /dev/null
 @@ -1,5 +0,0 @@
@@ -2779,7 +2779,7 @@ index 6b53840..0000000
 -</policies>
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_11.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_11.xml
 deleted file mode 100644
-index 2bcc5d4..0000000
+index 2bcc5d41a7c..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest/legacy_device_policies_11.xml
 +++ /dev/null
 @@ -1,5 +0,0 @@
@@ -2790,7 +2790,7 @@ index 2bcc5d4..0000000
 -</policies>
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_owner.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_owner.xml
 deleted file mode 100644
-index c0977f7..0000000
+index c0977f79127..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_owner.xml
 +++ /dev/null
 @@ -1,2 +0,0 @@
@@ -2798,7 +2798,7 @@ index c0977f7..0000000
 -<profile-owner package="com.android.frameworks.servicestests" name="0" userId="0" component="com.android.frameworks.servicestests/com.android.server.devicepolicy.DummyDeviceAdmins$Admin2" />
 diff --git a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_policies.xml b/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_policies.xml
 deleted file mode 100644
-index 6b53840..0000000
+index 6b53840434c..00000000000
 --- a/services/tests/servicestests/assets/DevicePolicyManagerServiceMigrationTest2/legacy_device_policies.xml
 +++ /dev/null
 @@ -1,5 +0,0 @@
@@ -2809,14 +2809,14 @@ index 6b53840..0000000
 -</policies>
 diff --git a/services/tests/servicestests/assets/OwnersTest/test01/input.xml b/services/tests/servicestests/assets/OwnersTest/test01/input.xml
 deleted file mode 100644
-index db3e974..0000000
+index db3e974f5d0..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test01/input.xml
 +++ /dev/null
 @@ -1 +0,0 @@
 -<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
 diff --git a/services/tests/servicestests/assets/OwnersTest/test02/input.xml b/services/tests/servicestests/assets/OwnersTest/test02/input.xml
 deleted file mode 100644
-index 321842b..0000000
+index 321842b2745..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test02/input.xml
 +++ /dev/null
 @@ -1,2 +0,0 @@
@@ -2824,7 +2824,7 @@ index 321842b..0000000
 -<device-owner package="com.google.android.testdpc" />
 diff --git a/services/tests/servicestests/assets/OwnersTest/test03/input.xml b/services/tests/servicestests/assets/OwnersTest/test03/input.xml
 deleted file mode 100644
-index 1bbfdad..0000000
+index 1bbfdadf6eb..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test03/input.xml
 +++ /dev/null
 @@ -1,3 +0,0 @@
@@ -2833,7 +2833,7 @@ index 1bbfdad..0000000
 -<profile-owner package="com.google.android.testdpc1" name="1" userId="11" />
 diff --git a/services/tests/servicestests/assets/OwnersTest/test04/input.xml b/services/tests/servicestests/assets/OwnersTest/test04/input.xml
 deleted file mode 100644
-index 8be51d9..0000000
+index 8be51d9a45e..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test04/input.xml
 +++ /dev/null
 @@ -1,6 +0,0 @@
@@ -2845,7 +2845,7 @@ index 8be51d9..0000000
 -<system-update-policy policy_type="5" />
 diff --git a/services/tests/servicestests/assets/OwnersTest/test05/input.xml b/services/tests/servicestests/assets/OwnersTest/test05/input.xml
 deleted file mode 100644
-index dbcb858..0000000
+index dbcb8588654..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test05/input.xml
 +++ /dev/null
 @@ -1,3 +0,0 @@
@@ -2854,7 +2854,7 @@ index dbcb858..0000000
 -
 diff --git a/services/tests/servicestests/assets/OwnersTest/test06/input.xml b/services/tests/servicestests/assets/OwnersTest/test06/input.xml
 deleted file mode 100644
-index 794622b..0000000
+index 794622b0b99..00000000000
 --- a/services/tests/servicestests/assets/OwnersTest/test06/input.xml
 +++ /dev/null
 @@ -1,2 +0,0 @@
@@ -2862,7 +2862,7 @@ index 794622b..0000000
 -<system-update-policy policy_type="5" />
 diff --git a/services/tests/servicestests/assets/shortcut/dumpsys_expected.txt b/services/tests/servicestests/assets/shortcut/dumpsys_expected.txt
 deleted file mode 100644
-index eed2087..0000000
+index eed2087f80e..00000000000
 --- a/services/tests/servicestests/assets/shortcut/dumpsys_expected.txt
 +++ /dev/null
 @@ -1,105 +0,0 @@
@@ -2973,7 +2973,7 @@ index eed2087..0000000
 -}
 diff --git a/services/tests/servicestests/assets/shortcut/shortcut_legacy_file.xml b/services/tests/servicestests/assets/shortcut/shortcut_legacy_file.xml
 deleted file mode 100644
-index f7eee91..0000000
+index f7eee9155da..00000000000
 --- a/services/tests/servicestests/assets/shortcut/shortcut_legacy_file.xml
 +++ /dev/null
 @@ -1,25 +0,0 @@
@@ -3004,7 +3004,7 @@ index f7eee91..0000000
 -</user>
 diff --git a/services/tests/servicestests/jni/UidRangeTest.cpp b/services/tests/servicestests/jni/UidRangeTest.cpp
 deleted file mode 100644
-index 7941731..0000000
+index 7941731a07f..00000000000
 --- a/services/tests/servicestests/jni/UidRangeTest.cpp
 +++ /dev/null
 @@ -1,79 +0,0 @@
@@ -3089,7 +3089,7 @@ index 7941731..0000000
 -}
 diff --git a/services/tests/servicestests/jni/UidRangeTest.h b/services/tests/servicestests/jni/UidRangeTest.h
 deleted file mode 100644
-index b7e7453..0000000
+index b7e74537880..00000000000
 --- a/services/tests/servicestests/jni/UidRangeTest.h
 +++ /dev/null
 @@ -1,38 +0,0 @@
@@ -3133,7 +3133,7 @@ index b7e7453..0000000
 -#endif  //  _ANDROID_NET_UIDRANGETEST_H_
 diff --git a/services/tests/servicestests/jni/apf_jni.cpp b/services/tests/servicestests/jni/apf_jni.cpp
 deleted file mode 100644
-index ee43dd4..0000000
+index ee43dd48836..00000000000
 --- a/services/tests/servicestests/jni/apf_jni.cpp
 +++ /dev/null
 @@ -1,182 +0,0 @@
@@ -3321,83 +3321,83 @@ index ee43dd4..0000000
 -}
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_1024x4096.png b/services/tests/servicestests/res/drawable-nodpi/black_1024x4096.png
 deleted file mode 100644
-index f700326..0000000
+index f7003269889..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_1024x4096.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_16x64.png b/services/tests/servicestests/res/drawable-nodpi/black_16x64.png
 deleted file mode 100644
-index 315763e..0000000
+index 315763e4560..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_16x64.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_32x32.png b/services/tests/servicestests/res/drawable-nodpi/black_32x32.png
 deleted file mode 100644
-index 8958f6b..0000000
+index 8958f6b1eab..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_32x32.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_4096x1024.png b/services/tests/servicestests/res/drawable-nodpi/black_4096x1024.png
 deleted file mode 100644
-index f675030..0000000
+index f6750301773..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_4096x1024.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_4096x4096.png b/services/tests/servicestests/res/drawable-nodpi/black_4096x4096.png
 deleted file mode 100644
-index 999d858..0000000
+index 999d8585fc6..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_4096x4096.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_512x512.png b/services/tests/servicestests/res/drawable-nodpi/black_512x512.png
 deleted file mode 100644
-index 40d1c2c..0000000
+index 40d1c2c41f1..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_512x512.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_64x16.png b/services/tests/servicestests/res/drawable-nodpi/black_64x16.png
 deleted file mode 100644
-index 5883015..0000000
+index 58830151997..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_64x16.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/black_64x64.png b/services/tests/servicestests/res/drawable-nodpi/black_64x64.png
 deleted file mode 100644
-index 71cfafc..0000000
+index 71cfafc2ad3..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/black_64x64.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/icon1.png b/services/tests/servicestests/res/drawable-nodpi/icon1.png
 deleted file mode 100644
-index 64eb294..0000000
+index 64eb294363d..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/icon1.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable-nodpi/icon2.png b/services/tests/servicestests/res/drawable-nodpi/icon2.png
 deleted file mode 100644
-index 7502484..0000000
+index 75024841d32..00000000000
 Binary files a/services/tests/servicestests/res/drawable-nodpi/icon2.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable/icon1.png b/services/tests/servicestests/res/drawable/icon1.png
 deleted file mode 100644
-index 64eb294..0000000
+index 64eb294363d..00000000000
 Binary files a/services/tests/servicestests/res/drawable/icon1.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable/icon2.png b/services/tests/servicestests/res/drawable/icon2.png
 deleted file mode 100644
-index 7502484..0000000
+index 75024841d32..00000000000
 Binary files a/services/tests/servicestests/res/drawable/icon2.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/drawable/icon3.png b/services/tests/servicestests/res/drawable/icon3.png
 deleted file mode 100644
-index 64eb294..0000000
+index 64eb294363d..00000000000
 Binary files a/services/tests/servicestests/res/drawable/icon3.png and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/apf.pcap b/services/tests/servicestests/res/raw/apf.pcap
 deleted file mode 100644
-index 963165f..0000000
+index 963165f19f7..00000000000
 Binary files a/services/tests/servicestests/res/raw/apf.pcap and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/netstats_uid_v4 b/services/tests/servicestests/res/raw/netstats_uid_v4
 deleted file mode 100644
-index e75fc1c..0000000
+index e75fc1ca5c2..00000000000
 Binary files a/services/tests/servicestests/res/raw/netstats_uid_v4 and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/netstats_v1 b/services/tests/servicestests/res/raw/netstats_v1
 deleted file mode 100644
-index e80860a..0000000
+index e80860a6b95..00000000000
 Binary files a/services/tests/servicestests/res/raw/netstats_v1 and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/test1.obb b/services/tests/servicestests/res/raw/test1.obb
 deleted file mode 100644
-index 7d2b4f6..0000000
+index 7d2b4f6e6fb..00000000000
 Binary files a/services/tests/servicestests/res/raw/test1.obb and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/test1_nosig.obb b/services/tests/servicestests/res/raw/test1_nosig.obb
 deleted file mode 100644
-index 5c3573f7..0000000
+index 5c3573f72a1..00000000000
 Binary files a/services/tests/servicestests/res/raw/test1_nosig.obb and /dev/null differ
 diff --git a/services/tests/servicestests/res/raw/test1_wrongpackage.obb b/services/tests/servicestests/res/raw/test1_wrongpackage.obb
 deleted file mode 100644
-index d0aafe1..0000000
+index d0aafe16e1a..00000000000
 Binary files a/services/tests/servicestests/res/raw/test1_wrongpackage.obb and /dev/null differ
 diff --git a/services/tests/servicestests/res/values/strings.xml b/services/tests/servicestests/res/values/strings.xml
 deleted file mode 100644
-index 2f9d06c..0000000
+index 2f9d06c318c..00000000000
 --- a/services/tests/servicestests/res/values/strings.xml
 +++ /dev/null
 @@ -1,24 +0,0 @@
@@ -3427,7 +3427,7 @@ index 2f9d06c..0000000
 -</resources>
 diff --git a/services/tests/servicestests/res/xml/device_admin_sample.xml b/services/tests/servicestests/res/xml/device_admin_sample.xml
 deleted file mode 100644
-index 032debb..0000000
+index 032debbb92b..00000000000
 --- a/services/tests/servicestests/res/xml/device_admin_sample.xml
 +++ /dev/null
 @@ -1,29 +0,0 @@
@@ -3462,7 +3462,7 @@ index 032debb..0000000
 -</device-admin>
 diff --git a/services/tests/servicestests/res/xml/shortcut_0.xml b/services/tests/servicestests/res/xml/shortcut_0.xml
 deleted file mode 100644
-index fda001e..0000000
+index fda001ec0aa..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_0.xml
 +++ /dev/null
 @@ -1,2 +0,0 @@
@@ -3470,7 +3470,7 @@ index fda001e..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_1.xml b/services/tests/servicestests/res/xml/shortcut_1.xml
 deleted file mode 100644
-index e3f9172..0000000
+index e3f9172cc23..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_1.xml
 +++ /dev/null
 @@ -1,18 +0,0 @@
@@ -3494,7 +3494,7 @@ index e3f9172..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_1_alt.xml b/services/tests/servicestests/res/xml/shortcut_1_alt.xml
 deleted file mode 100644
-index 2d5e8e7..0000000
+index 2d5e8e7cbd7..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_1_alt.xml
 +++ /dev/null
 @@ -1,33 +0,0 @@
@@ -3533,7 +3533,7 @@ index 2d5e8e7..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_1_disable.xml b/services/tests/servicestests/res/xml/shortcut_1_disable.xml
 deleted file mode 100644
-index e3ee3a0..0000000
+index e3ee3a0786e..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_1_disable.xml
 +++ /dev/null
 @@ -1,25 +0,0 @@
@@ -3564,7 +3564,7 @@ index e3ee3a0..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_2.xml b/services/tests/servicestests/res/xml/shortcut_2.xml
 deleted file mode 100644
-index f7ea803..0000000
+index f7ea803d340..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_2.xml
 +++ /dev/null
 @@ -1,48 +0,0 @@
@@ -3618,7 +3618,7 @@ index f7ea803..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_2_duplicate.xml b/services/tests/servicestests/res/xml/shortcut_2_duplicate.xml
 deleted file mode 100644
-index b00ec60..0000000
+index b00ec60e0ff..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_2_duplicate.xml
 +++ /dev/null
 @@ -1,35 +0,0 @@
@@ -3659,7 +3659,7 @@ index b00ec60..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_3.xml b/services/tests/servicestests/res/xml/shortcut_3.xml
 deleted file mode 100644
-index 432ca49..0000000
+index 432ca4935ec..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_3.xml
 +++ /dev/null
 @@ -1,56 +0,0 @@
@@ -3721,7 +3721,7 @@ index 432ca49..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_5.xml b/services/tests/servicestests/res/xml/shortcut_5.xml
 deleted file mode 100644
-index 9551100..0000000
+index 9551100cefe..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_5.xml
 +++ /dev/null
 @@ -1,85 +0,0 @@
@@ -3812,7 +3812,7 @@ index 9551100..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_5_alt.xml b/services/tests/servicestests/res/xml/shortcut_5_alt.xml
 deleted file mode 100644
-index f79cd6f..0000000
+index f79cd6f1573..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_5_alt.xml
 +++ /dev/null
 @@ -1,74 +0,0 @@
@@ -3892,7 +3892,7 @@ index f79cd6f..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_5_reverse.xml b/services/tests/servicestests/res/xml/shortcut_5_reverse.xml
 deleted file mode 100644
-index d5b7c8f..0000000
+index d5b7c8fde0b..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_5_reverse.xml
 +++ /dev/null
 @@ -1,78 +0,0 @@
@@ -3976,7 +3976,7 @@ index d5b7c8f..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_error_1.xml b/services/tests/servicestests/res/xml/shortcut_error_1.xml
 deleted file mode 100644
-index 3990d02..0000000
+index 3990d027050..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_error_1.xml
 +++ /dev/null
 @@ -1,34 +0,0 @@
@@ -4016,7 +4016,7 @@ index 3990d02..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_error_2.xml b/services/tests/servicestests/res/xml/shortcut_error_2.xml
 deleted file mode 100644
-index a6f7150..0000000
+index a6f715025cc..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_error_2.xml
 +++ /dev/null
 @@ -1,34 +0,0 @@
@@ -4056,7 +4056,7 @@ index a6f7150..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_error_3.xml b/services/tests/servicestests/res/xml/shortcut_error_3.xml
 deleted file mode 100644
-index 24ee024..0000000
+index 24ee024f64a..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_error_3.xml
 +++ /dev/null
 @@ -1,36 +0,0 @@
@@ -4098,7 +4098,7 @@ index 24ee024..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/res/xml/shortcut_error_4.xml b/services/tests/servicestests/res/xml/shortcut_error_4.xml
 deleted file mode 100644
-index f680e99..0000000
+index f680e99f98c..00000000000
 --- a/services/tests/servicestests/res/xml/shortcut_error_4.xml
 +++ /dev/null
 @@ -1,70 +0,0 @@
@@ -4174,7 +4174,7 @@ index f680e99..0000000
 -</shortcuts>
 diff --git a/services/tests/servicestests/src/android/net/ConnectivityMetricsLoggerTest.java b/services/tests/servicestests/src/android/net/ConnectivityMetricsLoggerTest.java
 deleted file mode 100644
-index 6d42cce..0000000
+index 6d42cce2e50..00000000000
 --- a/services/tests/servicestests/src/android/net/ConnectivityMetricsLoggerTest.java
 +++ /dev/null
 @@ -1,130 +0,0 @@
@@ -4310,7 +4310,7 @@ index 6d42cce..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/IpUtilsTest.java b/services/tests/servicestests/src/android/net/IpUtilsTest.java
 deleted file mode 100644
-index c2d1608..0000000
+index c2d1608c461..00000000000
 --- a/services/tests/servicestests/src/android/net/IpUtilsTest.java
 +++ /dev/null
 @@ -1,162 +0,0 @@
@@ -4478,7 +4478,7 @@ index c2d1608..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/UidRangeTest.java b/services/tests/servicestests/src/android/net/UidRangeTest.java
 deleted file mode 100644
-index 221fe0f..0000000
+index 221fe0f99f0..00000000000
 --- a/services/tests/servicestests/src/android/net/UidRangeTest.java
 +++ /dev/null
 @@ -1,112 +0,0 @@
@@ -4596,7 +4596,7 @@ index 221fe0f..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/apf/ApfTest.java b/services/tests/servicestests/src/android/net/apf/ApfTest.java
 deleted file mode 100644
-index 6092fdd..0000000
+index 6092fddc6be..00000000000
 --- a/services/tests/servicestests/src/android/net/apf/ApfTest.java
 +++ /dev/null
 @@ -1,1205 +0,0 @@
@@ -5807,7 +5807,7 @@ index 6092fdd..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/apf/Bpf2Apf.java b/services/tests/servicestests/src/android/net/apf/Bpf2Apf.java
 deleted file mode 100644
-index 220e54d..0000000
+index 220e54ddef5..00000000000
 --- a/services/tests/servicestests/src/android/net/apf/Bpf2Apf.java
 +++ /dev/null
 @@ -1,327 +0,0 @@
@@ -6140,7 +6140,7 @@ index 220e54d..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java b/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java
 deleted file mode 100644
-index bc8baa1..0000000
+index bc8baa12a45..00000000000
 --- a/services/tests/servicestests/src/android/net/dhcp/DhcpPacketTest.java
 +++ /dev/null
 @@ -1,939 +0,0 @@
@@ -7085,7 +7085,7 @@ index bc8baa1..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/netlink/NetlinkErrorMessageTest.java b/services/tests/servicestests/src/android/net/netlink/NetlinkErrorMessageTest.java
 deleted file mode 100644
-index e677475..0000000
+index e677475f590..00000000000
 --- a/services/tests/servicestests/src/android/net/netlink/NetlinkErrorMessageTest.java
 +++ /dev/null
 @@ -1,82 +0,0 @@
@@ -7173,7 +7173,7 @@ index e677475..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/netlink/NetlinkSocketTest.java b/services/tests/servicestests/src/android/net/netlink/NetlinkSocketTest.java
 deleted file mode 100644
-index c599fe3..0000000
+index c599fe3e5b7..00000000000
 --- a/services/tests/servicestests/src/android/net/netlink/NetlinkSocketTest.java
 +++ /dev/null
 @@ -1,116 +0,0 @@
@@ -7295,7 +7295,7 @@ index c599fe3..0000000
 -}
 diff --git a/services/tests/servicestests/src/android/net/netlink/RtNetlinkNeighborMessageTest.java b/services/tests/servicestests/src/android/net/netlink/RtNetlinkNeighborMessageTest.java
 deleted file mode 100644
-index 19ee000..0000000
+index 19ee00036b6..00000000000
 --- a/services/tests/servicestests/src/android/net/netlink/RtNetlinkNeighborMessageTest.java
 +++ /dev/null
 @@ -1,257 +0,0 @@
@@ -7558,7 +7558,7 @@ index 19ee000..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProvider.java b/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProvider.java
 deleted file mode 100644
-index 808f4dd..0000000
+index 808f4dd7b84..00000000000
 --- a/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProvider.java
 +++ /dev/null
 @@ -1,130 +0,0 @@
@@ -7694,7 +7694,7 @@ index 808f4dd..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProviderTest.java b/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProviderTest.java
 deleted file mode 100644
-index 05de0a5..0000000
+index 05de0a53e05..00000000000
 --- a/services/tests/servicestests/src/com/android/internal/util/FakeSettingsProviderTest.java
 +++ /dev/null
 @@ -1,59 +0,0 @@
@@ -7759,7 +7759,7 @@ index 05de0a5..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/AccessibilityManagerServiceTest.java b/services/tests/servicestests/src/com/android/server/AccessibilityManagerServiceTest.java
 deleted file mode 100644
-index 51e14d3..0000000
+index 51e14d3fcb0..00000000000
 --- a/services/tests/servicestests/src/com/android/server/AccessibilityManagerServiceTest.java
 +++ /dev/null
 @@ -1,757 +0,0 @@
@@ -8522,7 +8522,7 @@ index 51e14d3..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/AccessibilityManagerTest.java b/services/tests/servicestests/src/com/android/server/AccessibilityManagerTest.java
 deleted file mode 100644
-index 026a2ad..0000000
+index 026a2adc1f9..00000000000
 --- a/services/tests/servicestests/src/com/android/server/AccessibilityManagerTest.java
 +++ /dev/null
 @@ -1,162 +0,0 @@
@@ -8690,7 +8690,7 @@ index 026a2ad..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/BroadcastInterceptingContext.java b/services/tests/servicestests/src/com/android/server/BroadcastInterceptingContext.java
 deleted file mode 100644
-index 13657ab..0000000
+index 13657ab7f02..00000000000
 --- a/services/tests/servicestests/src/com/android/server/BroadcastInterceptingContext.java
 +++ /dev/null
 @@ -1,177 +0,0 @@
@@ -8873,7 +8873,7 @@ index 13657ab..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/CertBlacklisterTest.java b/services/tests/servicestests/src/com/android/server/CertBlacklisterTest.java
 deleted file mode 100644
-index 10b9e7c..0000000
+index 10b9e7cf121..00000000000
 --- a/services/tests/servicestests/src/com/android/server/CertBlacklisterTest.java
 +++ /dev/null
 @@ -1,169 +0,0 @@
@@ -9047,7 +9047,7 @@ index 10b9e7c..0000000
 -    }
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java b/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
-index 65f9399..012bdd8 100644
+index 65f9399c5a8..012bdd87b98 100644
 --- a/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
 +++ b/services/tests/servicestests/src/com/android/server/ConnectivityServiceTest.java
 @@ -620,6 +620,19 @@ public class ConnectivityServiceTest extends AndroidTestCase {
@@ -9072,7 +9072,7 @@ index 65f9399..012bdd8 100644
          private WrappedNetworkMonitor mLastCreatedNetworkMonitor;
 diff --git a/services/tests/servicestests/src/com/android/server/CountryDetectorServiceTest.java b/services/tests/servicestests/src/com/android/server/CountryDetectorServiceTest.java
 deleted file mode 100644
-index 192c50c..0000000
+index 192c50c7dc1..00000000000
 --- a/services/tests/servicestests/src/com/android/server/CountryDetectorServiceTest.java
 +++ /dev/null
 @@ -1,109 +0,0 @@
@@ -9187,7 +9187,7 @@ index 192c50c..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/DropBoxTest.java b/services/tests/servicestests/src/com/android/server/DropBoxTest.java
 deleted file mode 100644
-index 7f28d44..0000000
+index 7f28d442c77..00000000000
 --- a/services/tests/servicestests/src/com/android/server/DropBoxTest.java
 +++ /dev/null
 @@ -1,775 +0,0 @@
@@ -9968,7 +9968,7 @@ index 7f28d44..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/EntropyMixerTest.java b/services/tests/servicestests/src/com/android/server/EntropyMixerTest.java
 deleted file mode 100644
-index 50e7a03..0000000
+index 50e7a0395a2..00000000000
 --- a/services/tests/servicestests/src/com/android/server/EntropyMixerTest.java
 +++ /dev/null
 @@ -1,41 +0,0 @@
@@ -10015,7 +10015,7 @@ index 50e7a03..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/LockSettingsStorageTests.java b/services/tests/servicestests/src/com/android/server/LockSettingsStorageTests.java
 deleted file mode 100644
-index 7d28e39..0000000
+index 7d28e3964f8..00000000000
 --- a/services/tests/servicestests/src/com/android/server/LockSettingsStorageTests.java
 +++ /dev/null
 @@ -1,357 +0,0 @@
@@ -10378,7 +10378,7 @@ index 7d28e39..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/MockAccessibilityService.java b/services/tests/servicestests/src/com/android/server/MockAccessibilityService.java
 deleted file mode 100644
-index e1c5cee..0000000
+index e1c5cee752e..00000000000
 --- a/services/tests/servicestests/src/com/android/server/MockAccessibilityService.java
 +++ /dev/null
 @@ -1,256 +0,0 @@
@@ -10640,7 +10640,7 @@ index e1c5cee..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/MountServiceTests.java b/services/tests/servicestests/src/com/android/server/MountServiceTests.java
 deleted file mode 100644
-index ecfe0db..0000000
+index ecfe0db103f..00000000000
 --- a/services/tests/servicestests/src/com/android/server/MountServiceTests.java
 +++ /dev/null
 @@ -1,274 +0,0 @@
@@ -10920,7 +10920,7 @@ index ecfe0db..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/NativeDaemonConnectorTest.java b/services/tests/servicestests/src/com/android/server/NativeDaemonConnectorTest.java
 deleted file mode 100644
-index e2253a2..0000000
+index e2253a2151b..00000000000
 --- a/services/tests/servicestests/src/com/android/server/NativeDaemonConnectorTest.java
 +++ /dev/null
 @@ -1,97 +0,0 @@
@@ -11023,7 +11023,7 @@ index e2253a2..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/NetworkManagementServiceTest.java b/services/tests/servicestests/src/com/android/server/NetworkManagementServiceTest.java
 deleted file mode 100644
-index 0d5daa5..0000000
+index 0d5daa5def9..00000000000
 --- a/services/tests/servicestests/src/com/android/server/NetworkManagementServiceTest.java
 +++ /dev/null
 @@ -1,226 +0,0 @@
@@ -11255,7 +11255,7 @@ index 0d5daa5..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/NetworkPolicyManagerServiceTest.java b/services/tests/servicestests/src/com/android/server/NetworkPolicyManagerServiceTest.java
 deleted file mode 100644
-index 541be3d..0000000
+index 541be3dad37..00000000000
 --- a/services/tests/servicestests/src/com/android/server/NetworkPolicyManagerServiceTest.java
 +++ /dev/null
 @@ -1,1014 +0,0 @@
@@ -12275,7 +12275,7 @@ index 541be3d..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/Vector3Test.java b/services/tests/servicestests/src/com/android/server/Vector3Test.java
 deleted file mode 100644
-index 88dbe70..0000000
+index 88dbe70b994..00000000000
 --- a/services/tests/servicestests/src/com/android/server/Vector3Test.java
 +++ /dev/null
 @@ -1,164 +0,0 @@
@@ -12445,7 +12445,7 @@ index 88dbe70..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/accounts/AccountManagerServiceTest.java b/services/tests/servicestests/src/com/android/server/accounts/AccountManagerServiceTest.java
 deleted file mode 100644
-index a3d0afa..0000000
+index a3d0afab88e..00000000000
 --- a/services/tests/servicestests/src/com/android/server/accounts/AccountManagerServiceTest.java
 +++ /dev/null
 @@ -1,466 +0,0 @@
@@ -12917,7 +12917,7 @@ index a3d0afa..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/accounts/PreNTestDatabaseHelper.java b/services/tests/servicestests/src/com/android/server/accounts/PreNTestDatabaseHelper.java
 deleted file mode 100644
-index 97adbe6..0000000
+index 97adbe6417b..00000000000
 --- a/services/tests/servicestests/src/com/android/server/accounts/PreNTestDatabaseHelper.java
 +++ /dev/null
 @@ -1,98 +0,0 @@
@@ -13021,7 +13021,7 @@ index 97adbe6..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/am/ActivityManagerTest.java b/services/tests/servicestests/src/com/android/server/am/ActivityManagerTest.java
 deleted file mode 100644
-index bd9e6d1..0000000
+index bd9e6d19269..00000000000
 --- a/services/tests/servicestests/src/com/android/server/am/ActivityManagerTest.java
 +++ /dev/null
 @@ -1,55 +0,0 @@
@@ -13083,7 +13083,7 @@ index bd9e6d1..0000000
 \ No newline at end of file
 diff --git a/services/tests/servicestests/src/com/android/server/am/TaskPersisterTest.java b/services/tests/servicestests/src/com/android/server/am/TaskPersisterTest.java
 deleted file mode 100644
-index 984a484..0000000
+index 984a484dadc..00000000000
 --- a/services/tests/servicestests/src/com/android/server/am/TaskPersisterTest.java
 +++ /dev/null
 @@ -1,85 +0,0 @@
@@ -13175,7 +13175,7 @@ index 984a484..0000000
 \ No newline at end of file
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java b/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java
 deleted file mode 100644
-index 011e505..0000000
+index 011e505c46c..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityEventBuilderTest.java
 +++ /dev/null
 @@ -1,389 +0,0 @@
@@ -13570,7 +13570,7 @@ index 011e505..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java b/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java
 deleted file mode 100644
-index 450653c..0000000
+index 450653cdb01..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/IpConnectivityMetricsTest.java
 +++ /dev/null
 @@ -1,296 +0,0 @@
@@ -13872,7 +13872,7 @@ index 450653c..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java b/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java
 deleted file mode 100644
-index bce5787e..0000000
+index bce5787ed9a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/LingerMonitorTest.java
 +++ /dev/null
 @@ -1,349 +0,0 @@
@@ -14227,7 +14227,7 @@ index bce5787e..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/MetricsLoggerServiceTest.java b/services/tests/servicestests/src/com/android/server/connectivity/MetricsLoggerServiceTest.java
 deleted file mode 100644
-index 5f84ea1..0000000
+index 5f84ea1bfd9..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/MetricsLoggerServiceTest.java
 +++ /dev/null
 @@ -1,181 +0,0 @@
@@ -14414,7 +14414,7 @@ index 5f84ea1..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/MetricsTestUtil.java b/services/tests/servicestests/src/com/android/server/connectivity/MetricsTestUtil.java
 deleted file mode 100644
-index e201012..0000000
+index e2010127812..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/MetricsTestUtil.java
 +++ /dev/null
 @@ -1,120 +0,0 @@
@@ -14540,7 +14540,7 @@ index e201012..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/VpnTest.java b/services/tests/servicestests/src/com/android/server/connectivity/VpnTest.java
 deleted file mode 100644
-index 5d8b843..0000000
+index 5d8b843bbc1..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/VpnTest.java
 +++ /dev/null
 @@ -1,310 +0,0 @@
@@ -14856,7 +14856,7 @@ index 5d8b843..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/connectivity/tethering/TetherInterfaceStateMachineTest.java b/services/tests/servicestests/src/com/android/server/connectivity/tethering/TetherInterfaceStateMachineTest.java
 deleted file mode 100644
-index a30b362..0000000
+index a30b3629d5c..00000000000
 --- a/services/tests/servicestests/src/com/android/server/connectivity/tethering/TetherInterfaceStateMachineTest.java
 +++ /dev/null
 @@ -1,277 +0,0 @@
@@ -15140,7 +15140,7 @@ index a30b362..0000000
 \ No newline at end of file
 diff --git a/services/tests/servicestests/src/com/android/server/content/ObserverNodeTest.java b/services/tests/servicestests/src/com/android/server/content/ObserverNodeTest.java
 deleted file mode 100644
-index 07280bc..0000000
+index 07280bc881d..00000000000
 --- a/services/tests/servicestests/src/com/android/server/content/ObserverNodeTest.java
 +++ /dev/null
 @@ -1,100 +0,0 @@
@@ -15246,7 +15246,7 @@ index 07280bc..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/content/SyncManagerTest.java b/services/tests/servicestests/src/com/android/server/content/SyncManagerTest.java
 deleted file mode 100644
-index be6861c..0000000
+index be6861c4369..00000000000
 --- a/services/tests/servicestests/src/com/android/server/content/SyncManagerTest.java
 +++ /dev/null
 @@ -1,64 +0,0 @@
@@ -15316,7 +15316,7 @@ index be6861c..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/content/SyncOperationTest.java b/services/tests/servicestests/src/com/android/server/content/SyncOperationTest.java
 deleted file mode 100644
-index e45b92a..0000000
+index e45b92a1b48..00000000000
 --- a/services/tests/servicestests/src/com/android/server/content/SyncOperationTest.java
 +++ /dev/null
 @@ -1,154 +0,0 @@
@@ -15476,7 +15476,7 @@ index e45b92a..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/content/SyncStorageEngineTest.java b/services/tests/servicestests/src/com/android/server/content/SyncStorageEngineTest.java
 deleted file mode 100644
-index 91c0de6..0000000
+index 91c0de64cb8..00000000000
 --- a/services/tests/servicestests/src/com/android/server/content/SyncStorageEngineTest.java
 +++ /dev/null
 @@ -1,343 +0,0 @@
@@ -15825,7 +15825,7 @@ index 91c0de6..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceMigrationTest.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceMigrationTest.java
 deleted file mode 100644
-index 3a6b983..0000000
+index 3a6b983854a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceMigrationTest.java
 +++ /dev/null
 @@ -1,280 +0,0 @@
@@ -16111,7 +16111,7 @@ index 3a6b983..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceTestable.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceTestable.java
 deleted file mode 100644
-index 6cb4a82..0000000
+index 6cb4a823872..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerServiceTestable.java
 +++ /dev/null
 @@ -1,361 +0,0 @@
@@ -16478,7 +16478,7 @@ index 6cb4a82..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTest.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTest.java
 deleted file mode 100644
-index 11ec7ac..0000000
+index 11ec7ac64ed..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTest.java
 +++ /dev/null
 @@ -1,2186 +0,0 @@
@@ -18670,7 +18670,7 @@ index 11ec7ac..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTestable.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTestable.java
 deleted file mode 100644
-index 3da61d6..0000000
+index 3da61d69c74..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DevicePolicyManagerTestable.java
 +++ /dev/null
 @@ -1,37 +0,0 @@
@@ -18713,7 +18713,7 @@ index 3da61d6..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java
 deleted file mode 100644
-index 956d83a..0000000
+index 956d83a2caf..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmMockContext.java
 +++ /dev/null
 @@ -1,619 +0,0 @@
@@ -19338,7 +19338,7 @@ index 956d83a..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestBase.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestBase.java
 deleted file mode 100644
-index b4b74b3..0000000
+index b4b74b3ec10..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestBase.java
 +++ /dev/null
 @@ -1,167 +0,0 @@
@@ -19511,7 +19511,7 @@ index b4b74b3..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestUtils.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestUtils.java
 deleted file mode 100644
-index cceb2d2..0000000
+index cceb2d2761f..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DpmTestUtils.java
 +++ /dev/null
 @@ -1,166 +0,0 @@
@@ -19683,7 +19683,7 @@ index cceb2d2..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/DummyDeviceAdmins.java b/services/tests/servicestests/src/com/android/server/devicepolicy/DummyDeviceAdmins.java
 deleted file mode 100644
-index a0f4d97..0000000
+index a0f4d97de1d..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/DummyDeviceAdmins.java
 +++ /dev/null
 @@ -1,29 +0,0 @@
@@ -19718,7 +19718,7 @@ index a0f4d97..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/MockUtils.java b/services/tests/servicestests/src/com/android/server/devicepolicy/MockUtils.java
 deleted file mode 100644
-index 58db192..0000000
+index 58db192f117..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/MockUtils.java
 +++ /dev/null
 @@ -1,117 +0,0 @@
@@ -19841,7 +19841,7 @@ index 58db192..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/devicepolicy/OwnersTest.java b/services/tests/servicestests/src/com/android/server/devicepolicy/OwnersTest.java
 deleted file mode 100644
-index 423c4d5..0000000
+index 423c4d5431a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/devicepolicy/OwnersTest.java
 +++ /dev/null
 @@ -1,480 +0,0 @@
@@ -20327,7 +20327,7 @@ index 423c4d5..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/job/JobStoreTest.java b/services/tests/servicestests/src/com/android/server/job/JobStoreTest.java
 deleted file mode 100644
-index edbff83..0000000
+index edbff83736a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/job/JobStoreTest.java
 +++ /dev/null
 @@ -1,312 +0,0 @@
@@ -20645,7 +20645,7 @@ index edbff83..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/job/MockPriorityJobService.java b/services/tests/servicestests/src/com/android/server/job/MockPriorityJobService.java
 deleted file mode 100644
-index 3ea86f2..0000000
+index 3ea86f2e9ac..00000000000
 --- a/services/tests/servicestests/src/com/android/server/job/MockPriorityJobService.java
 +++ /dev/null
 @@ -1,106 +0,0 @@
@@ -20757,7 +20757,7 @@ index 3ea86f2..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/job/PrioritySchedulingTest.java b/services/tests/servicestests/src/com/android/server/job/PrioritySchedulingTest.java
 deleted file mode 100644
-index 63bccfa..0000000
+index 63bccfa0141..00000000000
 --- a/services/tests/servicestests/src/com/android/server/job/PrioritySchedulingTest.java
 +++ /dev/null
 @@ -1,119 +0,0 @@
@@ -20882,7 +20882,7 @@ index 63bccfa..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/location/ComprehensiveCountryDetectorTest.java b/services/tests/servicestests/src/com/android/server/location/ComprehensiveCountryDetectorTest.java
 deleted file mode 100644
-index 98966c0..0000000
+index 98966c032d1..00000000000
 --- a/services/tests/servicestests/src/com/android/server/location/ComprehensiveCountryDetectorTest.java
 +++ /dev/null
 @@ -1,299 +0,0 @@
@@ -21187,7 +21187,7 @@ index 98966c0..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/location/LocationBasedCountryDetectorTest.java b/services/tests/servicestests/src/com/android/server/location/LocationBasedCountryDetectorTest.java
 deleted file mode 100644
-index 5f5d668..0000000
+index 5f5d6684f38..00000000000
 --- a/services/tests/servicestests/src/com/android/server/location/LocationBasedCountryDetectorTest.java
 +++ /dev/null
 @@ -1,379 +0,0 @@
@@ -21572,7 +21572,7 @@ index 5f5d668..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/location/LocationRequestStatisticsTest.java b/services/tests/servicestests/src/com/android/server/location/LocationRequestStatisticsTest.java
 deleted file mode 100644
-index 33f604d..0000000
+index 33f604d9914..00000000000
 --- a/services/tests/servicestests/src/com/android/server/location/LocationRequestStatisticsTest.java
 +++ /dev/null
 @@ -1,175 +0,0 @@
@@ -21753,7 +21753,7 @@ index 33f604d..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/net/NetworkStatsAccessTest.java b/services/tests/servicestests/src/com/android/server/net/NetworkStatsAccessTest.java
 deleted file mode 100644
-index bb8f9d1..0000000
+index bb8f9d1a7b1..00000000000
 --- a/services/tests/servicestests/src/com/android/server/net/NetworkStatsAccessTest.java
 +++ /dev/null
 @@ -1,178 +0,0 @@
@@ -21937,7 +21937,7 @@ index bb8f9d1..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/net/NetworkStatsCollectionTest.java b/services/tests/servicestests/src/com/android/server/net/NetworkStatsCollectionTest.java
 deleted file mode 100644
-index 9f53c87..0000000
+index 9f53c87834e..00000000000
 --- a/services/tests/servicestests/src/com/android/server/net/NetworkStatsCollectionTest.java
 +++ /dev/null
 @@ -1,262 +0,0 @@
@@ -22205,7 +22205,7 @@ index 9f53c87..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/net/NetworkStatsObserversTest.java b/services/tests/servicestests/src/com/android/server/net/NetworkStatsObserversTest.java
 deleted file mode 100644
-index 21560ac..0000000
+index 21560acbf3b..00000000000
 --- a/services/tests/servicestests/src/com/android/server/net/NetworkStatsObserversTest.java
 +++ /dev/null
 @@ -1,477 +0,0 @@
@@ -22688,7 +22688,7 @@ index 21560ac..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/net/NetworkStatsServiceTest.java b/services/tests/servicestests/src/com/android/server/net/NetworkStatsServiceTest.java
 deleted file mode 100644
-index 94c6711..0000000
+index 94c6711da9a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/net/NetworkStatsServiceTest.java
 +++ /dev/null
 @@ -1,1324 +0,0 @@
@@ -24018,7 +24018,7 @@ index 94c6711..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/notification/BuzzBeepBlinkTest.java b/services/tests/servicestests/src/com/android/server/notification/BuzzBeepBlinkTest.java
 deleted file mode 100644
-index d51f2d8..0000000
+index d51f2d8152a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/notification/BuzzBeepBlinkTest.java
 +++ /dev/null
 @@ -1,542 +0,0 @@
@@ -24566,7 +24566,7 @@ index d51f2d8..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/notification/RankingHelperTest.java b/services/tests/servicestests/src/com/android/server/notification/RankingHelperTest.java
 deleted file mode 100644
-index 32501ad..0000000
+index 32501ad8878..00000000000
 --- a/services/tests/servicestests/src/com/android/server/notification/RankingHelperTest.java
 +++ /dev/null
 @@ -1,143 +0,0 @@
@@ -24715,7 +24715,7 @@ index 32501ad..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/notification/RateEstimatorTest.java b/services/tests/servicestests/src/com/android/server/notification/RateEstimatorTest.java
 deleted file mode 100644
-index 3278cf1..0000000
+index 3278cf1c0b7..00000000000
 --- a/services/tests/servicestests/src/com/android/server/notification/RateEstimatorTest.java
 +++ /dev/null
 @@ -1,152 +0,0 @@
@@ -24873,7 +24873,7 @@ index 3278cf1..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/notification/ValidateNotificationPeopleTest.java b/services/tests/servicestests/src/com/android/server/notification/ValidateNotificationPeopleTest.java
 deleted file mode 100644
-index a6fdee9..0000000
+index a6fdee9ce42..00000000000
 --- a/services/tests/servicestests/src/com/android/server/notification/ValidateNotificationPeopleTest.java
 +++ /dev/null
 @@ -1,152 +0,0 @@
@@ -25031,7 +25031,7 @@ index a6fdee9..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/BaseShortcutManagerTest.java b/services/tests/servicestests/src/com/android/server/pm/BaseShortcutManagerTest.java
 deleted file mode 100644
-index 792f300..0000000
+index 792f3001c04..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/BaseShortcutManagerTest.java
 +++ /dev/null
 @@ -1,1952 +0,0 @@
@@ -26989,7 +26989,7 @@ index 792f300..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/KeySetManagerServiceTest.java b/services/tests/servicestests/src/com/android/server/pm/KeySetManagerServiceTest.java
 deleted file mode 100644
-index ba83be1..0000000
+index ba83be19bed..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/KeySetManagerServiceTest.java
 +++ /dev/null
 @@ -1,804 +0,0 @@
@@ -27799,7 +27799,7 @@ index ba83be1..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/KeySetStrings.java b/services/tests/servicestests/src/com/android/server/pm/KeySetStrings.java
 deleted file mode 100644
-index 89d01ae..0000000
+index 89d01ae3cd9..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/KeySetStrings.java
 +++ /dev/null
 @@ -1,137 +0,0 @@
@@ -27942,7 +27942,7 @@ index 89d01ae..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/KeySetUtils.java b/services/tests/servicestests/src/com/android/server/pm/KeySetUtils.java
 deleted file mode 100644
-index 9e1a366..0000000
+index 9e1a366c8fc..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/KeySetUtils.java
 +++ /dev/null
 @@ -1,89 +0,0 @@
@@ -28037,7 +28037,7 @@ index 9e1a366..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/PackageManagerSettingsTests.java b/services/tests/servicestests/src/com/android/server/pm/PackageManagerSettingsTests.java
 deleted file mode 100644
-index bf6343f..0000000
+index bf6343f9c23..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/PackageManagerSettingsTests.java
 +++ /dev/null
 @@ -1,349 +0,0 @@
@@ -28392,7 +28392,7 @@ index bf6343f..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/PackageVerificationStateTest.java b/services/tests/servicestests/src/com/android/server/pm/PackageVerificationStateTest.java
 deleted file mode 100644
-index ebd3633..0000000
+index ebd363386fa..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/PackageVerificationStateTest.java
 +++ /dev/null
 @@ -1,205 +0,0 @@
@@ -28603,7 +28603,7 @@ index ebd3633..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java
 deleted file mode 100644
-index cd48f36..0000000
+index cd48f36ade5..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest1.java
 +++ /dev/null
 @@ -1,7349 +0,0 @@
@@ -35958,7 +35958,7 @@ index cd48f36..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest2.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest2.java
 deleted file mode 100644
-index d25923c..0000000
+index d25923c019c..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest2.java
 +++ /dev/null
 @@ -1,2040 +0,0 @@
@@ -38004,7 +38004,7 @@ index d25923c..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest3.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest3.java
 deleted file mode 100644
-index eb4db7a..0000000
+index eb4db7a0f4a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest3.java
 +++ /dev/null
 @@ -1,505 +0,0 @@
@@ -38515,7 +38515,7 @@ index eb4db7a..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest4.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest4.java
 deleted file mode 100644
-index 583c3d4..0000000
+index 583c3d41c40..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest4.java
 +++ /dev/null
 @@ -1,126 +0,0 @@
@@ -38648,7 +38648,7 @@ index 583c3d4..0000000
 \ No newline at end of file
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest5.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest5.java
 deleted file mode 100644
-index 29c98dc..0000000
+index 29c98dcf522..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest5.java
 +++ /dev/null
 @@ -1,202 +0,0 @@
@@ -38856,7 +38856,7 @@ index 29c98dc..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest6.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest6.java
 deleted file mode 100644
-index ba4dbc1..0000000
+index ba4dbc1d258..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest6.java
 +++ /dev/null
 @@ -1,281 +0,0 @@
@@ -39143,7 +39143,7 @@ index ba4dbc1..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest7.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest7.java
 deleted file mode 100644
-index 3c99174..0000000
+index 3c99174142c..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutManagerTest7.java
 +++ /dev/null
 @@ -1,339 +0,0 @@
@@ -39488,7 +39488,7 @@ index 3c99174..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/ShortcutTestActivity.java b/services/tests/servicestests/src/com/android/server/pm/ShortcutTestActivity.java
 deleted file mode 100644
-index d82b0d5..0000000
+index d82b0d55f2a..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/ShortcutTestActivity.java
 +++ /dev/null
 @@ -1,21 +0,0 @@
@@ -39515,7 +39515,7 @@ index d82b0d5..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceTest.java b/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceTest.java
 deleted file mode 100644
-index 9f77297..0000000
+index 9f77297b49d..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceTest.java
 +++ /dev/null
 @@ -1,121 +0,0 @@
@@ -39642,7 +39642,7 @@ index 9f77297..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/UserManagerTest.java b/services/tests/servicestests/src/com/android/server/pm/UserManagerTest.java
 deleted file mode 100644
-index ced4980..0000000
+index ced4980df52..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/UserManagerTest.java
 +++ /dev/null
 @@ -1,278 +0,0 @@
@@ -39926,7 +39926,7 @@ index ced4980..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/UserRestrictionsUtilsTest.java b/services/tests/servicestests/src/com/android/server/pm/UserRestrictionsUtilsTest.java
 deleted file mode 100644
-index 11f9ebb..0000000
+index 11f9ebb52f4..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/UserRestrictionsUtilsTest.java
 +++ /dev/null
 @@ -1,207 +0,0 @@
@@ -40139,7 +40139,7 @@ index 11f9ebb..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/pm/backup/BackupUtilsTest.java b/services/tests/servicestests/src/com/android/server/pm/backup/BackupUtilsTest.java
 deleted file mode 100644
-index c016e61..0000000
+index c016e610475..00000000000
 --- a/services/tests/servicestests/src/com/android/server/pm/backup/BackupUtilsTest.java
 +++ /dev/null
 @@ -1,118 +0,0 @@
@@ -40263,7 +40263,7 @@ index c016e61..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/search/SearchablesTest.java b/services/tests/servicestests/src/com/android/server/search/SearchablesTest.java
 deleted file mode 100644
-index 0f9bf2f..0000000
+index 0f9bf2f6cd8..00000000000
 --- a/services/tests/servicestests/src/com/android/server/search/SearchablesTest.java
 +++ /dev/null
 @@ -1,449 +0,0 @@
@@ -40718,7 +40718,7 @@ index 0f9bf2f..0000000
 -
 diff --git a/services/tests/servicestests/src/com/android/server/testutis/TestUtils.java b/services/tests/servicestests/src/com/android/server/testutis/TestUtils.java
 deleted file mode 100644
-index d2a4484..0000000
+index d2a44841ee0..00000000000
 --- a/services/tests/servicestests/src/com/android/server/testutis/TestUtils.java
 +++ /dev/null
 @@ -1,42 +0,0 @@
@@ -40766,7 +40766,7 @@ index d2a4484..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/updates/CertPinInstallReceiverTest.java b/services/tests/servicestests/src/com/android/server/updates/CertPinInstallReceiverTest.java
 deleted file mode 100644
-index d798518..0000000
+index d79851817f8..00000000000
 --- a/services/tests/servicestests/src/com/android/server/updates/CertPinInstallReceiverTest.java
 +++ /dev/null
 @@ -1,245 +0,0 @@
@@ -41017,7 +41017,7 @@ index d798518..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/usage/AppIdleHistoryTests.java b/services/tests/servicestests/src/com/android/server/usage/AppIdleHistoryTests.java
 deleted file mode 100644
-index 0bd014c..0000000
+index 0bd014c874b..00000000000
 --- a/services/tests/servicestests/src/com/android/server/usage/AppIdleHistoryTests.java
 +++ /dev/null
 @@ -1,100 +0,0 @@
@@ -41124,7 +41124,7 @@ index 0bd014c..0000000
 \ No newline at end of file
 diff --git a/services/tests/servicestests/src/com/android/server/webkit/TestSystemImpl.java b/services/tests/servicestests/src/com/android/server/webkit/TestSystemImpl.java
 deleted file mode 100644
-index e33be40..0000000
+index e33be400a84..00000000000
 --- a/services/tests/servicestests/src/com/android/server/webkit/TestSystemImpl.java
 +++ /dev/null
 @@ -1,116 +0,0 @@
@@ -41246,7 +41246,7 @@ index e33be40..0000000
 -}
 diff --git a/services/tests/servicestests/src/com/android/server/webkit/WebViewUpdateServiceTest.java b/services/tests/servicestests/src/com/android/server/webkit/WebViewUpdateServiceTest.java
 deleted file mode 100644
-index b737033..0000000
+index b7370331ad0..00000000000
 --- a/services/tests/servicestests/src/com/android/server/webkit/WebViewUpdateServiceTest.java
 +++ /dev/null
 @@ -1,1074 +0,0 @@
@@ -42326,7 +42326,7 @@ index b737033..0000000
 -}
 diff --git a/services/tests/shortcutmanagerutils/Android.mk b/services/tests/shortcutmanagerutils/Android.mk
 deleted file mode 100644
-index 2818457..0000000
+index 2818457c9ac..00000000000
 --- a/services/tests/shortcutmanagerutils/Android.mk
 +++ /dev/null
 @@ -1,31 +0,0 @@
@@ -42363,7 +42363,7 @@ index 2818457..0000000
 -include $(BUILD_STATIC_JAVA_LIBRARY)
 diff --git a/services/tests/shortcutmanagerutils/src/com/android/server/pm/shortcutmanagertest/ShortcutManagerTestUtils.java b/services/tests/shortcutmanagerutils/src/com/android/server/pm/shortcutmanagertest/ShortcutManagerTestUtils.java
 deleted file mode 100644
-index 1fe5cb7..0000000
+index 1fe5cb78231..00000000000
 --- a/services/tests/shortcutmanagerutils/src/com/android/server/pm/shortcutmanagertest/ShortcutManagerTestUtils.java
 +++ /dev/null
 @@ -1,1073 +0,0 @@
@@ -43441,7 +43441,7 @@ index 1fe5cb7..0000000
 -    }
 -}
 diff --git a/telephony/java/com/android/internal/telephony/DcParamObject.java b/telephony/java/com/android/internal/telephony/DcParamObject.java
-index 139939c..fc6b610 100644
+index 139939cbd0c..fc6b6106113 100644
 --- a/telephony/java/com/android/internal/telephony/DcParamObject.java
 +++ b/telephony/java/com/android/internal/telephony/DcParamObject.java
 @@ -36,7 +36,7 @@ public class DcParamObject implements Parcelable {
@@ -43454,7 +43454,7 @@ index 139939c..fc6b610 100644
  
      private void readFromParcel(Parcel in) {
 diff --git a/wifi/java/android/net/wifi/RttManager.java b/wifi/java/android/net/wifi/RttManager.java
-index 590ff1b..8c96774 100644
+index 590ff1b1bfa..8c96774eaea 100644
 --- a/wifi/java/android/net/wifi/RttManager.java
 +++ b/wifi/java/android/net/wifi/RttManager.java
 @@ -766,8 +766,8 @@ public class RttManager {

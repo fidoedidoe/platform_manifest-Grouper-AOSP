@@ -1,5 +1,5 @@
 diff --git a/service/java/com/android/server/wifi/WifiStateMachine.java b/service/java/com/android/server/wifi/WifiStateMachine.java
-index 89aabcf..7802b3d 100644
+index 89aabcf3e..7802b3d00 100644
 --- a/service/java/com/android/server/wifi/WifiStateMachine.java
 +++ b/service/java/com/android/server/wifi/WifiStateMachine.java
 @@ -2329,7 +2329,7 @@ public class WifiStateMachine extends StateMachine implements WifiNative.WifiRss
@@ -47,7 +47,7 @@ index 89aabcf..7802b3d 100644
                      }
                      break;
 diff --git a/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java b/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
-index c1d9445..b19af54 100644
+index c1d9445b0..b19af5435 100644
 --- a/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
 +++ b/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java
 @@ -2026,7 +2026,7 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {

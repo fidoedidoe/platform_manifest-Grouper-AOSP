@@ -1,5 +1,5 @@
 diff --git a/Android.mk b/Android.mk
-index 77c258a..4dbd17b 100644
+index 77c258aa06..4dbd17bb63 100644
 --- a/Android.mk
 +++ b/Android.mk
 @@ -643,7 +643,6 @@ LOCAL_SRC_FILES := \
@@ -11,7 +11,7 @@ index 77c258a..4dbd17b 100644
  	src/utils/SkTextureCompressor.cpp \
  	src/utils/SkTextureCompressor_ASTC.cpp \
 diff --git a/dm/Android.mk b/dm/Android.mk
-index e51da0f..f362c99 100644
+index e51da0fc6e..f362c99aca 100644
 --- a/dm/Android.mk
 +++ b/dm/Android.mk
 @@ -213,7 +213,6 @@ LOCAL_SRC_FILES := \
@@ -23,7 +23,7 @@ index e51da0f..f362c99 100644
  	../tests/RandomTest.cpp \
  	../tests/ReadPixelsTest.cpp \
 diff --git a/include/core/SkOSFile.h b/include/core/SkOSFile.h
-index f977327..cb775e2 100644
+index f977327e25..cb775e2bc1 100644
 --- a/include/core/SkOSFile.h
 +++ b/include/core/SkOSFile.h
 @@ -31,20 +31,12 @@ FILE* sk_fopen(const char path[], SkFILE_Flags);
@@ -60,7 +60,7 @@ index f977327..cb775e2 100644
  
  // Create a new directory at this path; returns true if successful.
 diff --git a/include/core/SkStream.h b/include/core/SkStream.h
-index 4502416..265fb64 100644
+index 4502416fd9..265fb641c7 100644
 --- a/include/core/SkStream.h
 +++ b/include/core/SkStream.h
 @@ -11,8 +11,9 @@
@@ -131,10 +131,10 @@ index 4502416..265fb64 100644
  };
 diff --git a/resources/invalid_images/b38116746.ico b/resources/invalid_images/b38116746.ico
 new file mode 100644
-index 0000000..35ee5b5
+index 0000000000..35ee5b5a28
 Binary files /dev/null and b/resources/invalid_images/b38116746.ico differ
 diff --git a/src/codec/SkIcoCodec.cpp b/src/codec/SkIcoCodec.cpp
-index dc4222a..8b3d26d 100644
+index dc4222a43c..8b3d26dd86 100644
 --- a/src/codec/SkIcoCodec.cpp
 +++ b/src/codec/SkIcoCodec.cpp
 @@ -14,6 +14,7 @@
@@ -168,7 +168,7 @@ index dc4222a..8b3d26d 100644
          bytesRead += size;
  
 diff --git a/src/codec/SkIcoCodec.h b/src/codec/SkIcoCodec.h
-index 9a3f248..5a3740d 100644
+index 9a3f248af5..5a3740d2c0 100644
 --- a/src/codec/SkIcoCodec.h
 +++ b/src/codec/SkIcoCodec.h
 @@ -8,6 +8,7 @@
@@ -180,7 +180,7 @@ index 9a3f248..5a3740d 100644
  
  /*
 diff --git a/src/codec/SkWebpCodec.cpp b/src/codec/SkWebpCodec.cpp
-index 6cfb385..8acd205 100644
+index 6cfb385294..8acd205d13 100644
 --- a/src/codec/SkWebpCodec.cpp
 +++ b/src/codec/SkWebpCodec.cpp
 @@ -235,7 +235,10 @@ SkCodec::Result SkWebpCodec::onGetPixels(const SkImageInfo& dstInfo, void* dst,
@@ -196,7 +196,7 @@ index 6cfb385..8acd205 100644
          }
  
 diff --git a/src/core/SkPath.cpp b/src/core/SkPath.cpp
-index 320448a..9eb5cd1 100644
+index 320448a30e..9eb5cd184b 100644
 --- a/src/core/SkPath.cpp
 +++ b/src/core/SkPath.cpp
 @@ -2082,6 +2082,7 @@ size_t SkPath::readFromMemory(const void* storage, size_t length) {
@@ -208,7 +208,7 @@ index 320448a..9eb5cd1 100644
  #include "SkStream.h"
  
 diff --git a/src/core/SkStream.cpp b/src/core/SkStream.cpp
-index 9529308..4f00768 100644
+index 9529308e86..4f00768747 100644
 --- a/src/core/SkStream.cpp
 +++ b/src/core/SkStream.cpp
 @@ -180,105 +180,95 @@ bool SkWStream::writeStream(SkStream* stream, size_t length) {
@@ -371,7 +371,7 @@ index 9529308..4f00768 100644
  
  ///////////////////////////////////////////////////////////////////////////////
 diff --git a/src/ports/SkOSFile_posix.cpp b/src/ports/SkOSFile_posix.cpp
-index 396de68..48b5b95 100644
+index 396de68bbe..48b5b95ad3 100644
 --- a/src/ports/SkOSFile_posix.cpp
 +++ b/src/ports/SkOSFile_posix.cpp
 @@ -95,6 +95,18 @@ void* sk_fmmap(FILE* f, size_t* size) {
@@ -394,7 +394,7 @@ index 396de68..48b5b95 100644
  
  struct SkOSFileIterData {
 diff --git a/src/ports/SkOSFile_stdio.cpp b/src/ports/SkOSFile_stdio.cpp
-index 915b87b..ee997e9 100644
+index 915b87b67b..ee997e9db9 100644
 --- a/src/ports/SkOSFile_stdio.cpp
 +++ b/src/ports/SkOSFile_stdio.cpp
 @@ -80,15 +80,6 @@ FILE* sk_fopen(const char path[], SkFILE_Flags flags) {
@@ -476,7 +476,7 @@ index 915b87b..ee997e9 100644
  
  bool sk_isdir(const char *path) {
 diff --git a/src/ports/SkOSFile_win.cpp b/src/ports/SkOSFile_win.cpp
-index 6bdf9ab..414393a 100644
+index 6bdf9ab163..414393a1d4 100644
 --- a/src/ports/SkOSFile_win.cpp
 +++ b/src/ports/SkOSFile_win.cpp
 @@ -124,6 +124,33 @@ void* sk_fmmap(FILE* f, size_t* length) {
@@ -514,7 +514,7 @@ index 6bdf9ab..414393a 100644
  
  struct SkOSFileIterData {
 diff --git a/tests/BadIcoTest.cpp b/tests/BadIcoTest.cpp
-index c387e15..f6b1c46 100644
+index c387e157be..f6b1c469cc 100644
 --- a/tests/BadIcoTest.cpp
 +++ b/tests/BadIcoTest.cpp
 @@ -22,6 +22,7 @@ DEF_TEST(BadImage, reporter) {
@@ -527,7 +527,7 @@ index c387e15..f6b1c46 100644
      const char* badImagesFolder = "invalid_images";
 diff --git a/tests/CodecTest.cpp b/tests/CodecTest.cpp
 new file mode 100644
-index 0000000..6bb0f1b
+index 0000000000..6bb0f1b2cb
 --- /dev/null
 +++ b/tests/CodecTest.cpp
 @@ -0,0 +1,1615 @@
@@ -2147,7 +2147,7 @@ index 0000000..6bb0f1b
 +    test_info(r, codec.get(), codec->getInfo(), SkCodec::kInvalidInput, nullptr);
 +}
 diff --git a/tests/PathOpsExtendedTest.cpp b/tests/PathOpsExtendedTest.cpp
-index c96cbcd..9e2dfbe 100644
+index c96cbcdae5..9e2dfbe2ae 100644
 --- a/tests/PathOpsExtendedTest.cpp
 +++ b/tests/PathOpsExtendedTest.cpp
 @@ -595,7 +595,7 @@ void initializeTests(skiatest::Reporter* reporter, const char* test) {
@@ -2160,7 +2160,7 @@ index c96cbcd..9e2dfbe 100644
              if (insert) {
                  insert += sizeof(marker) - 1;
 diff --git a/tests/StreamTest.cpp b/tests/StreamTest.cpp
-index a3df8d7..031cc1a 100644
+index a3df8d71bb..031cc1a623 100644
 --- a/tests/StreamTest.cpp
 +++ b/tests/StreamTest.cpp
 @@ -67,7 +67,7 @@ static void test_filestreams(skiatest::Reporter* reporter, const char* tmpDir) {
@@ -2173,7 +2173,7 @@ index a3df8d7..031cc1a 100644
          test_loop_stream(reporter, &stream, s, 26, 100);
  
 diff --git a/tools/chrome_fuzz.cpp b/tools/chrome_fuzz.cpp
-index f49e126..ff14b5b 100644
+index f49e12693b..ff14b5b307 100644
 --- a/tools/chrome_fuzz.cpp
 +++ b/tools/chrome_fuzz.cpp
 @@ -8,6 +8,8 @@

@@ -1,5 +1,5 @@
 diff --git a/src/com/android/nfc/BeamShareActivity.java b/src/com/android/nfc/BeamShareActivity.java
-index 5b8acac..f06bfdb 100644
+index 5b8acacd..f06bfdba 100644
 --- a/src/com/android/nfc/BeamShareActivity.java
 +++ b/src/com/android/nfc/BeamShareActivity.java
 @@ -19,6 +19,8 @@ package com.android.nfc;

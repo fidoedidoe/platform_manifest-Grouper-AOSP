@@ -1145,10 +1145,11 @@ diff --git a/src/drivers/driver.h b/src/drivers/driver.h
 index b7e0d16..bae4777 100644
 --- a/src/drivers/driver.h
 +++ b/src/drivers/driver.h
-@@ -3648,17 +3648,6 @@ enum wpa_event_type {
+@@ -3647,17 +3647,6 @@ enum wpa_event_type {
+ 	 */
  	EVENT_PMKID_CANDIDATE,
  
- 	/**
+-	/**
 -	 * EVENT_STKSTART - Request STK handshake (MLME-STKSTART.request)
 -	 *
 -	 * This event can be used to inform wpa_supplicant about desire to set
@@ -1159,24 +1160,23 @@ index b7e0d16..bae4777 100644
 -	 */
 -	EVENT_STKSTART,
 -
--	/**
+ 	/**
  	 * EVENT_TDLS - Request TDLS operation
  	 *
- 	 * This event can be used to request a TDLS operation to be performed.
-@@ -4298,13 +4287,6 @@ union wpa_event_data {
+@@ -4297,13 +4286,6 @@ union wpa_event_data {
+ 		int preauth;
  	} pmkid_candidate;
  
- 	/**
+-	/**
 -	 * struct stkstart - Data for EVENT_STKSTART
 -	 */
 -	struct stkstart {
 -		u8 peer[ETH_ALEN];
 -	} stkstart;
 -
--	/**
+ 	/**
  	 * struct tdls - Data for EVENT_TDLS
  	 */
- 	struct tdls {
 diff --git a/src/drivers/driver_common.c b/src/drivers/driver_common.c
 index b32d35f..7c35277 100644
 --- a/src/drivers/driver_common.c
@@ -3471,10 +3471,11 @@ diff --git a/wpa_supplicant/config_ssid.h b/wpa_supplicant/config_ssid.h
 index eb7b87b..5b6f426 100644
 --- a/wpa_supplicant/config_ssid.h
 +++ b/wpa_supplicant/config_ssid.h
-@@ -388,17 +388,6 @@ struct wpa_ssid {
+@@ -387,17 +387,6 @@ struct wpa_ssid {
+ 	 */
  	int disabled_for_connect;
  
- 	/**
+-	/**
 -	 * peerkey -  Whether PeerKey handshake for direct links is allowed
 -	 *
 -	 * This is only used when both RSN/WPA2 and IEEE 802.11e (QoS) are
@@ -3485,10 +3486,9 @@ index eb7b87b..5b6f426 100644
 -	 */
 -	int peerkey;
 -
--	/**
+ 	/**
  	 * id_str - Network identifier string for external scripts
  	 *
- 	 * This value is passed to external ctrl_iface monitors in
 diff --git a/wpa_supplicant/config_winreg.c b/wpa_supplicant/config_winreg.c
 index 199f04f..ca70474 100644
 --- a/wpa_supplicant/config_winreg.c

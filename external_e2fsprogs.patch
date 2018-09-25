@@ -1,5 +1,5 @@
 diff --git a/e2fsck/logfile.c b/e2fsck/logfile.c
-index 40e5acb..3e4df8a 100644
+index 40e5acb7..3e4df8a7 100644
 --- a/e2fsck/logfile.c
 +++ b/e2fsck/logfile.c
 @@ -67,7 +67,7 @@ static void expand_percent_expression(e2fsck_t ctx, char ch,
@@ -12,7 +12,7 @@ index 40e5acb..3e4df8a 100644
  	char		buf[256];
  
 diff --git a/misc/blkid.c b/misc/blkid.c
-index 388abad..248cacf 100644
+index 388abad0..248cacf6 100644
 --- a/misc/blkid.c
 +++ b/misc/blkid.c
 @@ -86,7 +86,9 @@ static void safe_print(const char *cp, int len)

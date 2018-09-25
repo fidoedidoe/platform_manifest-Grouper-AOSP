@@ -1,5 +1,5 @@
 diff --git a/camera/src/camera_metadata.c b/camera/src/camera_metadata.c
-index e369c64..70074c8 100644
+index e369c642..70074c82 100644
 --- a/camera/src/camera_metadata.c
 +++ b/camera/src/camera_metadata.c
 @@ -182,7 +182,13 @@ camera_metadata_t *allocate_copy_camera_metadata_checked(

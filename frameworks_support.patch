@@ -1,5 +1,5 @@
 diff --git a/compat/java/android/support/v4/view/ViewCompat.java b/compat/java/android/support/v4/view/ViewCompat.java
-index 9637e65..cc3cc26 100644
+index 9637e65fb9..cc3cc26058 100644
 --- a/compat/java/android/support/v4/view/ViewCompat.java
 +++ b/compat/java/android/support/v4/view/ViewCompat.java
 @@ -541,11 +541,11 @@ public class ViewCompat {
@@ -17,7 +17,7 @@ index 9637e65..cc3cc26 100644
          @Override
          public void postOnAnimation(View view, Runnable action) {
 diff --git a/design/src/android/support/design/widget/BottomSheetBehavior.java b/design/src/android/support/design/widget/BottomSheetBehavior.java
-index c3362a8..b913de1 100644
+index c3362a81d1..b913de19a5 100644
 --- a/design/src/android/support/design/widget/BottomSheetBehavior.java
 +++ b/design/src/android/support/design/widget/BottomSheetBehavior.java
 @@ -385,7 +385,8 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
@@ -31,7 +31,7 @@ index c3362a8..b913de1 100644
          }
          int top;
 diff --git a/fragment/java/android/support/v4/app/FragmentHostCallback.java b/fragment/java/android/support/v4/app/FragmentHostCallback.java
-index 75fde03..5c256d3 100644
+index 75fde038f2..5c256d38f7 100644
 --- a/fragment/java/android/support/v4/app/FragmentHostCallback.java
 +++ b/fragment/java/android/support/v4/app/FragmentHostCallback.java
 @@ -304,13 +304,9 @@ public abstract class FragmentHostCallback<E> extends FragmentContainer {
@@ -64,7 +64,7 @@ index 75fde03..5c256d3 100644
      }
  
 diff --git a/fragment/java/android/support/v4/app/FragmentManager.java b/fragment/java/android/support/v4/app/FragmentManager.java
-index 3baf4f9..5996c9d 100644
+index 3baf4f9d3a..5996c9dbc7 100644
 --- a/fragment/java/android/support/v4/app/FragmentManager.java
 +++ b/fragment/java/android/support/v4/app/FragmentManager.java
 @@ -2146,26 +2146,36 @@ final class FragmentManagerImpl extends FragmentManager implements LayoutInflate
@@ -136,7 +136,7 @@ index 3baf4f9..5996c9d 100644
          mParent = null;
 diff --git a/fragment/tests/java/android/support/v4/app/ReentrantFragment.java b/fragment/tests/java/android/support/v4/app/ReentrantFragment.java
 new file mode 100644
-index 0000000..472245d
+index 0000000000..472245df2a
 --- /dev/null
 +++ b/fragment/tests/java/android/support/v4/app/ReentrantFragment.java
 @@ -0,0 +1,69 @@
@@ -210,7 +210,7 @@ index 0000000..472245d
 +}
 +
 diff --git a/fragment/tests/java/android/support/v4/app/StrictFragment.java b/fragment/tests/java/android/support/v4/app/StrictFragment.java
-index dfda814..d91c161 100644
+index dfda814132..d91c161517 100644
 --- a/fragment/tests/java/android/support/v4/app/StrictFragment.java
 +++ b/fragment/tests/java/android/support/v4/app/StrictFragment.java
 @@ -51,6 +51,10 @@ public class StrictFragment extends Fragment {
@@ -309,7 +309,7 @@ index dfda814..d91c161 100644
      }
  }
 diff --git a/v7/recyclerview/src/android/support/v7/widget/RecyclerView.java b/v7/recyclerview/src/android/support/v7/widget/RecyclerView.java
-index b640f79..8c57dc8 100644
+index b640f79c62..8c57dc853a 100644
 --- a/v7/recyclerview/src/android/support/v7/widget/RecyclerView.java
 +++ b/v7/recyclerview/src/android/support/v7/widget/RecyclerView.java
 @@ -11160,6 +11160,11 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro

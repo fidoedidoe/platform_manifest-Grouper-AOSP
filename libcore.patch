@@ -1,5 +1,5 @@
 diff --git a/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java b/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
-index 13e9317..7e79e28 100644
+index 13e931786..7e79e2807 100644
 --- a/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
 +++ b/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
 @@ -87,7 +87,7 @@ public final class AndroidHardcodedSystemProperties {
@@ -17,7 +17,7 @@ index 13e9317..7e79e28 100644
  }
 -
 diff --git a/luni/src/test/java/libcore/java/io/FileTest.java b/luni/src/test/java/libcore/java/io/FileTest.java
-index 5d5317a..04de751 100644
+index 5d5317a9e..04de75137 100644
 --- a/luni/src/test/java/libcore/java/io/FileTest.java
 +++ b/luni/src/test/java/libcore/java/io/FileTest.java
 @@ -368,4 +368,25 @@ public class FileTest extends junit.framework.TestCase {
@@ -47,7 +47,7 @@ index 5d5317a..04de751 100644
 +    }
  }
 diff --git a/luni/src/test/java/libcore/java/net/URLTest.java b/luni/src/test/java/libcore/java/net/URLTest.java
-index 0eee1f8..410f3fb 100644
+index 0eee1f8d9..410f3fb67 100644
 --- a/luni/src/test/java/libcore/java/net/URLTest.java
 +++ b/luni/src/test/java/libcore/java/net/URLTest.java
 @@ -409,6 +409,46 @@ public final class URLTest extends TestCase {
@@ -98,7 +98,7 @@ index 0eee1f8..410f3fb 100644
          URL base = new URL("http://host/file");
          assertEquals("http://host/another#fragment", new URL(base, "another#fragment").toString());
 diff --git a/ojluni/src/main/java/java/io/FileSystem.java b/ojluni/src/main/java/java/io/FileSystem.java
-index aa00fa9..7db1651 100755
+index aa00fa996..7db1651f5 100755
 --- a/ojluni/src/main/java/java/io/FileSystem.java
 +++ b/ojluni/src/main/java/java/io/FileSystem.java
 @@ -232,8 +232,11 @@ abstract class FileSystem {
@@ -116,7 +116,7 @@ index aa00fa9..7db1651 100755
      private static boolean getBooleanProperty(String prop, boolean defaultVal) {
          String val = System.getProperty(prop);
 diff --git a/ojluni/src/main/java/java/net/URLStreamHandler.java b/ojluni/src/main/java/java/net/URLStreamHandler.java
-index 0892d67..49a84a9 100755
+index 0892d6741..49a84a9d6 100755
 --- a/ojluni/src/main/java/java/net/URLStreamHandler.java
 +++ b/ojluni/src/main/java/java/net/URLStreamHandler.java
 @@ -168,12 +168,25 @@ public abstract class URLStreamHandler {

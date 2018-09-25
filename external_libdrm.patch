@@ -1,5 +1,5 @@
 diff --git a/xf86drm.c b/xf86drm.c
-index 7e28b4f..67f9f83 100644
+index 7e28b4f7..67f9f838 100644
 --- a/xf86drm.c
 +++ b/xf86drm.c
 @@ -732,8 +732,8 @@ int drmOpen(const char *name, const char *busid)

@@ -1,5 +1,5 @@
 diff --git a/build/phone-xhdpi-1024-dalvik-heap.mk b/build/phone-xhdpi-1024-dalvik-heap.mk
-index 221227d..5707b1d 100644
+index 221227d4d..5707b1d1b 100644
 --- a/build/phone-xhdpi-1024-dalvik-heap.mk
 +++ b/build/phone-xhdpi-1024-dalvik-heap.mk
 @@ -18,7 +18,7 @@
@@ -12,7 +12,7 @@ index 221227d..5707b1d 100644
      dalvik.vm.heaptargetutilization=0.75 \
      dalvik.vm.heapminfree=512k \
 diff --git a/build/tablet-7in-hdpi-1024-dalvik-heap.mk b/build/tablet-7in-hdpi-1024-dalvik-heap.mk
-index 7fd34b5..e61c40b 100644
+index 7fd34b5f1..e61c40ba1 100644
 --- a/build/tablet-7in-hdpi-1024-dalvik-heap.mk
 +++ b/build/tablet-7in-hdpi-1024-dalvik-heap.mk
 @@ -18,7 +18,7 @@
@@ -25,7 +25,7 @@ index 7fd34b5..e61c40b 100644
      dalvik.vm.heaptargetutilization=0.75 \
      dalvik.vm.heapminfree=512k \
 diff --git a/cmds/atrace/atrace.cpp b/cmds/atrace/atrace.cpp
-index 5885738..86c315c 100644
+index 5885738e9..86c315cec 100644
 --- a/cmds/atrace/atrace.cpp
 +++ b/cmds/atrace/atrace.cpp
 @@ -594,16 +594,30 @@ static bool verifyKernelTraceFuncs(const char* funcs)
@@ -78,7 +78,7 @@ index 5885738..86c315c 100644
  }
  
 diff --git a/cmds/flatland/GLHelper.cpp b/cmds/flatland/GLHelper.cpp
-index ddf3aa8..5c04f6c 100644
+index ddf3aa868..5c04f6cf1 100644
 --- a/cmds/flatland/GLHelper.cpp
 +++ b/cmds/flatland/GLHelper.cpp
 @@ -365,6 +365,7 @@ static bool compileShaderLines(GLenum shaderType, const char* const* lines,
@@ -90,7 +90,7 @@ index ddf3aa8..5c04f6c 100644
      }
      delete[] src;
 diff --git a/cmds/installd/commands.cpp b/cmds/installd/commands.cpp
-index 271c75b..cadcd1e 100644
+index 271c75ba4..cadcd1ef1 100644
 --- a/cmds/installd/commands.cpp
 +++ b/cmds/installd/commands.cpp
 @@ -238,11 +238,15 @@ int migrate_app_data(const char *uuid, const char *pkgname, userid_t userid, int
@@ -113,7 +113,7 @@ index 271c75b..cadcd1e 100644
          }
      }
 diff --git a/include/binder/Parcel.h b/include/binder/Parcel.h
-index 2490b82..2b61151 100644
+index 2490b82bb..2b6115121 100644
 --- a/include/binder/Parcel.h
 +++ b/include/binder/Parcel.h
 @@ -375,7 +375,8 @@ private:
@@ -150,7 +150,7 @@ index 2490b82..2b61151 100644
      };
      status_t write(const FlattenableHelperInterface& val);
 diff --git a/include/gui/ISurfaceComposer.h b/include/gui/ISurfaceComposer.h
-index 74a4123..8dc6f6a 100644
+index 74a4123bb..8dc6f6a9d 100644
 --- a/include/gui/ISurfaceComposer.h
 +++ b/include/gui/ISurfaceComposer.h
 @@ -32,6 +32,12 @@
@@ -178,7 +178,7 @@ index 74a4123..8dc6f6a 100644
       *
 diff --git a/include/ui/FramebufferNativeWindow.h b/include/ui/FramebufferNativeWindow.h
 new file mode 100644
-index 0000000..2eb1cc1
+index 000000000..2eb1cc16e
 --- /dev/null
 +++ b/include/ui/FramebufferNativeWindow.h
 @@ -0,0 +1,102 @@
@@ -285,7 +285,7 @@ index 0000000..2eb1cc1
 +#endif // ANDROID_FRAMEBUFFER_NATIVE_WINDOW_H
 +
 diff --git a/libs/binder/AppOpsManager.cpp b/libs/binder/AppOpsManager.cpp
-index 9a061a0..8f97544 100644
+index 9a061a0ce..8f97544d5 100644
 --- a/libs/binder/AppOpsManager.cpp
 +++ b/libs/binder/AppOpsManager.cpp
 @@ -53,7 +53,8 @@ sp<IAppOpsService> AppOpsManager::getService()
@@ -299,7 +299,7 @@ index 9a061a0..8f97544 100644
              sleep(1);
          } else {
 diff --git a/libs/binder/Binder.cpp b/libs/binder/Binder.cpp
-index c4d47ca..d04074e 100644
+index c4d47caed..d04074eed 100644
 --- a/libs/binder/Binder.cpp
 +++ b/libs/binder/Binder.cpp
 @@ -240,6 +240,8 @@ status_t BBinder::onTransact(
@@ -312,7 +312,7 @@ index c4d47ca..d04074e 100644
  
          case SYSPROPS_TRANSACTION: {
 diff --git a/libs/binder/IPCThreadState.cpp b/libs/binder/IPCThreadState.cpp
-index eccc400..3efebf7 100644
+index eccc400c0..3efebf7ea 100644
 --- a/libs/binder/IPCThreadState.cpp
 +++ b/libs/binder/IPCThreadState.cpp
 @@ -331,6 +331,7 @@ void IPCThreadState::shutdown()
@@ -324,7 +324,7 @@ index eccc400..3efebf7 100644
      }
  }
 diff --git a/libs/binder/Parcel.cpp b/libs/binder/Parcel.cpp
-index 19ce3eb..e6630d5 100644
+index 19ce3ebae..e6630d549 100644
 --- a/libs/binder/Parcel.cpp
 +++ b/libs/binder/Parcel.cpp
 @@ -459,6 +459,7 @@ void Parcel::setDataPosition(size_t pos) const
@@ -469,7 +469,7 @@ index 19ce3eb..e6630d5 100644
  
          // We own the data, so we can just do a realloc().
 diff --git a/libs/binder/ProcessState.cpp b/libs/binder/ProcessState.cpp
-index f13f49f..e45b5f1 100644
+index f13f49fe9..e45b5f1ff 100644
 --- a/libs/binder/ProcessState.cpp
 +++ b/libs/binder/ProcessState.cpp
 @@ -366,6 +366,13 @@ ProcessState::ProcessState()
@@ -487,7 +487,7 @@ index f13f49f..e45b5f1 100644
          
  }; // namespace android
 diff --git a/libs/binder/tests/binderDriverInterfaceTest.cpp b/libs/binder/tests/binderDriverInterfaceTest.cpp
-index 0277550..d8fd81c 100644
+index 027755025..d8fd81c92 100644
 --- a/libs/binder/tests/binderDriverInterfaceTest.cpp
 +++ b/libs/binder/tests/binderDriverInterfaceTest.cpp
 @@ -77,6 +77,16 @@ class BinderDriverInterfaceTest : public ::testing::Test {
@@ -517,7 +517,7 @@ index 0277550..d8fd81c 100644
      EXPECT_EQ(sizeof(bc1), bwr.write_consumed);
      if (bwr.read_consumed < offsetof(typeof(br), pad)) {
 diff --git a/libs/gui/Android.mk b/libs/gui/Android.mk
-index 9e2fc2b..12d2148 100644
+index 9e2fc2b04..12d21488e 100644
 --- a/libs/gui/Android.mk
 +++ b/libs/gui/Android.mk
 @@ -86,6 +86,9 @@ LOCAL_SHARED_LIBRARIES := \
@@ -531,7 +531,7 @@ index 9e2fc2b..12d2148 100644
  LOCAL_MODULE := libgui
  
 diff --git a/libs/gui/BufferQueueProducer.cpp b/libs/gui/BufferQueueProducer.cpp
-index ff85eb5..6dc7fec 100644
+index ff85eb5ce..6dc7fec34 100644
 --- a/libs/gui/BufferQueueProducer.cpp
 +++ b/libs/gui/BufferQueueProducer.cpp
 @@ -721,6 +721,7 @@ status_t BufferQueueProducer::attachBuffer(int* outSlot,
@@ -567,7 +567,7 @@ index ff85eb5..6dc7fec 100644
                      format : mCore->mDefaultBufferFormat;
              uint32_t checkUsage = usage | mCore->mConsumerUsageBits;
 diff --git a/libs/gui/ISurfaceComposer.cpp b/libs/gui/ISurfaceComposer.cpp
-index f0b0ada..3577a33 100644
+index f0b0ada27..3577a331a 100644
 --- a/libs/gui/ISurfaceComposer.cpp
 +++ b/libs/gui/ISurfaceComposer.cpp
 @@ -106,7 +106,8 @@ public:
@@ -604,7 +604,7 @@ index f0b0ada..3577a33 100644
              return NO_ERROR;
          }
 diff --git a/libs/gui/Surface.cpp b/libs/gui/Surface.cpp
-index 5a2ca8d..16ccbc3 100644
+index 5a2ca8d7a..16ccbc30e 100644
 --- a/libs/gui/Surface.cpp
 +++ b/libs/gui/Surface.cpp
 @@ -1266,6 +1266,7 @@ status_t Surface::lock(
@@ -660,7 +660,7 @@ index 5a2ca8d..16ccbc3 100644
              *inOutDirtyBounds = newDirtyRegion.getBounds();
          }
 diff --git a/libs/ui/Android.mk b/libs/ui/Android.mk
-index e690ede..3927031 100644
+index e690ede19..392703167 100644
 --- a/libs/ui/Android.mk
 +++ b/libs/ui/Android.mk
 @@ -36,6 +36,7 @@ LOCAL_CPPFLAGS += -Wno-padded
@@ -673,7 +673,7 @@ index e690ede..3927031 100644
  	Gralloc1On0Adapter.cpp \
 diff --git a/libs/ui/FramebufferNativeWindow.cpp b/libs/ui/FramebufferNativeWindow.cpp
 new file mode 100644
-index 0000000..3ead25c
+index 000000000..3ead25cfe
 --- /dev/null
 +++ b/libs/ui/FramebufferNativeWindow.cpp
 @@ -0,0 +1,372 @@
@@ -1050,7 +1050,7 @@ index 0000000..3ead25c
 +    return static_cast<EGLNativeWindowType>(w);
 +}
 diff --git a/libs/ui/GraphicBuffer.cpp b/libs/ui/GraphicBuffer.cpp
-index 97b948d..0bb0941 100644
+index 97b948d97..0bb0941ad 100644
 --- a/libs/ui/GraphicBuffer.cpp
 +++ b/libs/ui/GraphicBuffer.cpp
 @@ -394,6 +394,7 @@ status_t GraphicBuffer::unflatten(
@@ -1062,7 +1062,7 @@ index 97b948d..0bb0941 100644
              ALOGE("unflatten: registerBuffer failed: %s (%d)",
                      strerror(-err), err);
 diff --git a/libs/ui/Region.cpp b/libs/ui/Region.cpp
-index ee152bf..9c82295 100644
+index ee152bf91..9c82295bb 100644
 --- a/libs/ui/Region.cpp
 +++ b/libs/ui/Region.cpp
 @@ -800,6 +800,11 @@ status_t Region::unflatten(void const* buffer, size_t size) {
@@ -1078,7 +1078,7 @@ index ee152bf..9c82295 100644
      result.mStorage.clear();
      for (size_t r = 0; r < numRects; ++r) {
 diff --git a/opengl/libs/Android.mk b/opengl/libs/Android.mk
-index 24e4c19..54e9d59 100644
+index 24e4c19a5..54e9d59ae 100644
 --- a/opengl/libs/Android.mk
 +++ b/opengl/libs/Android.mk
 @@ -42,9 +42,15 @@ LOCAL_CFLAGS += -DLOG_TAG=\"libEGL\"
@@ -1122,7 +1122,7 @@ index 24e4c19..54e9d59 100644
  LOCAL_SHARED_LIBRARIES += libcutils libutils liblog libEGL
  LOCAL_MODULE:= libGLESv3
 diff --git a/opengl/libs/EGL/eglApi.cpp b/opengl/libs/EGL/eglApi.cpp
-index 436ea30..58b625e 100644
+index 436ea3080..58b625ee9 100644
 --- a/opengl/libs/EGL/eglApi.cpp
 +++ b/opengl/libs/EGL/eglApi.cpp
 @@ -487,11 +487,17 @@ EGLSurface eglCreateWindowSurface(  EGLDisplay dpy, EGLConfig config,
@@ -1155,7 +1155,7 @@ index 436ea30..58b625e 100644
          // now select a corresponding sRGB format if needed
          if (attrib_list && dp->haveExtension("EGL_KHR_gl_colorspace")) {
 diff --git a/opengl/libs/EGL/egl_object.cpp b/opengl/libs/EGL/egl_object.cpp
-index cfecf77..4d9f77f 100644
+index cfecf7702..4d9f77fbe 100644
 --- a/opengl/libs/EGL/egl_object.cpp
 +++ b/opengl/libs/EGL/egl_object.cpp
 @@ -124,19 +124,25 @@ void egl_context_t::onMakeCurrent(EGLSurface draw, EGLSurface read) {
@@ -1197,7 +1197,7 @@ index cfecf77..4d9f77f 100644
      }
  }
 diff --git a/opengl/libs/EGL/getProcAddress.cpp b/opengl/libs/EGL/getProcAddress.cpp
-index 336c264..bb72e79 100644
+index 336c2642a..bb72e79f0 100644
 --- a/opengl/libs/EGL/getProcAddress.cpp
 +++ b/opengl/libs/EGL/getProcAddress.cpp
 @@ -40,6 +40,27 @@ namespace android {
@@ -1355,7 +1355,7 @@ index 336c264..bb72e79 100644
  
  GL_EXTENSION_LIST( GL_EXTENSION )
 diff --git a/opengl/libs/GLES2/gl2.cpp b/opengl/libs/GLES2/gl2.cpp
-index 6034a8e..6dd87c2 100644
+index 6034a8edc..6dd87c28e 100644
 --- a/opengl/libs/GLES2/gl2.cpp
 +++ b/opengl/libs/GLES2/gl2.cpp
 @@ -34,39 +34,65 @@ using namespace android;
@@ -1700,7 +1700,7 @@ index 6034a8e..6dd87c2 100644
  
  /*
 diff --git a/opengl/libs/GLES_CM/gl.cpp b/opengl/libs/GLES_CM/gl.cpp
-index b1b31f8..8bde4e5 100644
+index b1b31f829..8bde4e5f0 100644
 --- a/opengl/libs/GLES_CM/gl.cpp
 +++ b/opengl/libs/GLES_CM/gl.cpp
 @@ -90,39 +90,65 @@ GL_API void GL_APIENTRY glWeightPointerOESBounds(GLint size, GLenum type,
@@ -2044,7 +2044,7 @@ index b1b31f8..8bde4e5 100644
  
  /*
 diff --git a/opengl/libs/hooks.h b/opengl/libs/hooks.h
-index e14075c..18b1b76 100644
+index e14075cdb..18b1b7601 100644
 --- a/opengl/libs/hooks.h
 +++ b/opengl/libs/hooks.h
 @@ -43,7 +43,11 @@
@@ -2060,7 +2060,7 @@ index e14075c..18b1b76 100644
  
  #include <bionic_tls.h>  /* special private C library header */
 diff --git a/services/inputflinger/InputDispatcher.cpp b/services/inputflinger/InputDispatcher.cpp
-index 3f69d49..e48c53a 100644
+index 3f69d49f0..e48c53a08 100644
 --- a/services/inputflinger/InputDispatcher.cpp
 +++ b/services/inputflinger/InputDispatcher.cpp
 @@ -1224,15 +1224,8 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
@@ -2081,7 +2081,7 @@ index 3f69d49..e48c53a 100644
              }
          }
 diff --git a/services/inputflinger/InputManager.cpp b/services/inputflinger/InputManager.cpp
-index 6a6547b..2ef25f3 100644
+index 6a6547bdf..2ef25f315 100644
 --- a/services/inputflinger/InputManager.cpp
 +++ b/services/inputflinger/InputManager.cpp
 @@ -20,6 +20,7 @@
@@ -2121,7 +2121,7 @@ index 6a6547b..2ef25f3 100644
  }
  
 diff --git a/services/inputflinger/InputReader.cpp b/services/inputflinger/InputReader.cpp
-index b9be675..eff3deb 100644
+index b9be67568..eff3debc2 100644
 --- a/services/inputflinger/InputReader.cpp
 +++ b/services/inputflinger/InputReader.cpp
 @@ -2169,6 +2169,10 @@ void KeyboardInputMapper::configure(nsecs_t when,
@@ -2230,7 +2230,7 @@ index b9be675..eff3deb 100644
      }
  
 diff --git a/services/inputflinger/InputReader.h b/services/inputflinger/InputReader.h
-index 076f3d6..52cfb72 100644
+index 076f3d651..52cfb727e 100644
 --- a/services/inputflinger/InputReader.h
 +++ b/services/inputflinger/InputReader.h
 @@ -144,6 +144,9 @@ struct InputReaderConfiguration {
@@ -2282,7 +2282,7 @@ index 076f3d6..52cfb72 100644
  
      void resetLedState();
 diff --git a/services/inputflinger/InputWindow.h b/services/inputflinger/InputWindow.h
-index e243637..4794b47 100644
+index e243637ed..4794b47cb 100644
 --- a/services/inputflinger/InputWindow.h
 +++ b/services/inputflinger/InputWindow.h
 @@ -101,7 +101,7 @@ struct InputWindowInfo {
@@ -2295,7 +2295,7 @@ index e243637..4794b47 100644
          LAST_SYSTEM_WINDOW      = 2999,
      };
 diff --git a/services/surfaceflinger/Android.mk b/services/surfaceflinger/Android.mk
-index ffda035..52d4a8b 100644
+index ffda035a9..52d4a8b39 100644
 --- a/services/surfaceflinger/Android.mk
 +++ b/services/surfaceflinger/Android.mk
 @@ -54,8 +54,15 @@ else
@@ -2346,7 +2346,7 @@ index ffda035..52d4a8b 100644
  
  ifneq ($(PRESENT_TIME_OFFSET_FROM_VSYNC_NS),)
 diff --git a/services/surfaceflinger/DispSync.cpp b/services/surfaceflinger/DispSync.cpp
-index 1a9820d..b45e00a 100644
+index 1a9820d95..b45e00acd 100644
 --- a/services/surfaceflinger/DispSync.cpp
 +++ b/services/surfaceflinger/DispSync.cpp
 @@ -22,6 +22,7 @@
@@ -2366,7 +2366,7 @@ index 1a9820d..b45e00a 100644
      reset();
      beginResync();
 diff --git a/services/surfaceflinger/DisplayDevice.cpp b/services/surfaceflinger/DisplayDevice.cpp
-index 5c2c0ad..1f2e554 100644
+index 5c2c0adf3..1f2e554bd 100644
 --- a/services/surfaceflinger/DisplayDevice.cpp
 +++ b/services/surfaceflinger/DisplayDevice.cpp
 @@ -166,7 +166,7 @@ DisplayDevice::DisplayDevice(
@@ -2379,7 +2379,7 @@ index 5c2c0ad..1f2e554 100644
  }
  
 diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
-index ef41658..138d20a 100644
+index ef416581a..138d20ae5 100644
 --- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
 +++ b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
 @@ -111,6 +111,10 @@ HWComposer::HWComposer(
@@ -2449,7 +2449,7 @@ index ef41658..138d20a 100644
          mHwc->dump(mHwc, buffer, SIZE);
          result.append(buffer);
 diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
-index 170e382..0f0c65d 100644
+index 170e38233..0f0c65d49 100644
 --- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
 +++ b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.h
 @@ -236,6 +236,9 @@ public:
@@ -2463,7 +2463,7 @@ index 170e382..0f0c65d 100644
  
      // Returns an iterator to the beginning of the layer list
 diff --git a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
-index 2190466..8c36d85 100644
+index 2190466ad..8c36d85ee 100644
 --- a/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
 +++ b/services/surfaceflinger/DisplayHardware/VirtualDisplaySurface.cpp
 @@ -344,6 +344,13 @@ status_t VirtualDisplaySurface::dequeueBuffer(Source source,
@@ -2481,7 +2481,7 @@ index 2190466..8c36d85 100644
              mSinkBufferWidth, mSinkBufferHeight, format, usage);
      if (result < 0)
 diff --git a/services/surfaceflinger/EventThread.cpp b/services/surfaceflinger/EventThread.cpp
-index dd88adb..2dacd87 100644
+index dd88adb36..2dacd871a 100644
 --- a/services/surfaceflinger/EventThread.cpp
 +++ b/services/surfaceflinger/EventThread.cpp
 @@ -20,6 +20,7 @@
@@ -2501,7 +2501,7 @@ index dd88adb..2dacd87 100644
  
  sp<EventThread::Connection> EventThread::createEventConnection() const {
 diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
-index 3ffa655..f8de24d 100644
+index 3ffa6554a..f8de24d97 100644
 --- a/services/surfaceflinger/Layer.cpp
 +++ b/services/surfaceflinger/Layer.cpp
 @@ -55,6 +55,7 @@
@@ -2542,7 +2542,7 @@ index 3ffa655..f8de24d 100644
          }
  
 diff --git a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
-index 847cdb3..b2821b7 100644
+index 847cdb388..b2821b7d8 100644
 --- a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
 +++ b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.cpp
 @@ -92,14 +92,29 @@ void GLES11RenderEngine::setViewportAndProjection(
@@ -2637,7 +2637,7 @@ index 847cdb3..b2821b7 100644
  
  void GLES11RenderEngine::setupFillWithColor(float r, float g, float b, float a) {
 diff --git a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.h b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.h
-index 4cd968d..1ef6596 100644
+index 4cd968d12..1ef659625 100644
 --- a/services/surfaceflinger/RenderEngine/GLES11RenderEngine.h
 +++ b/services/surfaceflinger/RenderEngine/GLES11RenderEngine.h
 @@ -40,8 +40,9 @@ class GLES11RenderEngine : public RenderEngine {
@@ -2653,7 +2653,7 @@ index 4cd968d..1ef6596 100644
  public:
      GLES11RenderEngine();
 diff --git a/services/surfaceflinger/RenderEngine/GLES20RenderEngine.cpp b/services/surfaceflinger/RenderEngine/GLES20RenderEngine.cpp
-index 406e611..e3cbc70 100644
+index 406e611ee..e3cbc7054 100644
 --- a/services/surfaceflinger/RenderEngine/GLES20RenderEngine.cpp
 +++ b/services/surfaceflinger/RenderEngine/GLES20RenderEngine.cpp
 @@ -208,27 +208,44 @@ void GLES20RenderEngine::disableBlending() {
@@ -2714,7 +2714,7 @@ index 406e611..e3cbc70 100644
  
  void GLES20RenderEngine::setupFillWithColor(float r, float g, float b, float a) {
 diff --git a/services/surfaceflinger/RenderEngine/GLES20RenderEngine.h b/services/surfaceflinger/RenderEngine/GLES20RenderEngine.h
-index 7c3f9b5..b268119 100644
+index 7c3f9b5d4..b2681198e 100644
 --- a/services/surfaceflinger/RenderEngine/GLES20RenderEngine.h
 +++ b/services/surfaceflinger/RenderEngine/GLES20RenderEngine.h
 @@ -55,8 +55,9 @@ class GLES20RenderEngine : public RenderEngine {
@@ -2730,7 +2730,7 @@ index 7c3f9b5..b268119 100644
  public:
      GLES20RenderEngine();
 diff --git a/services/surfaceflinger/RenderEngine/RenderEngine.cpp b/services/surfaceflinger/RenderEngine/RenderEngine.cpp
-index d6a032f..28b3319 100644
+index d6a032fb3..28b3319ee 100644
 --- a/services/surfaceflinger/RenderEngine/RenderEngine.cpp
 +++ b/services/surfaceflinger/RenderEngine/RenderEngine.cpp
 @@ -83,7 +83,6 @@ RenderEngine* RenderEngine::create(EGLDisplay display, int hwcFormat) {
@@ -2765,7 +2765,7 @@ index d6a032f..28b3319 100644
  
  status_t RenderEngine::BindImageAsFramebuffer::getStatus() const {
 diff --git a/services/surfaceflinger/RenderEngine/RenderEngine.h b/services/surfaceflinger/RenderEngine/RenderEngine.h
-index 0259881..5a5910a 100644
+index 0259881ee..5a5910ab8 100644
 --- a/services/surfaceflinger/RenderEngine/RenderEngine.h
 +++ b/services/surfaceflinger/RenderEngine/RenderEngine.h
 @@ -51,8 +51,8 @@ class RenderEngine {
@@ -2791,7 +2791,7 @@ index 0259881..5a5910a 100644
          int getStatus() const;
      };
 diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
-index 8e7e577..f1104a0 100644
+index 8e7e5772b..f1104a06d 100644
 --- a/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -27,6 +27,7 @@
@@ -2900,7 +2900,7 @@ index 8e7e577..f1104a0 100644
                              uint32_t* pixels = new uint32_t[reqWidth*reqHeight];
                              getRenderEngine().readPixels(0, 0, reqWidth, reqHeight, pixels);
 diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
-index b98924b..f23ba41 100644
+index b98924bb2..f23ba410e 100644
 --- a/services/surfaceflinger/SurfaceFlinger.h
 +++ b/services/surfaceflinger/SurfaceFlinger.h
 @@ -218,7 +218,8 @@ private:
@@ -2933,7 +2933,7 @@ index b98924b..f23ba41 100644
       * Feature prototyping
       */
 diff --git a/services/surfaceflinger/SurfaceFlingerConsumer.cpp b/services/surfaceflinger/SurfaceFlingerConsumer.cpp
-index e0e4c61..6f2520b 100644
+index e0e4c61e6..6f2520be2 100644
 --- a/services/surfaceflinger/SurfaceFlingerConsumer.cpp
 +++ b/services/surfaceflinger/SurfaceFlingerConsumer.cpp
 @@ -70,6 +70,14 @@ status_t SurfaceFlingerConsumer::updateTexImage(BufferRejecter* rejecter,
@@ -2967,7 +2967,7 @@ index e0e4c61..6f2520b 100644
  #ifdef USE_HWC2
      err = updateAndReleaseLocked(item, &mPendingRelease);
 diff --git a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
-index b32f652..3d9c80f 100644
+index b32f652e8..3d9c80fcf 100644
 --- a/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger_hwc1.cpp
 @@ -26,6 +26,7 @@
