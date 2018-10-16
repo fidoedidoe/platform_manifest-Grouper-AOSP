@@ -324,10 +324,17 @@ index 36092e5..57a9e2f 100644
  }
  /******************************************************************************
 diff --git a/decoder/impeg2d_dec_hdr.c b/decoder/impeg2d_dec_hdr.c
-index 4a84086..5a8b996 100644
+index 4a84086..f5ebafd 100644
 --- a/decoder/impeg2d_dec_hdr.c
 +++ b/decoder/impeg2d_dec_hdr.c
-@@ -173,7 +173,16 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
+@@ -166,14 +166,19 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
+             /* This is the first time we are reading the resolution */
+             ps_dec->u2_horizontal_size = u2_width;
+             ps_dec->u2_vertical_size = u2_height;
+-            if (0 == ps_dec->u4_frm_buf_stride)
+-            {
+-                ps_dec->u4_frm_buf_stride  = (UWORD32) (u2_width);
+-            }
          }
          else
          {
@@ -345,7 +352,31 @@ index 4a84086..5a8b996 100644
                              || (u2_height > ps_dec->u2_create_max_height))
              {
                  IMPEG2D_ERROR_CODES_T e_error = IMPEG2D_UNSUPPORTED_DIMENSIONS;
-@@ -280,6 +289,8 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
+@@ -183,6 +188,11 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
+ 
+                 return e_error;
+             }
++            else if((ps_dec->u2_horizontal_size < MIN_WIDTH)
++                            || (ps_dec->u2_vertical_size < MIN_HEIGHT))
++            {
++                return IMPEG2D_UNSUPPORTED_DIMENSIONS;
++            }
+             else
+             {
+                 /* The resolution has changed */
+@@ -200,6 +210,11 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
+         return e_error;
+     }
+ 
++    if((ps_dec->u2_horizontal_size < MIN_WIDTH)
++                    || (ps_dec->u2_vertical_size < MIN_HEIGHT))
++    {
++        return IMPEG2D_UNSUPPORTED_DIMENSIONS;
++    }
+ 
+     /*------------------------------------------------------------------------*/
+     /* Flush the following as they are not being used                         */
+@@ -280,6 +295,8 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_hdr(dec_state_t *ps_dec)
  IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_ext(dec_state_t *ps_dec)
  {
      stream_t *ps_stream;
@@ -354,7 +385,7 @@ index 4a84086..5a8b996 100644
  
      ps_stream = &ps_dec->s_bit_stream;
  
-@@ -329,11 +340,30 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_ext(dec_state_t *ps_dec)
+@@ -329,11 +346,30 @@ IMPEG2D_ERROR_CODES_T impeg2d_dec_seq_ext(dec_state_t *ps_dec)
      if(impeg2d_bit_stream_get(ps_stream,2) != 0x1)
          return IMPEG2D_CHROMA_FMT_NOT_SUP;
  
@@ -387,7 +418,7 @@ index 4a84086..5a8b996 100644
  
      /*-----------------------------------------------------------------------*/
      /* Flush the following as they are not used now                          */
-@@ -914,7 +944,7 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
+@@ -914,7 +950,7 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
                  {
                      pu1_buf = ps_dec->pu1_inp_bits_buf + s_job.i4_bistream_ofst;
                      impeg2d_bit_stream_init(&(ps_dec->s_bit_stream), pu1_buf,
@@ -396,7 +427,7 @@ index 4a84086..5a8b996 100644
                      i4_cur_row      = s_job.i2_start_mb_y;
                      ps_dec->i4_start_mb_y = s_job.i2_start_mb_y;
                      ps_dec->i4_end_mb_y = s_job.i2_end_mb_y;
-@@ -956,6 +986,11 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
+@@ -956,6 +992,11 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
              if ((IMPEG2D_ERROR_CODES_T)IVD_ERROR_NONE != e_error)
              {
                  impeg2d_next_start_code(ps_dec);
@@ -408,20 +439,20 @@ index 4a84086..5a8b996 100644
              }
          }
  
-@@ -975,23 +1010,30 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
+@@ -975,23 +1016,30 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)
  
              if(i4_continue_decode)
              {
 -                /* If the slice is from the same row, then continue decoding without dequeue */
 -                if((temp - 1) == i4_cur_row)
-+                if (0 != ps_dec->u2_num_mbs_left)
-                 {
+-                {
 -                    i4_dequeue_job = 0;
 -                    break;
 -                }
 -
 -                if(temp < ps_dec->i4_end_mb_y)
--                {
++                if (0 != ps_dec->u2_num_mbs_left)
+                 {
 -                    i4_cur_row = ps_dec->u2_mb_y;
 +                    /* If the slice is from the same row, then continue decoding without dequeue */
 +                    if((temp - 1) == i4_cur_row)
@@ -449,7 +480,7 @@ index 4a84086..5a8b996 100644
              }
              else
                  break;
-@@ -1068,6 +1110,7 @@ static WORD32 impeg2d_init_thread_dec_ctxt(dec_state_t *ps_dec,
+@@ -1068,6 +1116,7 @@ static WORD32 impeg2d_init_thread_dec_ctxt(dec_state_t *ps_dec,
      ps_dec_thd->u2_mb_x = 0;
      ps_dec_thd->u2_mb_y = 0;
      ps_dec_thd->u2_is_mpeg2 = ps_dec->u2_is_mpeg2;
@@ -457,7 +488,7 @@ index 4a84086..5a8b996 100644
      ps_dec_thd->u2_frame_width = ps_dec->u2_frame_width;
      ps_dec_thd->u2_frame_height = ps_dec->u2_frame_height;
      ps_dec_thd->u2_picture_width = ps_dec->u2_picture_width;
-@@ -1337,8 +1380,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
+@@ -1337,8 +1386,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
      WORD32 i;
      dec_state_multi_core_t *ps_dec_state_multi_core;
  
@@ -466,7 +497,7 @@ index 4a84086..5a8b996 100644
      dec_state_t *ps_dec_thd;
      WORD32 i4_status;
      WORD32 i4_min_mb_y;
-@@ -1346,7 +1387,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
+@@ -1346,7 +1393,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
  
      /* Resetting the MB address and MB coordinates at the start of the Frame */
      ps_dec->u2_mb_x = ps_dec->u2_mb_y = 0;
@@ -474,7 +505,7 @@ index 4a84086..5a8b996 100644
  
      ps_dec_state_multi_core = ps_dec->ps_dec_state_multi_core;
      impeg2d_get_slice_pos(ps_dec_state_multi_core);
-@@ -1390,8 +1430,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
+@@ -1390,8 +1436,6 @@ void impeg2d_dec_pic_data(dec_state_t *ps_dec)
          }
      }
  
@@ -483,7 +514,7 @@ index 4a84086..5a8b996 100644
  }
  /*******************************************************************************
  *
-@@ -1725,6 +1763,7 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
+@@ -1725,6 +1769,7 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
              else if((ps_dec->s_bit_stream.u4_offset < ps_dec->s_bit_stream.u4_max_offset)
                      && (u4_next_bits == PICTURE_START_CODE))
              {
@@ -491,7 +522,7 @@ index 4a84086..5a8b996 100644
  
                  e_error = impeg2d_dec_pic_hdr(ps_dec);
                  if ((IMPEG2D_ERROR_CODES_T)IVD_ERROR_NONE != e_error)
-@@ -1741,7 +1780,11 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
+@@ -1741,7 +1786,11 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
                  {
                      return e_error;
                  }
@@ -504,7 +535,7 @@ index 4a84086..5a8b996 100644
                  impeg2d_dec_pic_data(ps_dec);
                  impeg2d_post_pic_dec_proc(ps_dec);
                  u4_start_code_found = 1;
-@@ -1813,6 +1856,7 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
+@@ -1813,6 +1862,7 @@ IMPEG2D_ERROR_CODES_T impeg2d_process_video_bit_stream(dec_state_t *ps_dec)
              else if ((impeg2d_bit_stream_nxt(ps_stream,START_CODE_LEN) == PICTURE_START_CODE)
                      && (ps_dec->s_bit_stream.u4_offset < ps_dec->s_bit_stream.u4_max_offset))
              {
@@ -513,7 +544,7 @@ index 4a84086..5a8b996 100644
                  e_error = impeg2d_dec_pic_hdr(ps_dec);
                  if ((IMPEG2D_ERROR_CODES_T)IVD_ERROR_NONE != e_error)
 diff --git a/decoder/impeg2d_decoder.c b/decoder/impeg2d_decoder.c
-index fa88bb5..e4ff79c 100644
+index fa88bb5..8846066 100644
 --- a/decoder/impeg2d_decoder.c
 +++ b/decoder/impeg2d_decoder.c
 @@ -98,12 +98,17 @@ void impeg2d_dec_hdr(void *pv_dec,impeg2d_video_decode_ip_t *ps_ip,
@@ -535,7 +566,20 @@ index fa88bb5..e4ff79c 100644
  
      {
          {
-@@ -189,12 +194,15 @@ void impeg2d_dec_frm(void *pv_dec,impeg2d_video_decode_ip_t *ps_ip,
+@@ -148,6 +153,12 @@ void impeg2d_dec_hdr(void *pv_dec,impeg2d_video_decode_ip_t *ps_ip,
+             ps_op->s_ivd_video_decode_op_t.u4_num_bytes_consumed = ps_ip->s_ivd_video_decode_ip_t.u4_num_Bytes;
+         }
+         ps_op->s_ivd_video_decode_op_t.u4_frame_decoded_flag = 0;
++
++        /* Set the stride */
++        if (0 == ps_dec->u4_frm_buf_stride)
++        {
++            ps_dec->u4_frm_buf_stride = ps_dec->u2_horizontal_size;
++        }
+         /* MOD */
+         ps_dec->u2_header_done = 1;
+ 
+@@ -189,12 +200,15 @@ void impeg2d_dec_frm(void *pv_dec,impeg2d_video_decode_ip_t *ps_ip,
      ps_op->s_ivd_video_decode_op_t.u4_num_bytes_consumed = 0;
  
      IMPEG2D_FRM_NUM_SET();

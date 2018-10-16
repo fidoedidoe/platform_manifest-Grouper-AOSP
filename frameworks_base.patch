@@ -322,6 +322,369 @@ index a1103838280..aea843adbd4 100644
              }
          }
          return false;
+diff --git a/core/java/android/database/sqlite/SQLiteDatabase.java b/core/java/android/database/sqlite/SQLiteDatabase.java
+index 8e178320d66..f300b5be452 100644
+--- a/core/java/android/database/sqlite/SQLiteDatabase.java
++++ b/core/java/android/database/sqlite/SQLiteDatabase.java
+@@ -1658,7 +1658,8 @@ public final class SQLiteDatabase extends SQLiteClosable {
+         executeSql(sql, bindArgs);
+     }
+ 
+-    private int executeSql(String sql, Object[] bindArgs) throws SQLException {
++    /** {@hide} */
++    public int executeSql(String sql, Object[] bindArgs) throws SQLException {
+         acquireReference();
+         try {
+             if (DatabaseUtils.getSqlStatementType(sql) == DatabaseUtils.STATEMENT_ATTACH) {
+diff --git a/core/java/android/database/sqlite/SQLiteQueryBuilder.java b/core/java/android/database/sqlite/SQLiteQueryBuilder.java
+index 56cba795355..13ab6fb0797 100644
+--- a/core/java/android/database/sqlite/SQLiteQueryBuilder.java
++++ b/core/java/android/database/sqlite/SQLiteQueryBuilder.java
+@@ -16,17 +16,25 @@
+ 
+ package android.database.sqlite;
+ 
++import android.annotation.NonNull;
++import android.annotation.Nullable;
++import android.content.ContentValues;
+ import android.database.Cursor;
+ import android.database.DatabaseUtils;
++import android.os.Build;
+ import android.os.CancellationSignal;
+ import android.os.OperationCanceledException;
+ import android.provider.BaseColumns;
+ import android.text.TextUtils;
+ import android.util.Log;
+ 
++import libcore.util.EmptyArray;
++
++import java.util.Arrays;
+ import java.util.Iterator;
+ import java.util.Map;
+ import java.util.Map.Entry;
++import java.util.Objects;
+ import java.util.Set;
+ import java.util.regex.Pattern;
+ 
+@@ -95,9 +103,6 @@ public class SQLiteQueryBuilder
+         if (mWhereClause == null) {
+             mWhereClause = new StringBuilder(inWhere.length() + 16);
+         }
+-        if (mWhereClause.length() == 0) {
+-            mWhereClause.append('(');
+-        }
+         mWhereClause.append(inWhere);
+     }
+ 
+@@ -115,9 +120,6 @@ public class SQLiteQueryBuilder
+         if (mWhereClause == null) {
+             mWhereClause = new StringBuilder(inWhere.length() + 16);
+         }
+-        if (mWhereClause.length() == 0) {
+-            mWhereClause.append('(');
+-        }
+         DatabaseUtils.appendEscapedSQLString(mWhereClause, inWhere);
+     }
+ 
+@@ -376,6 +378,11 @@ public class SQLiteQueryBuilder
+             return null;
+         }
+ 
++        final String sql;
++        final String unwrappedSql = buildQuery(
++                projectionIn, selection, groupBy, having,
++                sortOrder, limit);
++
+         if (mStrict && selection != null && selection.length() > 0) {
+             // Validate the user-supplied selection to detect syntactic anomalies
+             // in the selection string that could indicate a SQL injection attempt.
+@@ -384,24 +391,166 @@ public class SQLiteQueryBuilder
+             // originally specified. An attacker cannot create an expression that
+             // would escape the SQL expression while maintaining balanced parentheses
+             // in both the wrapped and original forms.
+-            String sqlForValidation = buildQuery(projectionIn, "(" + selection + ")", groupBy,
++
++            // NOTE: The ordering of the below operations is important; we must
++            // execute the wrapped query to ensure the untrusted clause has been
++            // fully isolated.
++
++            // Validate the unwrapped query
++            db.validateSql(unwrappedSql, cancellationSignal); // will throw if query is invalid
++
++            // Execute wrapped query for extra protection
++            final String wrappedSql = buildQuery(projectionIn, wrap(selection), groupBy,
+                     having, sortOrder, limit);
+-            db.validateSql(sqlForValidation, cancellationSignal); // will throw if query is invalid
++            sql = wrappedSql;
++        } else {
++            // Execute unwrapped query
++            sql = unwrappedSql;
+         }
+ 
+-        String sql = buildQuery(
+-                projectionIn, selection, groupBy, having,
+-                sortOrder, limit);
+-
++        final String[] sqlArgs = selectionArgs;
+         if (Log.isLoggable(TAG, Log.DEBUG)) {
+-            Log.d(TAG, "Performing query: " + sql);
++            if (Build.IS_DEBUGGABLE) {
++                Log.d(TAG, sql + " with args " + Arrays.toString(sqlArgs));
++            } else {
++                Log.d(TAG, sql);
++            }
+         }
+         return db.rawQueryWithFactory(
+-                mFactory, sql, selectionArgs,
++                mFactory, sql, sqlArgs,
+                 SQLiteDatabase.findEditTable(mTables),
+                 cancellationSignal); // will throw if query is invalid
+     }
+ 
++    /**
++     * Perform an update by combining all current settings and the
++     * information passed into this method.
++     *
++     * @param db the database to update on
++     * @param selection A filter declaring which rows to return,
++     *   formatted as an SQL WHERE clause (excluding the WHERE
++     *   itself). Passing null will return all rows for the given URL.
++     * @param selectionArgs You may include ?s in selection, which
++     *   will be replaced by the values from selectionArgs, in order
++     *   that they appear in the selection. The values will be bound
++     *   as Strings.
++     * @return the number of rows updated
++     * @hide
++     */
++    public int update(@NonNull SQLiteDatabase db, @NonNull ContentValues values,
++            @Nullable String selection, @Nullable String[] selectionArgs) {
++        Objects.requireNonNull(mTables, "No tables defined");
++        Objects.requireNonNull(db, "No database defined");
++        Objects.requireNonNull(values, "No values defined");
++
++        final String sql;
++        final String unwrappedSql = buildUpdate(values, selection);
++
++        if (mStrict) {
++            // Validate the user-supplied selection to detect syntactic anomalies
++            // in the selection string that could indicate a SQL injection attempt.
++            // The idea is to ensure that the selection clause is a valid SQL expression
++            // by compiling it twice: once wrapped in parentheses and once as
++            // originally specified. An attacker cannot create an expression that
++            // would escape the SQL expression while maintaining balanced parentheses
++            // in both the wrapped and original forms.
++
++            // NOTE: The ordering of the below operations is important; we must
++            // execute the wrapped query to ensure the untrusted clause has been
++            // fully isolated.
++
++            // Validate the unwrapped query
++            db.validateSql(unwrappedSql, null); // will throw if query is invalid
++
++            // Execute wrapped query for extra protection
++            final String wrappedSql = buildUpdate(values, wrap(selection));
++            sql = wrappedSql;
++        } else {
++            // Execute unwrapped query
++            sql = unwrappedSql;
++        }
++
++        if (selectionArgs == null) {
++            selectionArgs = EmptyArray.STRING;
++        }
++        final String[] rawKeys = values.keySet().toArray(EmptyArray.STRING);
++        final int valuesLength = rawKeys.length;
++        final Object[] sqlArgs = new Object[valuesLength + selectionArgs.length];
++        for (int i = 0; i < sqlArgs.length; i++) {
++            if (i < valuesLength) {
++                sqlArgs[i] = values.get(rawKeys[i]);
++            } else {
++                sqlArgs[i] = selectionArgs[i - valuesLength];
++            }
++        }
++        if (Log.isLoggable(TAG, Log.DEBUG)) {
++            if (Build.IS_DEBUGGABLE) {
++                Log.d(TAG, sql + " with args " + Arrays.toString(sqlArgs));
++            } else {
++                Log.d(TAG, sql);
++            }
++        }
++        return db.executeSql(sql, sqlArgs);
++    }
++
++    /**
++     * Perform a delete by combining all current settings and the
++     * information passed into this method.
++     *
++     * @param db the database to delete on
++     * @param selection A filter declaring which rows to return,
++     *   formatted as an SQL WHERE clause (excluding the WHERE
++     *   itself). Passing null will return all rows for the given URL.
++     * @param selectionArgs You may include ?s in selection, which
++     *   will be replaced by the values from selectionArgs, in order
++     *   that they appear in the selection. The values will be bound
++     *   as Strings.
++     * @return the number of rows deleted
++     * @hide
++     */
++    public int delete(@NonNull SQLiteDatabase db, @Nullable String selection,
++            @Nullable String[] selectionArgs) {
++        Objects.requireNonNull(mTables, "No tables defined");
++        Objects.requireNonNull(db, "No database defined");
++
++        final String sql;
++        final String unwrappedSql = buildDelete(selection);
++
++        if (mStrict) {
++            // Validate the user-supplied selection to detect syntactic anomalies
++            // in the selection string that could indicate a SQL injection attempt.
++            // The idea is to ensure that the selection clause is a valid SQL expression
++            // by compiling it twice: once wrapped in parentheses and once as
++            // originally specified. An attacker cannot create an expression that
++            // would escape the SQL expression while maintaining balanced parentheses
++            // in both the wrapped and original forms.
++
++            // NOTE: The ordering of the below operations is important; we must
++            // execute the wrapped query to ensure the untrusted clause has been
++            // fully isolated.
++
++            // Validate the unwrapped query
++            db.validateSql(unwrappedSql, null); // will throw if query is invalid
++
++            // Execute wrapped query for extra protection
++            final String wrappedSql = buildDelete(wrap(selection));
++            sql = wrappedSql;
++        } else {
++            // Execute unwrapped query
++            sql = unwrappedSql;
++        }
++
++        final String[] sqlArgs = selectionArgs;
++        if (Log.isLoggable(TAG, Log.DEBUG)) {
++            if (Build.IS_DEBUGGABLE) {
++                Log.d(TAG, sql + " with args " + Arrays.toString(sqlArgs));
++            } else {
++                Log.d(TAG, sql);
++            }
++        }
++        return db.executeSql(sql, sqlArgs);
++    }
++
+     /**
+      * Construct a SELECT statement suitable for use in a group of
+      * SELECT statements that will be joined through UNION operators
+@@ -434,28 +583,10 @@ public class SQLiteQueryBuilder
+             String[] projectionIn, String selection, String groupBy,
+             String having, String sortOrder, String limit) {
+         String[] projection = computeProjection(projectionIn);
+-
+-        StringBuilder where = new StringBuilder();
+-        boolean hasBaseWhereClause = mWhereClause != null && mWhereClause.length() > 0;
+-
+-        if (hasBaseWhereClause) {
+-            where.append(mWhereClause.toString());
+-            where.append(')');
+-        }
+-
+-        // Tack on the user's selection, if present.
+-        if (selection != null && selection.length() > 0) {
+-            if (hasBaseWhereClause) {
+-                where.append(" AND ");
+-            }
+-
+-            where.append('(');
+-            where.append(selection);
+-            where.append(')');
+-        }
++        String where = computeWhere(selection);
+ 
+         return buildQueryString(
+-                mDistinct, mTables, projection, where.toString(),
++                mDistinct, mTables, projection, where,
+                 groupBy, having, sortOrder, limit);
+     }
+ 
+@@ -472,6 +603,42 @@ public class SQLiteQueryBuilder
+         return buildQuery(projectionIn, selection, groupBy, having, sortOrder, limit);
+     }
+ 
++    /** {@hide} */
++    public String buildUpdate(ContentValues values, String selection) {
++        if (values == null || values.size() == 0) {
++            throw new IllegalArgumentException("Empty values");
++        }
++
++        StringBuilder sql = new StringBuilder(120);
++        sql.append("UPDATE ");
++        sql.append(mTables);
++        sql.append(" SET ");
++
++        final String[] rawKeys = values.keySet().toArray(EmptyArray.STRING);
++        for (int i = 0; i < rawKeys.length; i++) {
++            if (i > 0) {
++                sql.append(',');
++            }
++            sql.append(rawKeys[i]);
++            sql.append("=?");
++        }
++
++        final String where = computeWhere(selection);
++        appendClause(sql, " WHERE ", where);
++        return sql.toString();
++    }
++
++    /** {@hide} */
++    public String buildDelete(String selection) {
++        StringBuilder sql = new StringBuilder(120);
++        sql.append("DELETE FROM ");
++        sql.append(mTables);
++
++        final String where = computeWhere(selection);
++        appendClause(sql, " WHERE ", where);
++        return sql.toString();
++    }
++
+     /**
+      * Construct a SELECT statement suitable for use in a group of
+      * SELECT statements that will be joined through UNION operators
+@@ -645,4 +812,37 @@ public class SQLiteQueryBuilder
+         }
+         return null;
+     }
++
++    private @Nullable String computeWhere(@Nullable String selection) {
++        final boolean hasInternal = !TextUtils.isEmpty(mWhereClause);
++        final boolean hasExternal = !TextUtils.isEmpty(selection);
++
++        if (hasInternal || hasExternal) {
++            final StringBuilder where = new StringBuilder();
++            if (hasInternal) {
++                where.append('(').append(mWhereClause).append(')');
++            }
++            if (hasInternal && hasExternal) {
++                where.append(" AND ");
++            }
++            if (hasExternal) {
++                where.append('(').append(selection).append(')');
++            }
++            return where.toString();
++        } else {
++            return null;
++        }
++    }
++
++    /**
++     * Wrap given argument in parenthesis, unless it's {@code null} or
++     * {@code ()}, in which case return it verbatim.
++     */
++    private @Nullable String wrap(@Nullable String arg) {
++        if (TextUtils.isEmpty(arg)) {
++            return arg;
++        } else {
++            return "(" + arg + ")";
++        }
++    }
+ }
 diff --git a/core/java/android/hardware/location/NanoAppFilter.java b/core/java/android/hardware/location/NanoAppFilter.java
 index bf35a3d6fbd..c44094908f3 100644
 --- a/core/java/android/hardware/location/NanoAppFilter.java
@@ -465,6 +828,338 @@ index 674f809ef0f..70dfef574ca 100644
              return true;
          }
          try {
+diff --git a/core/java/android/text/Layout.java b/core/java/android/text/Layout.java
+index 0bd5071b6ea..bc55ee798e2 100644
+--- a/core/java/android/text/Layout.java
++++ b/core/java/android/text/Layout.java
+@@ -824,6 +824,32 @@ public abstract class Layout {
+         return TextUtils.packRangeInLong(0, getLineEnd(line));
+     }
+ 
++    /**
++     * Checks if the trailing BiDi level should be used for an offset
++     *
++     * This method is useful when the offset is at the BiDi level transition point and determine
++     * which run need to be used. For example, let's think about following input: (L* denotes
++     * Left-to-Right characters, R* denotes Right-to-Left characters.)
++     * Input (Logical Order): L1 L2 L3 R1 R2 R3 L4 L5 L6
++     * Input (Display Order): L1 L2 L3 R3 R2 R1 L4 L5 L6
++     *
++     * Then, think about selecting the range (3, 6). The offset=3 and offset=6 are ambiguous here
++     * since they are at the BiDi transition point.  In Android, the offset is considered to be
++     * associated with the trailing run if the BiDi level of the trailing run is higher than of the
++     * previous run.  In this case, the BiDi level of the input text is as follows:
++     *
++     * Input (Logical Order): L1 L2 L3 R1 R2 R3 L4 L5 L6
++     *              BiDi Run: [ Run 0 ][ Run 1 ][ Run 2 ]
++     *            BiDi Level:  0  0  0  1  1  1  0  0  0
++     *
++     * Thus, offset = 3 is part of Run 1 and this method returns true for offset = 3, since the BiDi
++     * level of Run 1 is higher than the level of Run 0.  Similarly, the offset = 6 is a part of Run
++     * 1 and this method returns false for the offset = 6 since the BiDi level of Run 1 is higher
++     * than the level of Run 2.
++     *
++     * @returns true if offset is at the BiDi level transition point and trailing BiDi level is
++     *          higher than previous BiDi level. See above for the detail.
++     */
+     private boolean primaryIsTrailingPrevious(int offset) {
+         int line = getLineForOffset(offset);
+         int lineStart = getLineStart(line);
+@@ -873,6 +899,95 @@ public abstract class Layout {
+         return levelBefore < levelAt;
+     }
+ 
++    /**
++     * Computes in linear time the results of calling
++     * #getHorizontal for all offsets on a line.
++     * @param line The line giving the offsets we compute information for
++     * @param clamped Whether to clamp the results to the width of the layout
++     * @param primary Whether the results should be the primary or the secondary horizontal
++     * @return The array of results, indexed from 0, where 0 corresponds to the line start offset
++     */
++    private float[] getLineHorizontals(int line, boolean clamped, boolean primary) {
++        int start = getLineStart(line);
++        int end = getLineEnd(line);
++        int dir = getParagraphDirection(line);
++        boolean hasTab = getLineContainsTab(line);
++        Directions directions = getLineDirections(line);
++
++        TabStops tabStops = null;
++        if (hasTab && mText instanceof Spanned) {
++            // Just checking this line should be good enough, tabs should be
++            // consistent across all lines in a paragraph.
++            TabStopSpan[] tabs = getParagraphSpans((Spanned) mText, start, end, TabStopSpan.class);
++            if (tabs.length > 0) {
++                tabStops = new TabStops(TAB_INCREMENT, tabs); // XXX should reuse
++            }
++        }
++
++        TextLine tl = TextLine.obtain();
++        tl.set(mPaint, mText, start, end, dir, directions, hasTab, tabStops);
++        boolean[] trailings = primaryIsTrailingPreviousAllLineOffsets(line);
++        if (!primary) {
++            for (int offset = 0; offset < trailings.length; ++offset) {
++                trailings[offset] = !trailings[offset];
++            }
++        }
++        float[] wid = tl.measureAllOffsets(trailings, null);
++        TextLine.recycle(tl);
++
++        if (clamped) {
++            for (int offset = 0; offset <= wid.length; ++offset) {
++                if (wid[offset] > mWidth) {
++                    wid[offset] = mWidth;
++                }
++            }
++        }
++        int left = getParagraphLeft(line);
++        int right = getParagraphRight(line);
++
++        int lineStartPos = getLineStartPos(line, left, right);
++        float[] horizontal = new float[end - start + 1];
++        for (int offset = 0; offset < horizontal.length; ++offset) {
++            horizontal[offset] = lineStartPos + wid[offset];
++        }
++        return horizontal;
++    }
++
++    /**
++     * Computes in linear time the results of calling
++     * #primaryIsTrailingPrevious for all offsets on a line.
++     * @param line The line giving the offsets we compute the information for
++     * @return The array of results, indexed from 0, where 0 corresponds to the line start offset
++     */
++    private boolean[] primaryIsTrailingPreviousAllLineOffsets(int line) {
++        int lineStart = getLineStart(line);
++        int lineEnd = getLineEnd(line);
++        int[] runs = getLineDirections(line).mDirections;
++
++        boolean[] trailing = new boolean[lineEnd - lineStart + 1];
++
++        byte[] level = new byte[lineEnd - lineStart + 1];
++        for (int i = 0; i < runs.length; i += 2) {
++            int start = lineStart + runs[i];
++            int limit = start + (runs[i + 1] & RUN_LENGTH_MASK);
++            if (limit > lineEnd) {
++                limit = lineEnd;
++            }
++            level[limit - lineStart - 1] =
++                    (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
++        }
++
++        for (int i = 0; i < runs.length; i += 2) {
++            int start = lineStart + runs[i];
++            byte currentLevel = (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
++            trailing[start - lineStart] = currentLevel > (start == lineStart
++                    ? (getParagraphDirection(line) == 1 ? 0 : 1)
++                    : level[start - lineStart - 1]);
++        }
++
++        return trailing;
++    }
++
+     /**
+      * Get the primary horizontal position for the specified text offset.
+      * This is the location where a new character would be inserted in
+@@ -1176,7 +1291,9 @@ public abstract class Layout {
+                     !isRtlCharAt(lineEndOffset - 1)) + lineStartOffset;
+         }
+         int best = lineStartOffset;
+-        float bestdist = Math.abs(getHorizontal(best, primary) - horiz);
++	final HorizontalMeasurementProvider horizontal =
++              new HorizontalMeasurementProvider(line);
++	float bestdist = Math.abs(horizontal.get(best) - horiz);
+ 
+         for (int i = 0; i < dirs.mDirections.length; i += 2) {
+             int here = lineStartOffset + dirs.mDirections[i];
+@@ -1192,7 +1309,7 @@ public abstract class Layout {
+                 guess = (high + low) / 2;
+                 int adguess = getOffsetAtStartOf(guess);
+ 
+-                if (getHorizontal(adguess, primary) * swap >= horiz * swap)
++                if (horizontal.get(adguess) * swap >= horiz * swap)
+                     high = guess;
+                 else
+                     low = guess;
+@@ -1205,9 +1322,9 @@ public abstract class Layout {
+                 int aft = tl.getOffsetToLeftRightOf(low - lineStartOffset, isRtl) + lineStartOffset;
+                 low = tl.getOffsetToLeftRightOf(aft - lineStartOffset, !isRtl) + lineStartOffset;
+                 if (low >= here && low < there) {
+-                    float dist = Math.abs(getHorizontal(low, primary) - horiz);
++                    float dist = Math.abs(horizontal.get(low) - horiz);
+                     if (aft < there) {
+-                        float other = Math.abs(getHorizontal(aft, primary) - horiz);
++                        float other = Math.abs(horizontal.get(aft) - horiz);
+ 
+                         if (other < dist) {
+                             dist = other;
+@@ -1222,7 +1339,7 @@ public abstract class Layout {
+                 }
+             }
+ 
+-            float dist = Math.abs(getHorizontal(here, primary) - horiz);
++            float dist = Math.abs(horizontal.get(here) - horiz);
+ 
+             if (dist < bestdist) {
+                 bestdist = dist;
+@@ -1230,7 +1347,7 @@ public abstract class Layout {
+             }
+         }
+ 
+-        float dist = Math.abs(getHorizontal(max, primary) - horiz);
++        float dist = Math.abs(horizontal.get(max) - horiz);
+ 
+         if (dist <= bestdist) {
+             bestdist = dist;
+@@ -1241,6 +1358,45 @@ public abstract class Layout {
+         return best;
+     }
+ 
++    /**
++     * Responds to #getHorizontal queries, by selecting the better strategy between:
++     * - calling #getHorizontal explicitly for each query
++     * - precomputing all #getHorizontal measurements, and responding to any query in constant time
++     * The first strategy is used for LTR-only text, while the second is used for all other cases.
++     * The class is currently only used in #getOffsetForHorizontal, so reuse with care in other
++     * contexts.
++     */
++    private class HorizontalMeasurementProvider {
++        private final int mLine;
++
++        private float[] mHorizontals;
++        private int mLineStartOffset;
++
++        HorizontalMeasurementProvider(final int line) {
++            mLine = line;
++            init();
++        }
++
++        private void init() {
++            final Directions dirs = getLineDirections(mLine);
++            if (dirs == DIRS_ALL_LEFT_TO_RIGHT) {
++                return;
++            }
++
++            mHorizontals = getLineHorizontals(mLine, false, true);
++            mLineStartOffset = getLineStart(mLine);
++        }
++
++        float get(final int offset) {
++            if (mHorizontals == null || offset < mLineStartOffset
++                    || offset >= mLineStartOffset + mHorizontals.length) {
++                return getPrimaryHorizontal(offset);
++            } else {
++                return mHorizontals[offset - mLineStartOffset];
++            }
++        }
++    }
++
+     /**
+      * Return the text offset after the last character on the specified line.
+      */
+diff --git a/core/java/android/text/TextLine.java b/core/java/android/text/TextLine.java
+index 2a52961984f..79333563af1 100644
+--- a/core/java/android/text/TextLine.java
++++ b/core/java/android/text/TextLine.java
+@@ -338,6 +338,98 @@ class TextLine {
+         return h;
+     }
+ 
++    /**
++     * @see #measure(int, boolean, FontMetricsInt)
++     * @return The measure results for all possible offsets
++     */
++    float[] measureAllOffsets(boolean[] trailing, FontMetricsInt fmi) {
++        float[] measurement = new float[mLen + 1];
++
++        int[] target = new int[mLen + 1];
++        for (int offset = 0; offset < target.length; ++offset) {
++            target[offset] = trailing[offset] ? offset - 1 : offset;
++        }
++        if (target[0] < 0) {
++            measurement[0] = 0;
++        }
++
++        float h = 0;
++
++        if (!mHasTabs) {
++            if (mDirections == Layout.DIRS_ALL_LEFT_TO_RIGHT) {
++                for (int offset = 0; offset <= mLen; ++offset) {
++                    measurement[offset] = measureRun(0, offset, mLen, false, fmi);
++                }
++                return measurement;
++            }
++            if (mDirections == Layout.DIRS_ALL_RIGHT_TO_LEFT) {
++                for (int offset = 0; offset <= mLen; ++offset) {
++                    measurement[offset] = measureRun(0, offset, mLen, true, fmi);
++                }
++                return measurement;
++            }
++        }
++
++        char[] chars = mChars;
++        int[] runs = mDirections.mDirections;
++        for (int i = 0; i < runs.length; i += 2) {
++            int runStart = runs[i];
++            int runLimit = runStart + (runs[i + 1] & Layout.RUN_LENGTH_MASK);
++            if (runLimit > mLen) {
++                runLimit = mLen;
++            }
++            boolean runIsRtl = (runs[i + 1] & Layout.RUN_RTL_FLAG) != 0;
++
++            int segstart = runStart;
++            for (int j = mHasTabs ? runStart : runLimit; j <= runLimit; ++j) {
++                int codept = 0;
++                if (mHasTabs && j < runLimit) {
++                    codept = chars[j];
++                    if (codept >= 0xD800 && codept < 0xDC00 && j + 1 < runLimit) {
++                        codept = Character.codePointAt(chars, j);
++                        if (codept > 0xFFFF) {
++                            ++j;
++                            continue;
++                        }
++                    }
++                }
++
++                if (j == runLimit || codept == '\t') {
++                    float oldh = h;
++                    boolean advance = (mDir == Layout.DIR_RIGHT_TO_LEFT) == runIsRtl;
++                    float w = measureRun(segstart, j, j, runIsRtl, fmi);
++                    h += advance ? w : -w;
++
++                    float baseh = advance ? oldh : h;
++                    FontMetricsInt crtfmi = advance ? fmi : null;
++                    for (int offset = segstart; offset <= j && offset <= mLen; ++offset) {
++                        if (target[offset] >= segstart && target[offset] < j) {
++                            measurement[offset] =
++                                    baseh + measureRun(segstart, offset, j, runIsRtl, crtfmi);
++                        }
++                    }
++
++                    if (codept == '\t') {
++                        if (target[j] == j) {
++                            measurement[j] = h;
++                        }
++                        h = mDir * nextTab(h * mDir);
++                        if (target[j + 1] == j) {
++                            measurement[j + 1] =  h;
++                        }
++                    }
++
++                    segstart = j + 1;
++                }
++            }
++        }
++        if (target[mLen] == mLen) {
++            measurement[mLen] = h;
++        }
++
++        return measurement;
++    }
++
+     /**
+      * Draws a unidirectional (but possibly multi-styled) run of text.
+      *
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
 index 395f73844b0..169f7e170dd 100644
 --- a/core/java/android/view/WindowManager.java

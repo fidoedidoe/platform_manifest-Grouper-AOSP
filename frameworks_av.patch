@@ -3065,6 +3065,25 @@ index b3a11e0a5..cd543c859 100644
      void                sendStoreAdded(MtpStorageID id);
      void                sendStoreRemoved(MtpStorageID id);
      void                sendEvent(MtpEventCode code, uint32_t param1);
+diff --git a/media/ndk/NdkMediaCodec.cpp b/media/ndk/NdkMediaCodec.cpp
+index 50b490d45..73e733e77 100644
+--- a/media/ndk/NdkMediaCodec.cpp
++++ b/media/ndk/NdkMediaCodec.cpp
+@@ -447,7 +447,13 @@ AMediaCodecCryptoInfo *AMediaCodecCryptoInfo_new(
+         size_t *encryptedbytes) {
+ 
+     // size needed to store all the crypto data
+-    size_t cryptosize = sizeof(AMediaCodecCryptoInfo) + sizeof(size_t) * numsubsamples * 2;
++    size_t cryptosize;
++    // = sizeof(AMediaCodecCryptoInfo) + sizeof(size_t) * numsubsamples * 2;
++    if (__builtin_mul_overflow(sizeof(size_t) * 2, numsubsamples, &cryptosize) ||
++            __builtin_add_overflow(cryptosize, sizeof(AMediaCodecCryptoInfo), &cryptosize)) {
++        ALOGE("crypto size overflow");
++        return NULL;
++    }
+     AMediaCodecCryptoInfo *ret = (AMediaCodecCryptoInfo*) malloc(cryptosize);
+     if (!ret) {
+         ALOGE("couldn't allocate %zu bytes", cryptosize);
 diff --git a/services/audioflinger/AudioFlinger.cpp b/services/audioflinger/AudioFlinger.cpp
 index fec3a57c1..4aad2c219 100644
 --- a/services/audioflinger/AudioFlinger.cpp

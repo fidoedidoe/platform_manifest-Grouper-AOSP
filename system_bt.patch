@@ -1,3 +1,24 @@
+diff --git a/bta/av/bta_av_act.c b/bta/av/bta_av_act.c
+index 9cc802f0a..5aef52823 100644
+--- a/bta/av/bta_av_act.c
++++ b/bta/av/bta_av_act.c
+@@ -800,11 +800,15 @@ tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE  *p_rc_rsp, tBTA_AV_RC_MSG *p_ms
+         case AVRC_PDU_GET_CAPABILITIES:
+             /* process GetCapabilities command without reporting the event to app */
+             evt = 0;
++            if (p_vendor->vendor_len != 5) {
++                p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
++                break;
++            }
+             u8 = *(p_vendor->p_vendor_data + 4);
+             p = p_vendor->p_vendor_data + 2;
+             p_rc_rsp->get_caps.capability_id = u8;
+             BE_STREAM_TO_UINT16 (u16, p);
+-            if ((u16 != 1) || (p_vendor->vendor_len != 5))
++            if (u16 != 1) 
+             {
+                 p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
+             }
 diff --git a/bta/dm/bta_dm_act.c b/bta/dm/bta_dm_act.c
 index 1bf741d92..a8d92e0d3 100644
 --- a/bta/dm/bta_dm_act.c
@@ -331,8 +352,64 @@ index 98ef5f755..52010541d 100644
  
              p_pkt->offset = L2CAP_MIN_OFFSET;
              p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
+diff --git a/stack/avrc/avrc_api.c b/stack/avrc/avrc_api.c
+index 77ca7d45e..dc0ce4661 100644
+--- a/stack/avrc/avrc_api.c
++++ b/stack/avrc/avrc_api.c
+@@ -563,7 +563,20 @@ static void avrc_msg_cback(UINT8 handle, UINT8 label, UINT8 cr,
+ 
+     p_data  = (UINT8 *)(p_pkt+1) + p_pkt->offset;
+     memset(&msg, 0, sizeof(tAVRC_MSG) );
+-    {
++
++    if (p_pkt->layer_specific == AVCT_DATA_BROWSE) {
++        opcode = AVRC_OP_BROWSE;
++        msg.browse.hdr.ctype = cr;
++        msg.browse.p_browse_data = p_data;
++        msg.browse.browse_len = p_pkt->len;
++        msg.browse.p_browse_pkt = p_pkt;
++    } else {
++        if (p_pkt->len < AVRC_AVC_HDR_SIZE) {
++            AVRC_TRACE_WARNING("%s: message length %d too short: must be at least %d",
++                                 __func__, p_pkt->len, AVRC_AVC_HDR_SIZE);
++            osi_free(p_pkt);
++            return;
++        }
+         msg.hdr.ctype           = p_data[0] & AVRC_CTYPE_MASK;
+         AVRC_TRACE_DEBUG("avrc_msg_cback handle:%d, ctype:%d, offset:%d, len: %d",
+                 handle, msg.hdr.ctype, p_pkt->offset, p_pkt->len);
+@@ -602,6 +615,14 @@ static void avrc_msg_cback(UINT8 handle, UINT8 label, UINT8 cr,
+             else
+             {
+                 /* parse response */
++	        if (p_pkt->len < AVRC_OP_UNIT_INFO_RSP_LEN) {
++                    AVRC_TRACE_WARNING(
++                         "%s: message length %d too short: must be at least %d",
++                         __func__, p_pkt->len, AVRC_OP_UNIT_INFO_RSP_LEN);
++                    drop = true;
++                    p_drop_msg = "UNIT_INFO_RSP too short";
++                    break;
++                }
+                 p_data += 4; /* 3 bytes: ctype, subunit*, opcode + octet 3 (is 7)*/
+                 msg.unit.unit_type  = (*p_data & AVRC_SUBTYPE_MASK) >> AVRC_SUBTYPE_SHIFT;
+                 msg.unit.unit       = *p_data & AVRC_SUBID_MASK;
+@@ -633,6 +654,14 @@ static void avrc_msg_cback(UINT8 handle, UINT8 label, UINT8 cr,
+             else
+             {
+                 /* parse response */
++	        if (p_pkt->len < AVRC_OP_SUB_UNIT_INFO_RSP_LEN) {
++                    AVRC_TRACE_WARNING(
++                        "%s: message length %d too short: must be at least %d",
++                        __func__, p_pkt->len, AVRC_OP_SUB_UNIT_INFO_RSP_LEN);
++                    drop = true;
++                    p_drop_msg = "SUB_UNIT_INFO_RSP too short";
++                    break;
++                }
+                 p_data += AVRC_AVC_HDR_SIZE; /* 3 bytes: ctype, subunit*, opcode */
+                 msg.sub.page    = (*p_data++ >> AVRC_SUB_PAGE_SHIFT) & AVRC_SUB_PAGE_MASK;
+                 xx      = 0;
 diff --git a/stack/avrc/avrc_pars_ct.c b/stack/avrc/avrc_pars_ct.c
-index 63cc38407..1818c522f 100644
+index 63cc38407..699cd0438 100644
 --- a/stack/avrc/avrc_pars_ct.c
 +++ b/stack/avrc/avrc_pars_ct.c
 @@ -22,6 +22,7 @@
@@ -367,7 +444,19 @@ index 63cc38407..1818c522f 100644
          for(int xx = 0; xx < p_result->list_app_attr.num_attr; xx++)
          {
              BE_STREAM_TO_UINT8(p_result->list_app_attr.attrs[xx], p);
-@@ -258,6 +269,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -240,6 +251,11 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+             break;
+         }
+         BE_STREAM_TO_UINT8(p_result->list_app_values.num_val, p);
++        if (p_result->list_app_values.num_val > AVRC_MAX_APP_ATTR_SIZE) {
++            android_errorWriteLog(0x534e4554, "78526423");
++            p_result->list_app_values.num_val = AVRC_MAX_APP_ATTR_SIZE;
++        }
++
+         AVRC_TRACE_DEBUG("%s value count = %d ", __func__, p_result->list_app_values.num_val);
+         for(int xx = 0; xx < p_result->list_app_values.num_val; xx++)
+         {
+@@ -258,6 +274,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
          tAVRC_APP_SETTING *app_sett =
              (tAVRC_APP_SETTING*)osi_malloc(p_result->get_cur_app_val.num_val*sizeof(tAVRC_APP_SETTING));
          AVRC_TRACE_DEBUG("%s attr count = %d ", __func__, p_result->get_cur_app_val.num_val);
@@ -380,7 +469,7 @@ index 63cc38407..1818c522f 100644
          for (int xx = 0; xx < p_result->get_cur_app_val.num_val; xx++)
          {
              BE_STREAM_TO_UINT8(app_sett[xx].attr_id, p);
-@@ -269,7 +286,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -269,7 +291,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
  
      case AVRC_PDU_GET_PLAYER_APP_ATTR_TEXT:
      {
@@ -388,7 +477,7 @@ index 63cc38407..1818c522f 100644
          UINT8                    num_attrs;
  
          if (len == 0)
-@@ -278,9 +294,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -278,9 +299,12 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
              break;
          }
          BE_STREAM_TO_UINT8(num_attrs, p);
@@ -402,7 +491,7 @@ index 63cc38407..1818c522f 100644
          for (int xx = 0; xx < num_attrs; xx++)
          {
              BE_STREAM_TO_UINT8(p_result->get_app_attr_txt.p_attrs[xx].attr_id, p);
-@@ -300,7 +319,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -300,7 +324,6 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
  
      case AVRC_PDU_GET_PLAYER_APP_VALUE_TEXT:
      {
@@ -410,7 +499,7 @@ index 63cc38407..1818c522f 100644
          UINT8                    num_vals;
  
          if (len == 0)
-@@ -309,10 +327,13 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
+@@ -309,10 +332,13 @@ static tAVRC_STS avrc_ctrl_pars_vendor_rsp(
              break;
          }
          BE_STREAM_TO_UINT8(num_vals, p);
@@ -833,6 +922,24 @@ index 11ef79c83..c2cdb885d 100644
      UNUSED(len);
  
      if (op_code == GATT_REQ_READ_BLOB)
+diff --git a/stack/include/rfcdefs.h b/stack/include/rfcdefs.h
+index dcc37bc72..1c751f3f5 100644
+--- a/stack/include/rfcdefs.h
++++ b/stack/include/rfcdefs.h
+@@ -90,13 +90,6 @@
+     pf   = (*p_data++ & RFCOMM_PF_MASK) >> RFCOMM_PF_OFFSET;\
+ }
+ 
+-#define RFCOMM_PARSE_LEN_FIELD(ea, length, p_data)          \
+-{                                                           \
+-    ea = (*p_data & RFCOMM_EA);                             \
+-    length = (*p_data++ >> RFCOMM_SHIFT_LENGTH1);           \
+-    if (!ea) length += (*p_data++ << RFCOMM_SHIFT_LENGTH2); \
+-}
+-
+ #define RFCOMM_FRAME_IS_CMD(initiator, cr)                  \
+     (( (initiator) && !(cr)) || (!(initiator) &&  (cr)))
+ 
 diff --git a/stack/l2cap/l2c_ble.c b/stack/l2cap/l2c_ble.c
 index 95de4e34c..b2f196c3c 100644
 --- a/stack/l2cap/l2c_ble.c
@@ -1205,7 +1312,7 @@ index 7e8b3cb6f..cd7edfe1f 100644
      fragment->len = client->remote_mtu;
      memcpy(fragment->data + fragment->offset, bt_packet->data + bt_packet->offset, client->remote_mtu);
 diff --git a/stack/mcap/mca_cact.c b/stack/mcap/mca_cact.c
-index 583a34215..483169ad6 100644
+index 583a34215..f1d76be5f 100644
 --- a/stack/mcap/mca_cact.c
 +++ b/stack/mcap/mca_cact.c
 @@ -122,7 +122,7 @@ void mca_ccb_snd_req(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
@@ -1226,6 +1333,22 @@ index 583a34215..483169ad6 100644
  
      MCA_TRACE_DEBUG("%s cong=%d req=%d", __func__, p_ccb->cong, p_msg->op_code);
      /* assume that API functions verified the parameters */
+@@ -269,9 +269,14 @@ void mca_ccb_hdl_req(tMCA_CCB *p_ccb, tMCA_CCB_EVT *p_data)
+     p_rx_msg = (tMCA_CCB_MSG *)p_pkt;
+     p = (UINT8 *)(p_pkt + 1) + p_pkt->offset;
+     evt_data.hdr.op_code = *p++;
+-    BE_STREAM_TO_UINT16 (evt_data.hdr.mdl_id, p);
+     reject_opcode = evt_data.hdr.op_code+1;
+ 
++    if (p_pkt->len >= 3) {
++        BE_STREAM_TO_UINT16(evt_data.hdr.mdl_id, p);
++    } else {
++        evt_data.hdr.mdl_id = 0;
++    }
++
+     MCA_TRACE_DEBUG ("received mdl id: %d ", evt_data.hdr.mdl_id);
+     if (p_ccb->status == MCA_CCB_STAT_PENDING)
+     {
 diff --git a/stack/pan/pan_main.c b/stack/pan/pan_main.c
 index 5c3a36739..9c90e5834 100644
 --- a/stack/pan/pan_main.c
@@ -1298,8 +1421,70 @@ index 5c3a36739..9c90e5834 100644
      return;
  }
  
+diff --git a/stack/rfcomm/rfc_ts_frames.c b/stack/rfcomm/rfc_ts_frames.c
+index 739469f64..68a238414 100644
+--- a/stack/rfcomm/rfc_ts_frames.c
++++ b/stack/rfcomm/rfc_ts_frames.c
+@@ -555,7 +555,15 @@ UINT8 rfc_parse_data (tRFC_MCB *p_mcb, MX_FRAME *p_frame, BT_HDR *p_buf)
+         return (RFC_EVENT_BAD_FRAME);
+     }
+     RFCOMM_PARSE_TYPE_FIELD (p_frame->type, p_frame->pf, p_data);
+-    RFCOMM_PARSE_LEN_FIELD (eal, len, p_data);
++
++    eal = *(p_data)&RFCOMM_EA;
++    len = *(p_data)++ >> RFCOMM_SHIFT_LENGTH1;
++    if (eal == 0 && p_buf->len > RFCOMM_CTRL_FRAME_LEN) {
++        len += (*(p_data)++ << RFCOMM_SHIFT_LENGTH2);
++    } else if (eal == 0) {
++        RFCOMM_TRACE_ERROR("Bad Length when EAL = 0: %d", p_buf->len);
++        return RFC_EVENT_BAD_FRAME;
++    }
+ 
+     p_buf->len      -= (3 + !ead + !eal + 1);  /* Additional 1 for FCS */
+     p_buf->offset   += (3 + !ead + !eal);
+@@ -670,6 +678,13 @@ void rfc_process_mx_message (tRFC_MCB *p_mcb, BT_HDR *p_buf)
+     UINT8        ea, cr, mx_len;
+     BOOLEAN      is_command;
+ 
++    if (length < 2) {
++        RFCOMM_TRACE_ERROR(
++            "%s: Illegal MX Frame len when reading EA, C/R. len:%d < 2", __func__,
++            length);
++        osi_free(p_buf);
++        return;
++    }
+     p_rx_frame->ea   = *p_data & RFCOMM_EA;
+     p_rx_frame->cr   = (*p_data & RFCOMM_CR_MASK) >> RFCOMM_SHIFT_CR;
+     p_rx_frame->type = *p_data++ & ~(RFCOMM_CR_MASK | RFCOMM_EA_MASK);
+@@ -692,6 +707,12 @@ void rfc_process_mx_message (tRFC_MCB *p_mcb, BT_HDR *p_buf)
+ 
+     if (!ea)
+     {
++       if (length < 1) {
++            RFCOMM_TRACE_ERROR("%s: Illegal MX Frame when EA = 0. len:%d < 1",
++                         __func__, length);
++            osi_free(p_buf);
++            return;
++        }
+         mx_len += *p_data++ << RFCOMM_SHIFT_LENGTH2;
+         length --;
+     }
+@@ -768,7 +789,12 @@ void rfc_process_mx_message (tRFC_MCB *p_mcb, BT_HDR *p_buf)
+         return;
+ 
+     case RFCOMM_MX_MSC:
+-
++        if (length != RFCOMM_MX_MSC_LEN_WITH_BREAK &&
++              length != RFCOMM_MX_MSC_LEN_NO_BREAK) {
++            RFCOMM_TRACE_ERROR("%s: Illegal MX MSC Frame len:%d", __func__, length);
++            osi_free(p_buf);
++            return;
++        }
+         ea                   = *p_data & RFCOMM_EA;
+         cr                   = (*p_data & RFCOMM_CR_MASK) >> RFCOMM_SHIFT_CR;
+         p_rx_frame->dlci = *p_data++ >> RFCOMM_SHIFT_DLCI;
 diff --git a/stack/sdp/sdp_discovery.c b/stack/sdp/sdp_discovery.c
-index ec20689e3..7a5333eda 100644
+index ec20689e3..08609a733 100644
 --- a/stack/sdp/sdp_discovery.c
 +++ b/stack/sdp/sdp_discovery.c
 @@ -29,6 +29,7 @@
@@ -1401,7 +1586,29 @@ index ec20689e3..7a5333eda 100644
      }
  }
  
-@@ -395,7 +406,8 @@ static void sdp_copy_raw_data (tCONN_CB *p_ccb, BOOLEAN offset)
+@@ -365,11 +376,17 @@ static void sdp_copy_raw_data (tCONN_CB *p_ccb, BOOLEAN offset)
+         list_len = p_ccb->list_len;
+         p = &p_ccb->rsp_list[0];
+ 
+-        if(offset)
+-        {
++        if(offset) {
++            cpy_len -= 1;
+             type = *p++;
+-            p = sdpu_get_len_from_type (p, type, &list_len);
+-        }
++            uint8_t* old_p = p;
++            p = sdpu_get_len_from_type(p, type, &list_len);
++            if ((int)cpy_len < (p - old_p)) {
++                SDP_TRACE_WARNING("%s: no bytes left for data", __func__);
++                return;
++            }
++            cpy_len -= (p - old_p);
++	}
+         if(list_len && list_len < cpy_len )
+         {
+             cpy_len = list_len;
+@@ -395,7 +412,8 @@ static void sdp_copy_raw_data (tCONN_CB *p_ccb, BOOLEAN offset)
  ** Returns          void
  **
  *******************************************************************************/
@@ -1411,7 +1618,7 @@ index ec20689e3..7a5333eda 100644
  {
      UINT8           *p_start, *p_param_len;
      UINT16          param_len, list_byte_count;
-@@ -502,8 +514,12 @@ static void process_service_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
+@@ -502,8 +520,12 @@ static void process_service_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
          /* Was this a continuation request ? */
          if (cont_request_needed)
          {
@@ -1426,7 +1633,7 @@ index ec20689e3..7a5333eda 100644
          }
          else
              UINT8_TO_BE_STREAM (p, 0);
-@@ -541,7 +557,8 @@ static void process_service_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
+@@ -541,7 +563,8 @@ static void process_service_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
  ** Returns          void
  **
  *******************************************************************************/
@@ -1436,7 +1643,7 @@ index ec20689e3..7a5333eda 100644
  {
      UINT8           *p, *p_start, *p_end, *p_param_len;
      UINT8           type;
-@@ -641,8 +658,12 @@ static void process_service_search_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
+@@ -641,8 +664,12 @@ static void process_service_search_attr_rsp (tCONN_CB *p_ccb, UINT8 *p_reply)
          /* No continuation for first request */
          if (p_reply)
          {
@@ -1889,7 +2096,7 @@ index fd3dc64fe..49f2d1104 100644
  
  #define ECC_PointMult(q, p, n, keyLength)  ECC_PointMult_Bin_NAF(q, p, n, keyLength)
 diff --git a/stack/smp/smp_act.c b/stack/smp/smp_act.c
-index e4152a478..9e0246c97 100644
+index e4152a478..7bef80b27 100644
 --- a/stack/smp/smp_act.c
 +++ b/stack/smp/smp_act.c
 @@ -16,11 +16,13 @@
@@ -1925,6 +2132,72 @@ index e4152a478..9e0246c97 100644
      p_cb->flags |= SMP_PAIR_FLAG_HAVE_PEER_PUBL_KEY;
  
      smp_wait_for_both_public_keys(p_cb, NULL);
+@@ -815,7 +829,6 @@ void smp_process_keypress_notification(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+     UINT8 reason = SMP_INVALID_PARAMETERS;
+ 
+     SMP_TRACE_DEBUG("%s", __func__);
+-    p_cb->status = *(UINT8 *)p_data;
+ 
+     if (smp_command_has_invalid_parameters(p_cb))
+     {
+@@ -823,6 +836,8 @@ void smp_process_keypress_notification(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+         return;
+     }
+ 
++    p_cb->status = *(UINT8 *)p_data;
++
+     if (p != NULL)
+     {
+         STREAM_TO_UINT8(p_cb->peer_keypress_notification, p);
+@@ -999,6 +1014,12 @@ void smp_proc_enc_info(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+     UINT8   *p = (UINT8 *)p_data;
+ 
+     SMP_TRACE_DEBUG("%s", __func__);
++
++    if (smp_command_has_invalid_parameters(p_cb)) {
++        smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, NULL);
++        return;
++    }
++
+     STREAM_TO_ARRAY(p_cb->ltk, p, BT_OCTET16_LEN);
+ 
+     smp_key_distribution(p_cb, NULL);
+@@ -1013,6 +1034,13 @@ void smp_proc_master_id(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+     tBTM_LE_PENC_KEYS   le_key;
+ 
+     SMP_TRACE_DEBUG("%s", __func__);
++
++    if (p_cb->rcvd_cmd_len < 11) {  // 1(Code) + 2(EDIV) + 8(Rand)
++        SMP_TRACE_ERROR("%s: Invalid command length: %d, should be at least 11",
++                        __func__, p_cb->rcvd_cmd_len);
++        return;
++    }
++
+     smp_update_key_mask (p_cb, SMP_SEC_KEY_TYPE_ENC, TRUE);
+ 
+     STREAM_TO_UINT16(le_key.ediv, p);
+@@ -1032,7 +1060,7 @@ void smp_proc_master_id(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+ }
+ 
+ /*******************************************************************************
+-** Function     smp_proc_enc_info
++** Function     smp_proc_id_info
+ ** Description  process identity information from peer device
+ *******************************************************************************/
+ void smp_proc_id_info(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+@@ -1040,6 +1068,12 @@ void smp_proc_id_info(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
+     UINT8   *p = (UINT8 *)p_data;
+ 
+     SMP_TRACE_DEBUG("%s", __func__);
++
++    if (smp_command_has_invalid_parameters(p_cb)) {
++        smp_sm_event(p_cb, SMP_AUTH_CMPL_EVT, NULL);
++        return;
++    }
++
+     STREAM_TO_ARRAY (p_cb->tk, p, BT_OCTET16_LEN);   /* reuse TK for IRK */
+     smp_key_distribution_by_transport(p_cb, NULL);
+ }
 diff --git a/stack/smp/smp_main.c b/stack/smp/smp_main.c
 index c3709f8a3..67a2b397a 100644
 --- a/stack/smp/smp_main.c
