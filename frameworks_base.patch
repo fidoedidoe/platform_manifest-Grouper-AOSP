@@ -129,6 +129,215 @@ index cd5eff29237..d329175646e 100644
          } catch (RemoteException e) {Log.e(TAG, "", e);}
          return null;
      }
+diff --git a/core/java/android/content/ContentProvider.java b/core/java/android/content/ContentProvider.java
+index bc2d788bf4c..1072b5d7902 100644
+--- a/core/java/android/content/ContentProvider.java
++++ b/core/java/android/content/ContentProvider.java
+@@ -53,6 +53,7 @@ import java.io.IOException;
+ import java.io.PrintWriter;
+ import java.util.ArrayList;
+ import java.util.Arrays;
++import java.util.Objects;
+ 
+ /**
+  * Content providers are one of the primary building blocks of Android applications, providing
+@@ -207,7 +208,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+         public Cursor query(String callingPkg, Uri uri, String[] projection,
+                 String selection, String[] selectionArgs, String sortOrder,
+                 ICancellationSignal cancellationSignal) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceReadPermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+                 // The caller has no access to the data, so return an empty cursor with
+@@ -246,14 +247,14 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public String getType(Uri uri) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             return ContentProvider.this.getType(uri);
+         }
+ 
+         @Override
+         public Uri insert(String callingPkg, Uri uri, ContentValues initialValues) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             int userId = getUserIdFromUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+@@ -269,7 +270,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public int bulkInsert(String callingPkg, Uri uri, ContentValues[] initialValues) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+                 return 0;
+@@ -291,11 +292,12 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             for (int i = 0; i < numOperations; i++) {
+                 ContentProviderOperation operation = operations.get(i);
+                 Uri uri = operation.getUri();
+-                validateIncomingUri(uri);
+                 userIds[i] = getUserIdFromUri(uri);
+-                if (userIds[i] != UserHandle.USER_CURRENT) {
+-                    // Removing the user id from the uri.
+-                    operation = new ContentProviderOperation(operation, true);
++                uri = validateIncomingUri(uri);
++                uri = getUriWithoutUserId(uri);
++                // Rebuild operation if we changed the Uri above
++                if (!Objects.equals(operation.getUri(), uri)) {
++                    operation = new ContentProviderOperation(operation, uri);
+                     operations.set(i, operation);
+                 }
+                 if (operation.isReadOperation()) {
+@@ -330,7 +332,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public int delete(String callingPkg, Uri uri, String selection, String[] selectionArgs) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+                 return 0;
+@@ -346,7 +348,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+         @Override
+         public int update(String callingPkg, Uri uri, ContentValues values, String selection,
+                 String[] selectionArgs) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+                 return 0;
+@@ -363,7 +365,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+         public ParcelFileDescriptor openFile(
+                 String callingPkg, Uri uri, String mode, ICancellationSignal cancellationSignal,
+                 IBinder callerToken) throws FileNotFoundException {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             enforceFilePermission(callingPkg, uri, mode, callerToken);
+             final String original = setCallingPackage(callingPkg);
+@@ -379,7 +381,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+         public AssetFileDescriptor openAssetFile(
+                 String callingPkg, Uri uri, String mode, ICancellationSignal cancellationSignal)
+                 throws FileNotFoundException {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             enforceFilePermission(callingPkg, uri, mode, null);
+             final String original = setCallingPackage(callingPkg);
+@@ -405,7 +407,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public String[] getStreamTypes(Uri uri, String mimeTypeFilter) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             return ContentProvider.this.getStreamTypes(uri, mimeTypeFilter);
+         }
+@@ -414,7 +416,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+         public AssetFileDescriptor openTypedAssetFile(String callingPkg, Uri uri, String mimeType,
+                 Bundle opts, ICancellationSignal cancellationSignal) throws FileNotFoundException {
+             Bundle.setDefusable(opts, true);
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             uri = getUriWithoutUserId(uri);
+             enforceFilePermission(callingPkg, uri, "r", null);
+             final String original = setCallingPackage(callingPkg);
+@@ -433,7 +435,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public Uri canonicalize(String callingPkg, Uri uri) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             int userId = getUserIdFromUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceReadPermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+@@ -449,7 +451,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+         @Override
+         public Uri uncanonicalize(String callingPkg, Uri uri) {
+-            validateIncomingUri(uri);
++            uri = validateIncomingUri(uri);
+             int userId = getUserIdFromUri(uri);
+             uri = getUriWithoutUserId(uri);
+             if (enforceReadPermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+@@ -1735,7 +1737,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+          */
+         if (mContext == null) {
+             mContext = context;
+-            if (context != null) {
++            if (context != null && mTransport != null) {
+                 mTransport.mAppOpsManager = (AppOpsManager) context.getSystemService(
+                         Context.APP_OPS_SERVICE);
+             }
+@@ -1844,7 +1846,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+     }
+ 
+     /** @hide */
+-    private void validateIncomingUri(Uri uri) throws SecurityException {
++    public Uri validateIncomingUri(Uri uri) throws SecurityException {
+         String auth = uri.getAuthority();
+         int userId = getUserIdFromAuthority(auth, UserHandle.USER_CURRENT);
+         if (userId != UserHandle.USER_CURRENT && userId != mContext.getUserId()) {
+@@ -1861,6 +1863,19 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             }
+             throw new SecurityException(message);
+         }
++
++        // Normalize the path by removing any empty path segments, which can be
++        // a source of security issues.
++        final String encodedPath = uri.getEncodedPath();
++        if (encodedPath != null && encodedPath.indexOf("//") != -1) {
++            final Uri normalized = uri.buildUpon()
++                    .encodedPath(encodedPath.replaceAll("//+", "/")).build();
++            Log.w(TAG, "Normalized " + uri + " to " + normalized
++                    + " to avoid possible security issues");
++            return normalized;
++        } else {
++            return uri;
++        }
+     }
+ 
+     /** @hide */
+diff --git a/core/java/android/content/ContentProviderOperation.java b/core/java/android/content/ContentProviderOperation.java
+index fd1e24a48da..1a03bd68cd0 100644
+--- a/core/java/android/content/ContentProviderOperation.java
++++ b/core/java/android/content/ContentProviderOperation.java
+@@ -94,13 +94,9 @@ public class ContentProviderOperation implements Parcelable {
+     }
+ 
+     /** @hide */
+-    public ContentProviderOperation(ContentProviderOperation cpo, boolean removeUserIdFromUri) {
++    public ContentProviderOperation(ContentProviderOperation cpo, Uri withUri) {
+         mType = cpo.mType;
+-        if (removeUserIdFromUri) {
+-            mUri = ContentProvider.getUriWithoutUserId(cpo.mUri);
+-        } else {
+-            mUri = cpo.mUri;
+-        }
++        mUri = withUri;
+         mValues = cpo.mValues;
+         mSelection = cpo.mSelection;
+         mSelectionArgs = cpo.mSelectionArgs;
+@@ -110,14 +106,6 @@ public class ContentProviderOperation implements Parcelable {
+         mYieldAllowed = cpo.mYieldAllowed;
+     }
+ 
+-    /** @hide */
+-    public ContentProviderOperation getWithoutUserIdInUri() {
+-        if (ContentProvider.uriHasUserId(mUri)) {
+-            return new ContentProviderOperation(this, true);
+-        }
+-        return this;
+-    }
+-
+     public void writeToParcel(Parcel dest, int flags) {
+         dest.writeInt(mType);
+         Uri.writeToParcel(dest, mUri);
 diff --git a/core/java/android/content/PermissionChecker.java b/core/java/android/content/PermissionChecker.java
 new file mode 100644
 index 00000000000..a4b2fe0c10e
@@ -759,6 +968,31 @@ index 09af05c0dfb..6c069be07e3 100644
              int portSeparator = authority.indexOf(':', userInfoSeparator);
  
              if (portSeparator == NOT_FOUND) {
+diff --git a/core/java/android/os/Parcel.java b/core/java/android/os/Parcel.java
+index f6e6ad6067b..0591fa8883c 100644
+--- a/core/java/android/os/Parcel.java
++++ b/core/java/android/os/Parcel.java
+@@ -692,11 +692,19 @@ public final class Parcel {
+             return;
+         }
+         Set<Map.Entry<String,Object>> entries = val.entrySet();
+-        writeInt(entries.size());
++        int size = entries.size();
++        writeInt(size);
++
+         for (Map.Entry<String,Object> e : entries) {
+             writeValue(e.getKey());
+             writeValue(e.getValue());
++            size--;
+         }
++
++        if (size != 0) {
++            throw new BadParcelableException("Map size does not match number of entries!");
++        }
++
+     }
+ 
+     /**
 diff --git a/core/java/android/provider/MediaStore.java b/core/java/android/provider/MediaStore.java
 index de19f819295..b17657b43db 100644
 --- a/core/java/android/provider/MediaStore.java
@@ -1881,6 +2115,20 @@ index 7217832bac6..feff102850f 100644
                      }
                  }
                  break;
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index 3ee844cd8ef..9e03307fa31 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -165,6 +165,9 @@
+     <!-- shortcut manager -->
+     <uses-permission android:name="android.permission.RESET_SHORTCUT_MANAGER_THROTTLING" />
+ 
++    <!-- permission necessary to hide non-system overlay windows from covering up the SystemUI -->
++    <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS" />
++
+     <application
+         android:name=".SystemUIApplication"
+         android:persistent="true"
 diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
 index 0fa9a85f412..925f3681c73 100644
 --- a/packages/SystemUI/res/values/config.xml
@@ -1936,6 +2184,38 @@ index 851ab771882..a384641e16d 100644
      }
  
      public void setType(int type) {
+diff --git a/packages/SystemUI/src/com/android/systemui/media/MediaProjectionPermissionActivity.java b/packages/SystemUI/src/com/android/systemui/media/MediaProjectionPermissionActivity.java
+index b2a80f4ca52..4a6786832df 100644
+--- a/packages/SystemUI/src/com/android/systemui/media/MediaProjectionPermissionActivity.java
++++ b/packages/SystemUI/src/com/android/systemui/media/MediaProjectionPermissionActivity.java
+@@ -16,6 +16,8 @@
+ 
+ package com.android.systemui.media;
+ 
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
++
+ import android.app.Activity;
+ import android.app.AlertDialog;
+ import android.content.DialogInterface;
+@@ -36,6 +38,7 @@ import android.text.TextPaint;
+ import android.text.TextUtils;
+ import android.text.style.StyleSpan;
+ import android.util.Log;
++import android.view.Window;
+ import android.view.WindowManager;
+ import android.widget.CheckBox;
+ import android.widget.CompoundButton;
+@@ -146,7 +149,9 @@ public class MediaProjectionPermissionActivity extends Activity
+         mDialog.getButton(DialogInterface.BUTTON_POSITIVE).setFilterTouchesWhenObscured(true);
+ 
+         ((CheckBox) mDialog.findViewById(R.id.remember)).setOnCheckedChangeListener(this);
+-        mDialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
++        final Window w = mDialog.getWindow();
++        w.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
++        w.addPrivateFlags(PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
+ 
+         mDialog.show();
+     }
 diff --git a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java b/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
 index dd8075057e1..005206fcd14 100644
 --- a/packages/SystemUI/src/com/android/systemui/settings/CurrentUserTracker.java
@@ -2901,10 +3181,18 @@ index 08c0a4b0135..b5c4202dc10 100644
          StringBuilder sb = new StringBuilder();
          sb.append("Session{");
 diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
-index ca2610af3f6..0d970591cb5 100644
+index ca2610af3f6..2203ebbee94 100644
 --- a/services/core/java/com/android/server/wm/WindowManagerService.java
 +++ b/services/core/java/com/android/server/wm/WindowManagerService.java
-@@ -490,6 +490,9 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -16,6 +16,7 @@
+ 
+ package com.android.server.wm;
+ 
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
+ import android.Manifest;
+ import android.animation.ValueAnimator;
+ import android.annotation.IntDef;
+@@ -490,6 +491,9 @@ public class WindowManagerService extends IWindowManager.Stub
       */
      final ArrayList<WindowState> mForceRemoves = new ArrayList<>();
  
@@ -2914,7 +3202,7 @@ index ca2610af3f6..0d970591cb5 100644
      /**
       * Windows that clients are waiting to have drawn.
       */
-@@ -2129,6 +2132,9 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2129,6 +2133,9 @@ public class WindowManagerService extends IWindowManager.Stub
                  }
              }
  
@@ -2924,7 +3212,7 @@ index ca2610af3f6..0d970591cb5 100644
              if (type == TYPE_APPLICATION_STARTING && token.appWindowToken != null) {
                  token.appWindowToken.startingWindow = win;
                  if (DEBUG_STARTING_WINDOW) Slog.v (TAG_WM, "addWindow: " + token.appWindowToken
-@@ -2576,6 +2582,7 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2576,6 +2583,7 @@ public class WindowManagerService extends IWindowManager.Stub
  
          mPendingRemove.remove(win);
          mResizingWindows.remove(win);
@@ -2932,13 +3220,26 @@ index ca2610af3f6..0d970591cb5 100644
          mWindowsChanged = true;
          if (DEBUG_WINDOW_MOVEMENT) Slog.v(TAG_WM, "Final remove of window: " + win);
  
-@@ -11771,4 +11778,34 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2893,6 +2901,11 @@ public class WindowManagerService extends IWindowManager.Stub
+                         | WindowManager.LayoutParams.SYSTEM_UI_VISIBILITY_CHANGED)) != 0) {
+                     win.mLayoutNeeded = true;
+                 }
++
++                if ((flagChanges & PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS) != 0) {
++                    updateNonSystemOverlayWindowsVisibilityIfNeeded(
++                            win, win.mWinAnimator.getShown());
++                }
+             }
+ 
+             if (DEBUG_LAYOUT) Slog.v(TAG_WM, "Relayout " + win + ": viewVisibility=" + viewVisibility
+@@ -11771,4 +11784,35 @@ public class WindowManagerService extends IWindowManager.Stub
              }
          }
      }
 +
 +    void updateNonSystemOverlayWindowsVisibilityIfNeeded(WindowState win, boolean surfaceShown) {
-+        if (!win.hideNonSystemOverlayWindowsWhenVisible()) {
++        if (!win.hideNonSystemOverlayWindowsWhenVisible()
++                && !mHidingNonSystemOverlayWindows.contains(win)) {
 +            return;
 +        }
 +        final boolean systemAlertWindowsHidden = !mHidingNonSystemOverlayWindows.isEmpty();
