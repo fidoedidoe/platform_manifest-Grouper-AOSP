@@ -2365,19 +2365,6 @@ index 1a9820d95..b45e00acd 100644
  
      reset();
      beginResync();
-diff --git a/services/surfaceflinger/DisplayDevice.cpp b/services/surfaceflinger/DisplayDevice.cpp
-index 5c2c0adf3..1f2e554bd 100644
---- a/services/surfaceflinger/DisplayDevice.cpp
-+++ b/services/surfaceflinger/DisplayDevice.cpp
-@@ -166,7 +166,7 @@ DisplayDevice::DisplayDevice(
-     setProjection(DisplayState::eOrientationDefault, mViewport, mFrame);
- 
- #ifdef NUM_FRAMEBUFFER_SURFACE_BUFFERS
--    surface->allocateBuffers();
-+    mSurface->allocateBuffers();
- #endif
- }
- 
 diff --git a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp b/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
 index ef416581a..138d20ae5 100644
 --- a/services/surfaceflinger/DisplayHardware/HWComposer_hwc1.cpp
