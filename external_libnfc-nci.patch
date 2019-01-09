@@ -1,3 +1,164 @@
+diff --git a/src/nfc/llcp/llcp_dlc.c b/src/nfc/llcp/llcp_dlc.c
+index 95bcac5..30e1358 100644
+--- a/src/nfc/llcp/llcp_dlc.c
++++ b/src/nfc/llcp/llcp_dlc.c
+@@ -26,6 +26,7 @@
+ #include <string.h>
+ #include "gki.h"
+ #include "nfc_target.h"
++#include <log/log.h>
+ #include "bt_types.h"
+ #include "llcp_int.h"
+ #include "llcp_defs.h"
+@@ -883,6 +884,15 @@ void llcp_dlc_proc_i_pdu (UINT8 dsap, UINT8 ssap, UINT16 i_pdu_length, UINT8 *p_
+             p_i_pdu = (UINT8 *) (p_msg + 1) + p_msg->offset;
+         }
+ 
++	if (i_pdu_length < LLCP_PDU_HEADER_SIZE + LLCP_SEQUENCE_SIZE) {
++            android_errorWriteLog(0x534e4554, "116722267");
++            LOG(ERROR) << StringPrintf("Insufficient I PDU length %d", i_pdu_length);
++            if (p_msg) {
++                GKI_freebuf(p_msg);
++            }
++            return;
++        }
++
+         info_len = i_pdu_length - LLCP_PDU_HEADER_SIZE - LLCP_SEQUENCE_SIZE;
+ 
+         if (info_len > p_dlcb->local_miu)
+diff --git a/src/nfc/llcp/llcp_link.c b/src/nfc/llcp/llcp_link.c
+index d70349c..9249539 100644
+--- a/src/nfc/llcp/llcp_link.c
++++ b/src/nfc/llcp/llcp_link.c
+@@ -23,6 +23,7 @@
+  *
+  ******************************************************************************/
+ 
++#include <log/log.h>
+ #include <string.h>
+ #include "gki.h"
+ #include "nfc_target.h"
+@@ -1132,7 +1133,7 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+ {
+     UINT16 agf_length;
+     UINT8 *p, *p_info, *p_pdu_length;
+-    UINT16 pdu_hdr, pdu_length;
++    UINT16 pdu_hdr, pdu_length, pdu_num;
+     UINT8  dsap, ptype, ssap;
+ 
+     p_agf->len    -= LLCP_PDU_HEADER_SIZE;
+@@ -1143,12 +1144,17 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+     */
+     agf_length = p_agf->len;
+     p = (UINT8 *) (p_agf + 1) + p_agf->offset;
++    pdu_num = 0;
+ 
+     while (agf_length > 0)
+     {
+         if (agf_length > LLCP_PDU_AGF_LEN_SIZE)
+         {
+             BE_STREAM_TO_UINT16 (pdu_length, p);
++	    if (pdu_length < LLCP_PDU_HEADER_SIZE) {
++                LOG(ERROR) << StringPrintf("Received invalid encapsulated PDU");
++                break;
++            }
+             agf_length -= LLCP_PDU_AGF_LEN_SIZE;
+         }
+         else
+@@ -1159,6 +1165,7 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+         if (pdu_length <= agf_length)
+         {
+             p += pdu_length;
++	    pdu_num++;
+             agf_length -= pdu_length;
+         }
+         else
+@@ -1167,8 +1174,9 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+         }
+     }
+ 
+-    if (agf_length != 0)
++    if (agf_length != 0 || pdu_num < 2)
+     {
++	android_errorWriteLog(0x534e4554, "116791157");
+         LLCP_TRACE_ERROR0 ("llcp_link_proc_agf_pdu (): Received invalid AGF PDU");
+         GKI_freebuf (p_agf);
+         return;
+@@ -1207,7 +1215,8 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+             GKI_freebuf (p_agf);
+             llcp_link_deactivate (LLCP_LINK_REMOTE_INITIATED);
+             return;
+-        }
++	} else if (ptype == LLCP_PDU_AGF_TYPE) {
++            LOG(ERROR) << StringPrintf("AGF PDU shall not be in AGF");
+         else if (ptype == LLCP_PDU_SYMM_TYPE)
+         {
+             LLCP_TRACE_ERROR0 ("llcp_link_proc_agf_pdu (): SYMM PDU exchange shall not be in AGF");
+diff --git a/src/nfc/nfc/nfc_ncif.c b/src/nfc/nfc/nfc_ncif.c
+index 2e2c14f..739bae2 100644
+--- a/src/nfc/nfc/nfc_ncif.c
++++ b/src/nfc/nfc/nfc_ncif.c
+@@ -26,6 +26,7 @@
+  ******************************************************************************/
+ #include <stdlib.h>
+ #include <string.h>
++#include <log/log.h>
+ #include "nfc_target.h"
+ 
+ #if NFC_INCLUDED == TRUE
+@@ -490,14 +491,31 @@ void nfc_ncif_set_config_status (UINT8 *p, UINT8 len)
+     tNFC_RESPONSE   evt_data;
+     if (nfc_cb.p_resp_cback)
+     {
+-        evt_data.set_config.status          = (tNFC_STATUS) *p++;
+-        evt_data.set_config.num_param_id    = NFC_STATUS_OK;
+-        if (evt_data.set_config.status != NFC_STATUS_OK)
+-        {
+-            evt_data.set_config.num_param_id    = *p++;
+-            STREAM_TO_ARRAY (evt_data.set_config.param_ids, p, evt_data.set_config.num_param_id);
++        evt_data.set_config.num_param_id = 0;
++        if (len == 0) {
++            LOG(ERROR) << StringPrintf("Insufficient RSP length");
++            evt_data.set_config.status = NFC_STATUS_SYNTAX_ERROR;
++            (*nfc_cb.p_resp_cback)(NFC_SET_CONFIG_REVT, &evt_data);
++            return;
+         }
+ 
++        evt_data.set_config.status = (tNFC_STATUS)*p++;
++        if (evt_data.set_config.status != NFC_STATUS_OK && len > 1) {
++            evt_data.set_config.num_param_id = *p++;
++            if (evt_data.set_config.num_param_id > NFC_MAX_NUM_IDS) {
++                android_errorWriteLog(0x534e4554, "114047681");
++                LOG(ERROR) << StringPrintf("OOB write num_param_id %d",
++                                       evt_data.set_config.num_param_id);
++                evt_data.set_config.num_param_id = 0;
++            } else if (evt_data.set_config.num_param_id <= len - 2) {
++                STREAM_TO_ARRAY(evt_data.set_config.param_ids, p,
++                        evt_data.set_config.num_param_id);
++            } else {
++                LOG(ERROR) << StringPrintf("Insufficient RSP length %d,num_param_id %d",
++                                       len, evt_data.set_config.num_param_id);
++                evt_data.set_config.num_param_id = 0;
++            }
++	}
+         (*nfc_cb.p_resp_cback) (NFC_SET_CONFIG_REVT, &evt_data);
+     }
+ }
+@@ -1171,8 +1189,13 @@ void nfc_ncif_proc_get_routing (UINT8 *p, UINT8 len)
+             {
+                 tl                  = *(p+1);
+                 tl                 += NFC_TL_SIZE;
+-                STREAM_TO_ARRAY (pn, p, tl);
+                 evt_data.tlv_size  += tl;
++		if (evt_data.tlv_size > NFC_MAX_EE_TLV_SIZE) {
++                    android_errorWriteLog(0x534e4554, "117554809");
++                    LOG(ERROR) << __func__ << "Invalid data format";
++                    return;
++                }
++                STREAM_TO_ARRAY(pn, p, tl);
+                 pn                 += tl;
+             }
+             (*nfc_cb.p_resp_cback) (NFC_GET_ROUTING_REVT, (tNFC_RESPONSE *) &evt_data);
 diff --git a/src/nfc/tags/rw_t2t_ndef.c b/src/nfc/tags/rw_t2t_ndef.c
 index 3304a90..42a558e 100644
 --- a/src/nfc/tags/rw_t2t_ndef.c
