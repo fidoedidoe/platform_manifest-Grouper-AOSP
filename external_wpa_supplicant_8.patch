@@ -1,5 +1,5 @@
 diff --git a/hostapd/Android.mk b/hostapd/Android.mk
-index 67ca129..588fed9 100644
+index 67ca1295..588fed90 100644
 --- a/hostapd/Android.mk
 +++ b/hostapd/Android.mk
 @@ -210,11 +210,6 @@ L_CFLAGS += -DCONFIG_RSN_PREAUTH
@@ -15,7 +15,7 @@ index 67ca129..588fed9 100644
  NEED_AES_OMAC1=y
  CONFIG_PROXYARP=y
 diff --git a/hostapd/Makefile b/hostapd/Makefile
-index fa4af82..7a5781f 100644
+index fa4af82a..7a5781f1 100644
 --- a/hostapd/Makefile
 +++ b/hostapd/Makefile
 @@ -248,11 +248,6 @@ CFLAGS += -DCONFIG_RSN_PREAUTH
@@ -31,7 +31,7 @@ index fa4af82..7a5781f 100644
  NEED_AES_OMAC1=y
  CONFIG_PROXYARP=y
 diff --git a/hostapd/android.config b/hostapd/android.config
-index e382c40..e8fd2df 100644
+index e382c408..e8fd2dfd 100644
 --- a/hostapd/android.config
 +++ b/hostapd/android.config
 @@ -44,9 +44,6 @@ CONFIG_DRIVER_NL80211_QCA=y
@@ -45,7 +45,7 @@ index e382c40..e8fd2df 100644
  # This version is an experimental implementation based on IEEE 802.11w/D1.0
  # draft and is subject to change since the standard has not yet been finalized.
 diff --git a/hostapd/config_file.c b/hostapd/config_file.c
-index c35d5ae..8f49179 100644
+index c35d5aec..8f49179d 100644
 --- a/hostapd/config_file.c
 +++ b/hostapd/config_file.c
 @@ -2515,10 +2515,9 @@ static int hostapd_config_fill(struct hostapd_config *conf,
@@ -62,7 +62,7 @@ index c35d5ae..8f49179 100644
  	} else if (os_strcmp(buf, "mobility_domain") == 0) {
  		if (os_strlen(pos) != 2 * MOBILITY_DOMAIN_ID_LEN ||
 diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
-index a87f117..09e3bc4 100644
+index a87f1174..09e3bc40 100644
 --- a/hostapd/ctrl_iface.c
 +++ b/hostapd/ctrl_iface.c
 @@ -1531,6 +1531,67 @@ static int hostapd_ctrl_iface_mgmt_tx(struct hostapd_data *hapd, char *cmd)
@@ -145,7 +145,7 @@ index a87f117..09e3bc4 100644
  		if (hostapd_ctrl_iface_eapol_rx(hapd, buf + 9) < 0)
  			reply_len = -1;
 diff --git a/hostapd/defconfig b/hostapd/defconfig
-index f7b60e0..5ee37dd 100644
+index f7b60e04..5ee37dd9 100644
 --- a/hostapd/defconfig
 +++ b/hostapd/defconfig
 @@ -50,9 +50,6 @@ CONFIG_IAPP=y
@@ -159,7 +159,7 @@ index f7b60e0..5ee37dd 100644
  CONFIG_IEEE80211W=y
  
 diff --git a/hostapd/hostapd.conf b/hostapd/hostapd.conf
-index d943a43..1648fd0 100644
+index d943a43d..1648fd0b 100644
 --- a/hostapd/hostapd.conf
 +++ b/hostapd/hostapd.conf
 @@ -1192,12 +1192,6 @@ own_ip_addr=127.0.0.1
@@ -176,7 +176,7 @@ index d943a43..1648fd0 100644
  # 0 = disabled (default)
  # 1 = optional
 diff --git a/src/ap/Makefile b/src/ap/Makefile
-index 98788fe..d67405f 100644
+index 98788fef..d67405f8 100644
 --- a/src/ap/Makefile
 +++ b/src/ap/Makefile
 @@ -45,7 +45,6 @@ LIB_OBJS= \
@@ -188,7 +188,7 @@ index 98788fe..d67405f 100644
  	preauth_auth.o \
  	sta_info.o \
 diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
-index 2d07c67..4b00c29 100644
+index 2d07c67b..4b00c296 100644
 --- a/src/ap/ap_config.h
 +++ b/src/ap/ap_config.h
 @@ -322,7 +322,6 @@ struct hostapd_bss_config {
@@ -200,7 +200,7 @@ index 2d07c67..4b00c29 100644
  #ifdef CONFIG_IEEE80211R
  	/* IEEE 802.11r - Fast BSS Transition */
 diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
-index 6a373c5..b1cfb51 100644
+index 6a373c54..b1cfb51c 100644
 --- a/src/ap/ieee802_11.c
 +++ b/src/ap/ieee802_11.c
 @@ -1774,6 +1774,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
@@ -266,7 +266,7 @@ index 6a373c5..b1cfb51 100644
  #endif /* CONFIG_TESTING_OPTIONS */
 diff --git a/src/ap/peerkey_auth.c b/src/ap/peerkey_auth.c
 deleted file mode 100644
-index efc1d7e..0000000
+index efc1d7e4..00000000
 --- a/src/ap/peerkey_auth.c
 +++ /dev/null
 @@ -1,396 +0,0 @@
@@ -667,7 +667,7 @@ index efc1d7e..0000000
 -
 -#endif /* CONFIG_PEERKEY */
 diff --git a/src/ap/wnm_ap.c b/src/ap/wnm_ap.c
-index 41d50ce..02daa9b 100644
+index 41d50ceb..02daa9bc 100644
 --- a/src/ap/wnm_ap.c
 +++ b/src/ap/wnm_ap.c
 @@ -202,6 +202,13 @@ static void ieee802_11_rx_wnmsleep_req(struct hostapd_data *hapd,
@@ -685,7 +685,7 @@ index 41d50ce..02daa9b 100644
  	while (pos + 1 < frm + len) {
  		u8 ie_len = pos[1];
 diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
-index 3587086..e5974ff 100644
+index 35870864..e5974ff1 100644
 --- a/src/ap/wpa_auth.c
 +++ b/src/ap/wpa_auth.c
 @@ -879,8 +879,7 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
@@ -880,7 +880,7 @@ index 3587086..e5974ff 100644
  			     struct rsn_pmksa_cache_entry *entry)
  {
 diff --git a/src/ap/wpa_auth.h b/src/ap/wpa_auth.h
-index 0de8d97..032b0a3 100644
+index 0de8d976..032b0a32 100644
 --- a/src/ap/wpa_auth.h
 +++ b/src/ap/wpa_auth.h
 @@ -147,7 +147,6 @@ struct wpa_auth_config {
@@ -909,7 +909,7 @@ index 0de8d97..032b0a3 100644
  			     struct rsn_pmksa_cache_entry *entry);
  struct rsn_pmksa_cache_entry *
 diff --git a/src/ap/wpa_auth_ft.c b/src/ap/wpa_auth_ft.c
-index 42242a5..e63b99a 100644
+index 42242a54..e63b99ad 100644
 --- a/src/ap/wpa_auth_ft.c
 +++ b/src/ap/wpa_auth_ft.c
 @@ -780,6 +780,14 @@ void wpa_ft_install_ptk(struct wpa_state_machine *sm)
@@ -944,7 +944,7 @@ index 42242a5..e63b99a 100644
  
  	buflen = 2 + sizeof(struct rsn_mdie) + 2 + sizeof(struct rsn_ftie) +
 diff --git a/src/ap/wpa_auth_glue.c b/src/ap/wpa_auth_glue.c
-index 5fe0987..cbc1dbc 100644
+index 5fe0987f..cbc1dbc4 100644
 --- a/src/ap/wpa_auth_glue.c
 +++ b/src/ap/wpa_auth_glue.c
 @@ -44,7 +44,6 @@ static void hostapd_wpa_auth_conf(struct hostapd_bss_config *conf,
@@ -956,7 +956,7 @@ index 5fe0987..cbc1dbc 100644
  	wconf->wmm_uapsd = conf->wmm_uapsd;
  	wconf->disable_pmksa_caching = conf->disable_pmksa_caching;
 diff --git a/src/ap/wpa_auth_i.h b/src/ap/wpa_auth_i.h
-index 72b7eb3..b781605 100644
+index 72b7eb37..b781605e 100644
 --- a/src/ap/wpa_auth_i.h
 +++ b/src/ap/wpa_auth_i.h
 @@ -65,6 +65,7 @@ struct wpa_state_machine {
@@ -989,7 +989,7 @@ index 72b7eb3..b781605 100644
  int wpa_write_mdie(struct wpa_auth_config *conf, u8 *buf, size_t len);
  int wpa_write_ftie(struct wpa_auth_config *conf, const u8 *r0kh_id,
 diff --git a/src/ap/wpa_auth_ie.c b/src/ap/wpa_auth_ie.c
-index f79783b..8f855b8 100644
+index f79783b9..8f855b83 100644
 --- a/src/ap/wpa_auth_ie.c
 +++ b/src/ap/wpa_auth_ie.c
 @@ -230,8 +230,6 @@ int wpa_write_rsn_ie(struct wpa_auth_config *conf, u8 *buf, size_t len,
@@ -1039,7 +1039,7 @@ index f79783b..8f855b8 100644
  	if (pos[1] > RSN_SELECTOR_LEN + 2 &&
  	    RSN_SELECTOR_GET(pos + 2) == RSN_KEY_DATA_IGTK) {
 diff --git a/src/ap/wpa_auth_ie.h b/src/ap/wpa_auth_ie.h
-index d2067ba..0e2b3df 100644
+index d2067ba3..0e2b3df3 100644
 --- a/src/ap/wpa_auth_ie.h
 +++ b/src/ap/wpa_auth_ie.h
 @@ -19,16 +19,6 @@ struct wpa_eapol_ie_parse {
@@ -1060,7 +1060,7 @@ index d2067ba..0e2b3df 100644
  	const u8 *igtk;
  	size_t igtk_len;
 diff --git a/src/common/privsep_commands.h b/src/common/privsep_commands.h
-index 8dff303..15a1bfc 100644
+index 8dff3038..15a1bfcd 100644
 --- a/src/common/privsep_commands.h
 +++ b/src/common/privsep_commands.h
 @@ -84,7 +84,6 @@ enum privsep_event {
@@ -1072,7 +1072,7 @@ index 8dff303..15a1bfc 100644
  	PRIVSEP_EVENT_RX_EAPOL,
  	PRIVSEP_EVENT_SCAN_STARTED,
 diff --git a/src/common/wpa_common.c b/src/common/wpa_common.c
-index d6295b2..41a49d0 100644
+index d6295b2d..41a49d0e 100644
 --- a/src/common/wpa_common.c
 +++ b/src/common/wpa_common.c
 @@ -133,10 +133,6 @@ int wpa_eapol_key_mic(const u8 *key, size_t key_len, int akmp, int ver,
@@ -1099,7 +1099,7 @@ index d6295b2..41a49d0 100644
  		os_memcpy(data, addr1, ETH_ALEN);
  		os_memcpy(data + ETH_ALEN, addr2, ETH_ALEN);
 diff --git a/src/common/wpa_common.h b/src/common/wpa_common.h
-index af1d0f0..642b28c 100644
+index af1d0f0c..642b28c3 100644
 --- a/src/common/wpa_common.h
 +++ b/src/common/wpa_common.h
 @@ -88,12 +88,6 @@ RSN_SELECTOR(0x00, 0x0f, 0xac, 13)
@@ -1159,8 +1159,30 @@ index af1d0f0..642b28c 100644
  struct rsn_error_kde {
  	be16 mui;
  	be16 error_type;
+diff --git a/src/crypto/random.c b/src/crypto/random.c
+index 3a86a93a..5d671bdc 100644
+--- a/src/crypto/random.c
++++ b/src/crypto/random.c
+@@ -160,10 +160,17 @@ int random_get_bytes(void *buf, size_t len)
+ 	wpa_printf(MSG_MSGDUMP, "Get randomness: len=%u entropy=%u",
+ 		   (unsigned int) len, entropy);
+ 
++#ifdef CONFIG_USE_OPENSSL_RNG
++	/* Start with assumed strong randomness from OpenSSL */
++	ret = crypto_get_random(buf, len);
++	wpa_hexdump_key(MSG_EXCESSIVE, "random from crypto_get_random",
++			buf, len);
++#else /* CONFIG_USE_OPENSSL_RNG */
+ 	/* Start with assumed strong randomness from OS */
+ 	ret = os_get_random(buf, len);
+ 	wpa_hexdump_key(MSG_EXCESSIVE, "random from os_get_random",
+ 			buf, len);
++#endif /* CONFIG_USE_OPENSSL_RNG */
+ 
+ 	/* Mix in additional entropy extracted from the internal pool */
+ 	left = len;
 diff --git a/src/drivers/driver.h b/src/drivers/driver.h
-index b7e0d16..bae4777 100644
+index b7e0d163..bae47778 100644
 --- a/src/drivers/driver.h
 +++ b/src/drivers/driver.h
 @@ -3647,17 +3647,6 @@ enum wpa_event_type {
@@ -1196,7 +1218,7 @@ index b7e0d16..bae4777 100644
  	 * struct tdls - Data for EVENT_TDLS
  	 */
 diff --git a/src/drivers/driver_common.c b/src/drivers/driver_common.c
-index b32d35f..7c35277 100644
+index b32d35f4..7c35277e 100644
 --- a/src/drivers/driver_common.c
 +++ b/src/drivers/driver_common.c
 @@ -35,7 +35,6 @@ const char * event_to_string(enum wpa_event_type event)
@@ -1208,7 +1230,7 @@ index b32d35f..7c35277 100644
  	E2S(FT_RESPONSE);
  	E2S(IBSS_RSN_START);
 diff --git a/src/drivers/driver_privsep.c b/src/drivers/driver_privsep.c
-index 43d4193..6fd298d 100644
+index 43d41937..6fd298d6 100644
 --- a/src/drivers/driver_privsep.c
 +++ b/src/drivers/driver_privsep.c
 @@ -464,19 +464,6 @@ static void wpa_driver_privsep_event_pmkid_candidate(void *ctx, u8 *buf,
@@ -1243,7 +1265,7 @@ index 43d4193..6fd298d 100644
  		wpa_driver_privsep_event_ft_response(drv->ctx, event_buf,
  						     event_len);
 diff --git a/src/drivers/driver_wext.c b/src/drivers/driver_wext.c
-index 791cd5d..e149ed2 100644
+index 791cd5d4..e149ed2d 100644
 --- a/src/drivers/driver_wext.c
 +++ b/src/drivers/driver_wext.c
 @@ -290,15 +290,6 @@ wpa_driver_wext_event_wireless_custom(void *ctx, char *custom)
@@ -1272,7 +1294,7 @@ index 791cd5d..e149ed2 100644
  				wpa_driver_wext_event_assoc_ies(drv);
  				wpa_supplicant_event(drv->ctx, EVENT_ASSOC,
 diff --git a/src/rsn_supp/Makefile b/src/rsn_supp/Makefile
-index d5e61fe..c2d81f2 100644
+index d5e61fe7..c2d81f27 100644
 --- a/src/rsn_supp/Makefile
 +++ b/src/rsn_supp/Makefile
 @@ -10,7 +10,6 @@ include ../lib.rules
@@ -1293,7 +1315,7 @@ index d5e61fe..c2d81f2 100644
  	wpa.o \
 diff --git a/src/rsn_supp/peerkey.c b/src/rsn_supp/peerkey.c
 deleted file mode 100644
-index 79764d9..0000000
+index 79764d94..00000000
 --- a/src/rsn_supp/peerkey.c
 +++ /dev/null
 @@ -1,1155 +0,0 @@
@@ -2454,7 +2476,7 @@ index 79764d9..0000000
 -#endif /* CONFIG_PEERKEY */
 diff --git a/src/rsn_supp/peerkey.h b/src/rsn_supp/peerkey.h
 deleted file mode 100644
-index 6ccd948..0000000
+index 6ccd948b..00000000
 --- a/src/rsn_supp/peerkey.h
 +++ /dev/null
 @@ -1,82 +0,0 @@
@@ -2541,7 +2563,7 @@ index 6ccd948..0000000
 -
 -#endif /* PEERKEY_H */
 diff --git a/src/rsn_supp/tdls.c b/src/rsn_supp/tdls.c
-index e424168..9eb9738 100644
+index e4241681..9eb97386 100644
 --- a/src/rsn_supp/tdls.c
 +++ b/src/rsn_supp/tdls.c
 @@ -112,6 +112,7 @@ struct wpa_tdls_peer {
@@ -2645,7 +2667,7 @@ index e424168..9eb9738 100644
  
  #if 0
 diff --git a/src/rsn_supp/wpa.c b/src/rsn_supp/wpa.c
-index 3c47879..a22e36d 100644
+index 3c478792..a22e36da 100644
 --- a/src/rsn_supp/wpa.c
 +++ b/src/rsn_supp/wpa.c
 @@ -21,7 +21,6 @@
@@ -3165,7 +3187,7 @@ index 3c47879..a22e36d 100644
  
  int wpa_sm_get_p2p_ip_addr(struct wpa_sm *sm, u8 *buf)
 diff --git a/src/rsn_supp/wpa.h b/src/rsn_supp/wpa.h
-index c89799a..b55baac 100644
+index c89799ac..b55baac6 100644
 --- a/src/rsn_supp/wpa.h
 +++ b/src/rsn_supp/wpa.h
 @@ -95,7 +95,6 @@ enum wpa_sm_conf_params {
@@ -3201,7 +3223,7 @@ index c89799a..b55baac 100644
  
  int wpa_sm_set_ft_params(struct wpa_sm *sm, const u8 *ies, size_t ies_len);
 diff --git a/src/rsn_supp/wpa_ft.c b/src/rsn_supp/wpa_ft.c
-index 205793e..d45bb45 100644
+index 205793e7..d45bb458 100644
 --- a/src/rsn_supp/wpa_ft.c
 +++ b/src/rsn_supp/wpa_ft.c
 @@ -153,6 +153,7 @@ static u8 * wpa_ft_gen_req_ies(struct wpa_sm *sm, size_t *len,
@@ -3234,7 +3256,7 @@ index 205793e..d45bb45 100644
  		return -1;
  
 diff --git a/src/rsn_supp/wpa_i.h b/src/rsn_supp/wpa_i.h
-index f653ba6..2243613 100644
+index f653ba6e..2243613f 100644
 --- a/src/rsn_supp/wpa_i.h
 +++ b/src/rsn_supp/wpa_i.h
 @@ -11,7 +11,6 @@
@@ -3292,7 +3314,7 @@ index f653ba6..2243613 100644
  	u8 target_ap[ETH_ALEN]; /* over-the-DS target AP */
  	int set_ptk_after_assoc;
 diff --git a/src/rsn_supp/wpa_ie.c b/src/rsn_supp/wpa_ie.c
-index c44844e..4e0c3f4 100644
+index c44844ec..4e0c3f45 100644
 --- a/src/rsn_supp/wpa_ie.c
 +++ b/src/rsn_supp/wpa_ie.c
 @@ -405,44 +405,6 @@ static int wpa_parse_generic(const u8 *pos, const u8 *end,
@@ -3341,7 +3363,7 @@ index c44844e..4e0c3f4 100644
  	if (pos[1] > RSN_SELECTOR_LEN + 2 &&
  	    RSN_SELECTOR_GET(pos + 2) == RSN_KEY_DATA_IGTK) {
 diff --git a/src/rsn_supp/wpa_ie.h b/src/rsn_supp/wpa_ie.h
-index fe95af0..0e72af5 100644
+index fe95af0a..0e72af56 100644
 --- a/src/rsn_supp/wpa_ie.h
 +++ b/src/rsn_supp/wpa_ie.h
 @@ -21,16 +21,6 @@ struct wpa_eapol_ie_parse {
@@ -3362,7 +3384,7 @@ index fe95af0..0e72af5 100644
  	const u8 *igtk;
  	size_t igtk_len;
 diff --git a/wpa_supplicant/Android.mk b/wpa_supplicant/Android.mk
-index f65076c..71236a5 100644
+index f65076c7..802c4ae9 100644
 --- a/wpa_supplicant/Android.mk
 +++ b/wpa_supplicant/Android.mk
 @@ -247,15 +247,10 @@ ifdef CONFIG_TDLS_TESTING
@@ -3391,8 +3413,16 @@ index f65076c..71236a5 100644
  endif
  
  ifdef CONFIG_ACS
+@@ -931,6 +923,7 @@ endif
+ 
+ ifndef CONFIG_TLS
+ CONFIG_TLS=openssl
++L_CFLAGS += -DCONFIG_USE_OPENSSL_RNG
+ endif
+ 
+ ifdef CONFIG_TLSV11
 diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
-index 550d44b..b057f7f 100644
+index 550d44b2..b057f7f1 100644
 --- a/wpa_supplicant/Makefile
 +++ b/wpa_supplicant/Makefile
 @@ -286,15 +286,10 @@ ifdef CONFIG_TDLS_TESTING
@@ -3422,7 +3452,7 @@ index 550d44b..b057f7f 100644
  
  ifdef CONFIG_ACS
 diff --git a/wpa_supplicant/android.config b/wpa_supplicant/android.config
-index 0a8bf98..8eb6443 100644
+index 0a8bf981..8eb64431 100644
 --- a/wpa_supplicant/android.config
 +++ b/wpa_supplicant/android.config
 @@ -263,9 +263,6 @@ CONFIG_ELOOP=eloop
@@ -3436,7 +3466,7 @@ index 0a8bf98..8eb6443 100644
  # Driver support is also needed for IEEE 802.11w.
  CONFIG_IEEE80211W=y
 diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
-index 4376676..6cbbe2d 100644
+index 43766763..6cbbe2d7 100644
 --- a/wpa_supplicant/config.c
 +++ b/wpa_supplicant/config.c
 @@ -1810,6 +1810,24 @@ static char * wpa_config_write_mesh_basic_rates(const struct parse_data *data,
@@ -3474,7 +3504,7 @@ index 4376676..6cbbe2d 100644
  	{ INT_RANGE(frequency, 0, 65000) },
  	{ INT_RANGE(fixed_freq, 0, 1) },
 diff --git a/wpa_supplicant/config_file.c b/wpa_supplicant/config_file.c
-index 38061f1..1d317fc 100644
+index 38061f1c..1d317fc5 100644
 --- a/wpa_supplicant/config_file.c
 +++ b/wpa_supplicant/config_file.c
 @@ -752,7 +752,6 @@ static void wpa_config_write_network(FILE *f, struct wpa_ssid *ssid)
@@ -3486,7 +3516,7 @@ index 38061f1..1d317fc 100644
  	INT(max_oper_chwidth);
  	INT(pbss);
 diff --git a/wpa_supplicant/config_ssid.h b/wpa_supplicant/config_ssid.h
-index eb7b87b..5b6f426 100644
+index eb7b87be..5b6f426d 100644
 --- a/wpa_supplicant/config_ssid.h
 +++ b/wpa_supplicant/config_ssid.h
 @@ -387,17 +387,6 @@ struct wpa_ssid {
@@ -3508,7 +3538,7 @@ index eb7b87b..5b6f426 100644
  	 * id_str - Network identifier string for external scripts
  	 *
 diff --git a/wpa_supplicant/config_winreg.c b/wpa_supplicant/config_winreg.c
-index 199f04f..ca70474 100644
+index 199f04fb..ca70474e 100644
 --- a/wpa_supplicant/config_winreg.c
 +++ b/wpa_supplicant/config_winreg.c
 @@ -924,7 +924,6 @@ static int wpa_config_write_network(HKEY hk, struct wpa_ssid *ssid, int id)
@@ -3520,7 +3550,7 @@ index 199f04f..ca70474 100644
  	write_int(netw, "ieee80211w", ssid->ieee80211w,
  		  MGMT_FRAME_PROTECTION_DEFAULT);
 diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
-index 8574437..80f1d41 100644
+index 85744379..80f1d410 100644
 --- a/wpa_supplicant/ctrl_iface.c
 +++ b/wpa_supplicant/ctrl_iface.c
 @@ -575,27 +575,6 @@ static int wpa_supplicant_ctrl_iface_preauth(struct wpa_supplicant *wpa_s,
@@ -3564,7 +3594,7 @@ index 8574437..80f1d41 100644
  	} else if (os_strncmp(buf, "FT_DS ", 6) == 0) {
  		if (wpa_supplicant_ctrl_iface_ft_ds(wpa_s, buf + 6))
 diff --git a/wpa_supplicant/defconfig b/wpa_supplicant/defconfig
-index 1d05198..5531386 100644
+index 1d05198f..55313869 100644
 --- a/wpa_supplicant/defconfig
 +++ b/wpa_supplicant/defconfig
 @@ -288,9 +288,6 @@ CONFIG_BACKEND=file
@@ -3578,7 +3608,7 @@ index 1d05198..5531386 100644
  # Driver support is also needed for IEEE 802.11w.
  #CONFIG_IEEE80211W=y
 diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
-index 1b3d8a9..46f2924 100644
+index 1b3d8a91..46f29240 100644
 --- a/wpa_supplicant/events.c
 +++ b/wpa_supplicant/events.c
 @@ -2790,18 +2790,6 @@ wpa_supplicant_event_interface_status(struct wpa_supplicant *wpa_s,
@@ -3613,7 +3643,7 @@ index 1b3d8a9..46f2924 100644
  	case EVENT_TDLS:
  		wpa_supplicant_event_tdls(wpa_s, data);
 diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
-index f77d51a..7dc1909 100644
+index f77d51ae..7dc1909d 100644
 --- a/wpa_supplicant/wnm_sta.c
 +++ b/wpa_supplicant/wnm_sta.c
 @@ -259,7 +259,7 @@ static void ieee802_11_rx_wnmsleep_resp(struct wpa_supplicant *wpa_s,
@@ -3635,7 +3665,7 @@ index f77d51a..7dc1909 100644
  	    wnmsleep_ie->status == WNM_STATUS_SLEEP_EXIT_ACCEPT_GTK_UPDATE) {
  		wpa_printf(MSG_DEBUG, "Successfully recv WNM-Sleep Response "
 diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
-index 36a7a4e..ac1a36f 100644
+index 36a7a4eb..ac1a36fb 100644
 --- a/wpa_supplicant/wpa_cli.c
 +++ b/wpa_supplicant/wpa_cli.c
 @@ -861,13 +861,6 @@ static int wpa_cli_cmd_bss_flush(struct wpa_ctrl *ctrl, int argc, char *argv[])
@@ -3672,7 +3702,7 @@ index 36a7a4e..ac1a36f 100644
  	  cli_cmd_flag_none,
  	  "<addr> = request over-the-DS FT with <addr>" },
 diff --git a/wpa_supplicant/wpa_priv.c b/wpa_supplicant/wpa_priv.c
-index 511df4f..483b6d8 100644
+index 511df4f1..483b6d85 100644
 --- a/wpa_supplicant/wpa_priv.c
 +++ b/wpa_supplicant/wpa_priv.c
 @@ -990,12 +990,6 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
@@ -3689,7 +3719,7 @@ index 511df4f..483b6d8 100644
  		wpa_priv_send_ft_response(iface, data);
  		break;
 diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
-index 51bb245..aba93da 100644
+index 51bb2457..aba93da1 100644
 --- a/wpa_supplicant/wpa_supplicant.c
 +++ b/wpa_supplicant/wpa_supplicant.c
 @@ -3238,16 +3238,6 @@ void wpa_supplicant_rx_eapol(void *ctx, const u8 *src_addr,
@@ -3710,7 +3740,7 @@ index 51bb245..aba93da 100644
  	    (wpa_s->last_eapol_matches_bssid &&
  #ifdef CONFIG_AP
 diff --git a/wpa_supplicant/wpa_supplicant.conf b/wpa_supplicant/wpa_supplicant.conf
-index e55b380..512116a 100644
+index e55b380f..512116a0 100644
 --- a/wpa_supplicant/wpa_supplicant.conf
 +++ b/wpa_supplicant/wpa_supplicant.conf
 @@ -865,12 +865,6 @@ fast_reauth=1
@@ -3727,7 +3757,7 @@ index e55b380..512116a 100644
  # enforce rekeying of PTK to mitigate some attacks against TKIP deficiencies.
  #
 diff --git a/wpa_supplicant/wpa_supplicant_template.conf b/wpa_supplicant/wpa_supplicant_template.conf
-index f3f2a64..d511029 100644
+index f3f2a641..d5110295 100644
 --- a/wpa_supplicant/wpa_supplicant_template.conf
 +++ b/wpa_supplicant/wpa_supplicant_template.conf
 @@ -3,4 +3,4 @@ update_config=1
@@ -3737,7 +3767,7 @@ index f3f2a64..d511029 100644
 -pmf=1
 +pmf=0
 diff --git a/wpa_supplicant/wpas_glue.c b/wpa_supplicant/wpas_glue.c
-index f84c8b9..8c1d4fc 100644
+index f84c8b90..8c1d4fcb 100644
 --- a/wpa_supplicant/wpas_glue.c
 +++ b/wpa_supplicant/wpas_glue.c
 @@ -1105,7 +1105,6 @@ void wpa_supplicant_rsn_supp_set_config(struct wpa_supplicant *wpa_s,

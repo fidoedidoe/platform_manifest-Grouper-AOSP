@@ -1,0 +1,71 @@
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index bbe02d4ae..ae130648d 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -89,7 +89,7 @@
+ 
+         <uses-library android:name="org.apache.http.legacy" android:required="false" />
+         <activity
+-            android:name="com.android.email.activity.ComposeActivityEmail"
++            android:name="com.android.email.activity.ComposeActivityEmailExternal"
+             android:label="@string/app_name"
+             android:documentLaunchMode="intoExisting"
+             android:autoRemoveFromRecents="true"
+@@ -144,6 +144,19 @@
+                 <data android:scheme="mailto" />
+             </intent-filter>
+ 
++        </activity>
++
++        <!--
++            There are 2 ComposeActivityEmail activities (here and above) because one is listening
++             for intents broadcasted internally and the other for those broadcasted from external
++             applications. Refer to b/32068883.
++        -->
++        <activity android:name="com.android.email.activity.ComposeActivityEmail"
++            android:exported="false"
++            android:label="@string/app_name"
++            android:documentLaunchMode="intoExisting"
++            android:autoRemoveFromRecents="true"
++            android:theme="@style/ComposeTheme">
+             <intent-filter>
+                 <action android:name="com.android.mail.intent.action.LAUNCH_COMPOSE" />
+                 <category android:name="android.intent.category.DEFAULT" />
+diff --git a/src/com/android/email/activity/ComposeActivityEmailExternal.java b/src/com/android/email/activity/ComposeActivityEmailExternal.java
+new file mode 100644
+index 000000000..455193bea
+--- /dev/null
++++ b/src/com/android/email/activity/ComposeActivityEmailExternal.java
+@@ -0,0 +1,32 @@
++/**
++ * Copyright (C) 2018 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.email.activity;
++
++/**
++ * A subclass of {@link ComposeActivityEmail} which is exported for other Android packages to open.
++ */
++public class ComposeActivityEmailExternal extends ComposeActivityEmail {
++
++  /**
++   * Only relevant when WebView Compose is enabled. Change this when WebView
++   * Compose is enabled for Email.
++   */
++  @Override
++  public boolean isExternal() {
++      return false;
++  }
++}

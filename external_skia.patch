@@ -1,8 +1,16 @@
 diff --git a/Android.mk b/Android.mk
-index 77c258aa06..4dbd17bb63 100644
+index 77c258aa06..a501e2cb50 100644
 --- a/Android.mk
 +++ b/Android.mk
-@@ -643,7 +643,6 @@ LOCAL_SRC_FILES := \
+@@ -89,6 +89,7 @@ LOCAL_SRC_FILES := \
+ 	src/codec/SkWebpCodec.cpp \
+ 	src/codec/SkCodecImageGenerator.cpp \
+ 	src/ports/SkImageGenerator_skia.cpp \
++	src/android/SkAndroidFrameworkUtils.cpp \
+ 	src/android/SkBitmapRegionCanvas.cpp \
+ 	src/android/SkBitmapRegionCodec.cpp \
+ 	src/android/SkBitmapRegionDecoder.cpp \
+@@ -643,7 +644,6 @@ LOCAL_SRC_FILES := \
  	src/utils/SkPatchGrid.cpp \
  	src/utils/SkPatchUtils.cpp \
  	src/utils/SkRGBAToYUV.cpp \
@@ -22,6 +30,37 @@ index e51da0fc6e..f362c99aca 100644
  	../tests/RTreeTest.cpp \
  	../tests/RandomTest.cpp \
  	../tests/ReadPixelsTest.cpp \
+diff --git a/include/android/SkAndroidFrameworkUtils.h b/include/android/SkAndroidFrameworkUtils.h
+new file mode 100644
+index 0000000000..abe959983b
+--- /dev/null
++++ b/include/android/SkAndroidFrameworkUtils.h
+@@ -0,0 +1,25 @@
++/*
++ * Copyright 2017 Google Inc.
++ *
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file.
++ */
++
++#ifndef SkAndroidFrameworkUtils_DEFINED
++#define SkAndroidFrameworkUtils_DEFINED
++
++#include "SkTypes.h"
++
++#ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
++
++/**
++ *  SkAndroidFrameworkUtils expose private APIs used only by Android framework.
++ */
++class SkAndroidFrameworkUtils {
++public:
++    static void SafetyNetLog(const char*);
++};
++
++#endif // SK_BUILD_FOR_ANDROID_FRAMEWORK
++
++#endif // SkAndroidFrameworkUtils_DEFINED
 diff --git a/include/core/SkOSFile.h b/include/core/SkOSFile.h
 index f977327e25..cb775e2bc1 100644
 --- a/include/core/SkOSFile.h
@@ -133,6 +172,31 @@ diff --git a/resources/invalid_images/b38116746.ico b/resources/invalid_images/b
 new file mode 100644
 index 0000000000..35ee5b5a28
 Binary files /dev/null and b/resources/invalid_images/b38116746.ico differ
+diff --git a/src/android/SkAndroidFrameworkUtils.cpp b/src/android/SkAndroidFrameworkUtils.cpp
+new file mode 100644
+index 0000000000..968b7b7d08
+--- /dev/null
++++ b/src/android/SkAndroidFrameworkUtils.cpp
+@@ -0,0 +1,19 @@
++/*
++ * Copyright 2017 Google Inc.
++ *
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file.
++ */
++
++#include "SkAndroidFrameworkUtils.h"
++
++#ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
++
++#include <log/log.h>
++
++void SkAndroidFrameworkUtils::SafetyNetLog(const char* bugNumber) {
++    android_errorWriteLog(0x534e4554, bugNumber);
++}
++
++#endif // SK_BUILD_FOR_ANDROID_FRAMEWORK
++
 diff --git a/src/codec/SkIcoCodec.cpp b/src/codec/SkIcoCodec.cpp
 index dc4222a43c..8b3d26dd86 100644
 --- a/src/codec/SkIcoCodec.cpp
@@ -179,6 +243,40 @@ index 9a3f248af5..5a3740d2c0 100644
  #include "SkTypes.h"
  
  /*
+diff --git a/src/codec/SkSwizzler.cpp b/src/codec/SkSwizzler.cpp
+index 133736879f..f4be612c4d 100644
+--- a/src/codec/SkSwizzler.cpp
++++ b/src/codec/SkSwizzler.cpp
+@@ -11,6 +11,10 @@
+ #include "SkSwizzler.h"
+ #include "SkTemplates.h"
+ 
++#ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
++    #include "SkAndroidFrameworkUtils.h"
++#endif
++
+ static void copy(void* dst, const uint8_t* src, int width, int bpp, int deltaSrc, int offset,
+         const SkPMColor ctable[]) {
+     // This function must not be called if we are sampling.  If we are not
+@@ -937,6 +941,18 @@ int SkSwizzler::onSetSampleX(int sampleX) {
+     fSwizzleWidth = get_scaled_dimension(fSrcWidth, sampleX);
+     fAllocatedWidth = get_scaled_dimension(fDstWidth, sampleX);
+ 
++    if (fDstOffsetBytes > 0) {
++        const size_t dstSwizzleBytes   = fSwizzleWidth   * fDstBPP;
++        const size_t dstAllocatedBytes = fAllocatedWidth * fDstBPP;
++        if (fDstOffsetBytes + dstSwizzleBytes > dstAllocatedBytes) {
++#ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
++            SkAndroidFrameworkUtils::SafetyNetLog("118143775");
++#endif
++            SkASSERT(dstSwizzleBytes < dstAllocatedBytes);
++            fDstOffsetBytes = dstAllocatedBytes - dstSwizzleBytes;
++        }
++    }
++
+     // The optimized swizzler functions do not support sampling.  Sampled swizzles
+     // are already fast because they skip pixels.  We haven't seen a situation
+     // where speeding up sampling has a significant impact on total decode time.
 diff --git a/src/codec/SkWebpCodec.cpp b/src/codec/SkWebpCodec.cpp
 index 6cfb385294..8acd205d13 100644
 --- a/src/codec/SkWebpCodec.cpp

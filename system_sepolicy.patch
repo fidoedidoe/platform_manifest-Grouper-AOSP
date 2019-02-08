@@ -155,10 +155,10 @@ index 45569de4..5013ad30 100644
  neverallow {
    domain
 diff --git a/file.te b/file.te
-index 87cec829..bdc7cbe6 100644
+index 87cec829..1ebe2163 100644
 --- a/file.te
 +++ b/file.te
-@@ -46,6 +46,8 @@ type devpts, fs_type, mlstrustedobject;
+@@ -46,12 +46,14 @@ type devpts, fs_type, mlstrustedobject;
  type tmpfs, fs_type;
  type shm, fs_type;
  type mqueue, fs_type;
@@ -167,6 +167,22 @@ index 87cec829..bdc7cbe6 100644
  type fuse, sdcard_type, fs_type, mlstrustedobject;
  type sdcardfs, sdcard_type, fs_type, mlstrustedobject;
  type vfat, sdcard_type, fs_type, mlstrustedobject;
+ type debugfs, fs_type;
+-type debugfs_trace_marker, fs_type, debugfs_type, mlstrustedobject;
+-type debugfs_tracing, fs_type, debugfs_type;
++type debugfs_trace_marker, fs_type, debugfs_type, tracefs_type, mlstrustedobject;
++type debugfs_tracing, fs_type, debugfs_type, tracefs_type;
+ type pstorefs, fs_type;
+ type functionfs, fs_type;
+ type oemfs, fs_type, contextmount_type;
+@@ -245,6 +247,7 @@ type property_contexts, file_type;
+ allow fs_type self:filesystem associate;
+ allow sysfs_type sysfs:filesystem associate;
+ allow debugfs_type { debugfs debugfs_tracing }:filesystem associate;
++allow tracefs_type debugfs_tracing:filesystem associate;
+ allow file_type labeledfs:filesystem associate;
+ allow file_type tmpfs:filesystem associate;
+ allow file_type rootfs:filesystem associate;
 diff --git a/mediaserver.te b/mediaserver.te
 index 5fbaa303..dc05e14b 100644
 --- a/mediaserver.te
