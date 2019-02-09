@@ -1,3 +1,37 @@
+diff --git a/otherlibs/highgui/bitstrm.cpp b/otherlibs/highgui/bitstrm.cpp
+index 3a3bb1aaa..17a599356 100644
+--- a/otherlibs/highgui/bitstrm.cpp
++++ b/otherlibs/highgui/bitstrm.cpp
+@@ -209,13 +209,18 @@ void  RBaseStream::SetPos( int pos )
+ int  RBaseStream::GetPos()
+ {
+     assert( IsOpened() );
+-    return m_block_pos - m_block_size + (int)(m_current - m_start);
++    int pos = validateToInt((m_current - m_start) + m_block_pos - m_block_size );
++    //assert(pos >= m_block_pos); // overflow check
++    assert(pos >= 0); // overflow check
++    return pos;
+ }
+ 
+ void  RBaseStream::Skip( int bytes )
+ {
+     assert( bytes >= 0 );
++    uchar* old = m_current;
+     m_current += bytes;
++    assert(m_current >= old);
+ }
+ 
+ jmp_buf& RBaseStream::JmpBuf()
+@@ -746,6 +751,9 @@ void  WBaseStream::WriteBlock()
+ {
+     int size = (int)(m_current - m_start);
+     assert( m_file != 0 );
++    assert( IsOpened() );
++    if (size == 0 )
++        return;
+ 
+     //fseek( m_file, m_block_pos, SEEK_SET );
+     fwrite( m_start, 1, size, m_file );
 diff --git a/otherlibs/highgui/grfmt_bmp.cpp b/otherlibs/highgui/grfmt_bmp.cpp
 index c67ed4132..b39e23a53 100644
 --- a/otherlibs/highgui/grfmt_bmp.cpp
