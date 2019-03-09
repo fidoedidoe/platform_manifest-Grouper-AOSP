@@ -4182,7 +4182,7 @@ index d656519..d2ea7a5 100644
  
      if(1 == ps_codec->i4_pic_present)
 diff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c
-index c0f1564..5fe955a 100644
+index c0f1564..78b578a 100644
 --- a/decoder/ihevcd_parse_headers.c
 +++ b/decoder/ihevcd_parse_headers.c
 @@ -1272,12 +1272,6 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
@@ -4267,7 +4267,26 @@ index c0f1564..5fe955a 100644
          ps_sps->i1_num_long_term_ref_pics_sps = value;
  
          for(i = 0; i < ps_sps->i1_num_long_term_ref_pics_sps; i++)
-@@ -1797,6 +1815,35 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
+@@ -1576,6 +1594,18 @@ IHEVCD_ERROR_T ihevcd_parse_sps(codec_t *ps_codec)
+         if((0 >= disp_wd) || (0 >= disp_ht))
+             return IHEVCD_INVALID_PARAMETER;
+ 
++        if((0 != ps_codec->u4_allocate_dynamic_done) &&
++                            ((ps_codec->i4_disp_wd != disp_wd) ||
++                            (ps_codec->i4_disp_ht != disp_ht)))
++        {
++            if(0 == ps_codec->i4_first_pic_done)
++            {
++                return IHEVCD_INVALID_PARAMETER;
++            }
++            ps_codec->i4_reset_flag = 1;
++            return (IHEVCD_ERROR_T)IVD_RES_CHANGED;
++        }
++
+         ps_codec->i4_disp_wd = disp_wd;
+         ps_codec->i4_disp_ht = disp_ht;
+ 
+@@ -1797,6 +1827,35 @@ IHEVCD_ERROR_T ihevcd_parse_pps(codec_t *ps_codec)
      BITS_PARSE("tiles_enabled_flag", value, ps_bitstrm, 1);
      ps_pps->i1_tiles_enabled_flag = value;
  

@@ -50,6 +50,85 @@ index 5cfcac33050..010b871c1d4 100644
              final Network network = cm.getBoundNetworkForProcess();
              if (network != null) {
                  Proxy.setHttpProxySystemProperty(cm.getDefaultProxy());
+diff --git a/core/java/android/app/DownloadManager.java b/core/java/android/app/DownloadManager.java
+index 6e38347f7c9..462f66f38de 100644
+--- a/core/java/android/app/DownloadManager.java
++++ b/core/java/android/app/DownloadManager.java
+@@ -832,6 +832,7 @@ public class DownloadManager {
+ 
+         private long[] mIds = null;
+         private Integer mStatusFlags = null;
++        private String mFilterString = null;
+         private String mOrderByColumn = Downloads.Impl.COLUMN_LAST_MODIFICATION;
+         private int mOrderDirection = ORDER_DESCENDING;
+         private boolean mOnlyIncludeVisibleInDownloadsUi = false;
+@@ -845,6 +846,17 @@ public class DownloadManager {
+             return this;
+         }
+ 
++        /**
++         *
++         * Include only the downloads that contains the given string in its name.
++         * @return this object
++         * @hide
++         */
++        public Query setFilterByString(@Nullable String filter) {
++            mFilterString = filter;
++            return this;
++        }
++
+         /**
+          * Include only downloads with status matching any the given status flags.
+          * @param flags any combination of the STATUS_* bit flags
+@@ -904,9 +916,20 @@ public class DownloadManager {
+             List<String> selectionParts = new ArrayList<String>();
+             String[] selectionArgs = null;
+ 
+-            if (mIds != null) {
+-                selectionParts.add(getWhereClauseForIds(mIds));
+-                selectionArgs = getWhereArgsForIds(mIds);
++            int whereArgsCount = (mIds == null) ? 0 : mIds.length;
++            whereArgsCount = (mFilterString == null) ? whereArgsCount : whereArgsCount + 1;
++            selectionArgs = new String[whereArgsCount];
++
++            if (whereArgsCount > 0) {
++                if (mIds != null) {
++                    selectionParts.add(getWhereClauseForIds(mIds));
++                    getWhereArgsForIds(mIds, selectionArgs);
++                }
++
++                if (mFilterString != null) {
++                    selectionParts.add(Downloads.Impl.COLUMN_TITLE + " LIKE ?");
++                    selectionArgs[selectionArgs.length - 1] = "%" + mFilterString + "%";
++                }
+             }
+ 
+             if (mStatusFlags != null) {
+@@ -1450,12 +1473,22 @@ public class DownloadManager {
+      */
+     static String[] getWhereArgsForIds(long[] ids) {
+         String[] whereArgs = new String[ids.length];
++        return getWhereArgsForIds(ids, whereArgs);
++    }
++
++    /**
++     * Get selection args for a clause returned by {@link #getWhereClauseForIds(long[])}
++     * and write it to the supplied args array.
++     */
++    static String[] getWhereArgsForIds(long[] ids, String[] args) {
++        assert(args.length >= ids.length);
+         for (int i = 0; i < ids.length; i++) {
+-            whereArgs[i] = Long.toString(ids[i]);
++            args[i] = Long.toString(ids[i]);
+         }
+-        return whereArgs;
++        return args;
+     }
+ 
++
+     /**
+      * This class wraps a cursor returned by DownloadProvider -- the "underlying cursor" -- and
+      * presents a different set of columns, those defined in the DownloadManager.COLUMN_* constants.
 diff --git a/core/java/android/app/Notification.java b/core/java/android/app/Notification.java
 index 0dd9c63c40c..bcdf3f49251 100644
 --- a/core/java/android/app/Notification.java
@@ -130,7 +209,7 @@ index cd5eff29237..d329175646e 100644
          return null;
      }
 diff --git a/core/java/android/content/ContentProvider.java b/core/java/android/content/ContentProvider.java
-index bc2d788bf4c..1072b5d7902 100644
+index bc2d788bf4c..e61ac70de8d 100644
 --- a/core/java/android/content/ContentProvider.java
 +++ b/core/java/android/content/ContentProvider.java
 @@ -53,6 +53,7 @@ import java.io.IOException;
@@ -141,22 +220,25 @@ index bc2d788bf4c..1072b5d7902 100644
  
  /**
   * Content providers are one of the primary building blocks of Android applications, providing
-@@ -207,7 +208,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+@@ -207,8 +208,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
          public Cursor query(String callingPkg, Uri uri, String[] projection,
                  String selection, String[] selectionArgs, String sortOrder,
                  ICancellationSignal cancellationSignal) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              if (enforceReadPermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
                  // The caller has no access to the data, so return an empty cursor with
-@@ -246,14 +247,14 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+                 // the columns in the requested order. The caller may ask for an invalid
+@@ -246,16 +247,16 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
  
          @Override
          public String getType(Uri uri) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              return ContentProvider.this.getType(uri);
          }
  
@@ -165,17 +247,22 @@ index bc2d788bf4c..1072b5d7902 100644
 -            validateIncomingUri(uri);
 +            uri = validateIncomingUri(uri);
              int userId = getUserIdFromUri(uri);
-             uri = getUriWithoutUserId(uri);
+-            uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
-@@ -269,7 +270,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+                 return rejectInsert(uri, initialValues);
+             }
+@@ -269,8 +270,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
  
          @Override
          public int bulkInsert(String callingPkg, Uri uri, ContentValues[] initialValues) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
                  return 0;
+             }
 @@ -291,11 +292,12 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
              for (int i = 0; i < numOperations; i++) {
                  ContentProviderOperation operation = operations.get(i);
@@ -186,67 +273,79 @@ index bc2d788bf4c..1072b5d7902 100644
 -                    // Removing the user id from the uri.
 -                    operation = new ContentProviderOperation(operation, true);
 +                uri = validateIncomingUri(uri);
-+                uri = getUriWithoutUserId(uri);
++                uri = maybeGetUriWithoutUserId(uri);
 +                // Rebuild operation if we changed the Uri above
 +                if (!Objects.equals(operation.getUri(), uri)) {
 +                    operation = new ContentProviderOperation(operation, uri);
                      operations.set(i, operation);
                  }
                  if (operation.isReadOperation()) {
-@@ -330,7 +332,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+@@ -330,8 +332,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
  
          @Override
          public int delete(String callingPkg, Uri uri, String selection, String[] selectionArgs) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
                  return 0;
-@@ -346,7 +348,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             }
+@@ -346,8 +348,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
          @Override
          public int update(String callingPkg, Uri uri, ContentValues values, String selection,
                  String[] selectionArgs) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              if (enforceWritePermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
                  return 0;
-@@ -363,7 +365,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             }
+@@ -363,8 +365,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
          public ParcelFileDescriptor openFile(
                  String callingPkg, Uri uri, String mode, ICancellationSignal cancellationSignal,
                  IBinder callerToken) throws FileNotFoundException {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              enforceFilePermission(callingPkg, uri, mode, callerToken);
              final String original = setCallingPackage(callingPkg);
-@@ -379,7 +381,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             try {
+@@ -379,8 +381,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
          public AssetFileDescriptor openAssetFile(
                  String callingPkg, Uri uri, String mode, ICancellationSignal cancellationSignal)
                  throws FileNotFoundException {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              enforceFilePermission(callingPkg, uri, mode, null);
              final String original = setCallingPackage(callingPkg);
-@@ -405,7 +407,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+             try {
+@@ -405,8 +407,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
  
          @Override
          public String[] getStreamTypes(Uri uri, String mimeTypeFilter) {
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              return ContentProvider.this.getStreamTypes(uri, mimeTypeFilter);
          }
-@@ -414,7 +416,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+ 
+@@ -414,8 +416,8 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
          public AssetFileDescriptor openTypedAssetFile(String callingPkg, Uri uri, String mimeType,
                  Bundle opts, ICancellationSignal cancellationSignal) throws FileNotFoundException {
              Bundle.setDefusable(opts, true);
 -            validateIncomingUri(uri);
+-            uri = getUriWithoutUserId(uri);
 +            uri = validateIncomingUri(uri);
-             uri = getUriWithoutUserId(uri);
++            uri = maybeGetUriWithoutUserId(uri);
              enforceFilePermission(callingPkg, uri, "r", null);
              final String original = setCallingPackage(callingPkg);
+             try {
 @@ -433,7 +435,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
  
          @Override
@@ -274,16 +373,27 @@ index bc2d788bf4c..1072b5d7902 100644
                  mTransport.mAppOpsManager = (AppOpsManager) context.getSystemService(
                          Context.APP_OPS_SERVICE);
              }
-@@ -1844,7 +1846,7 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+@@ -1844,12 +1846,14 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
      }
  
      /** @hide */
 -    private void validateIncomingUri(Uri uri) throws SecurityException {
 +    public Uri validateIncomingUri(Uri uri) throws SecurityException {
          String auth = uri.getAuthority();
-         int userId = getUserIdFromAuthority(auth, UserHandle.USER_CURRENT);
-         if (userId != UserHandle.USER_CURRENT && userId != mContext.getUserId()) {
-@@ -1861,6 +1863,19 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
+-        int userId = getUserIdFromAuthority(auth, UserHandle.USER_CURRENT);
+-        if (userId != UserHandle.USER_CURRENT && userId != mContext.getUserId()) {
+-            throw new SecurityException("trying to query a ContentProvider in user "
+-                    + mContext.getUserId() + " with a uri belonging to user " + userId);
++        if (!mSingleUser) {
++            int userId = getUserIdFromAuthority(auth, UserHandle.USER_CURRENT);
++            if (userId != UserHandle.USER_CURRENT && userId != mContext.getUserId()) {
++                throw new SecurityException("trying to query a ContentProvider in user "
++                        + mContext.getUserId() + " with a uri belonging to user " + userId);
++            }
+         }
+         if (!matchesOurAuthorities(getAuthorityWithoutUserId(auth))) {
+             String message = "The authority of the uri " + uri + " does not match the one of the "
+@@ -1861,6 +1865,27 @@ public abstract class ContentProvider implements ComponentCallbacks2 {
              }
              throw new SecurityException(message);
          }
@@ -300,6 +410,14 @@ index bc2d788bf4c..1072b5d7902 100644
 +        } else {
 +            return uri;
 +        }
++    }
++
++    /** @hide */
++    private Uri maybeGetUriWithoutUserId(Uri uri) {
++        if (mSingleUser) {
++            return uri;
++        }
++        return getUriWithoutUserId(uri);
      }
  
      /** @hide */
@@ -501,6 +619,54 @@ index 00000000000..a4b2fe0c10e
 +                Binder.getCallingUid(), packageName);
 +    }
 +}
+diff --git a/core/java/android/content/pm/PackageItemInfo.java b/core/java/android/content/pm/PackageItemInfo.java
+index bc79f41b1fc..73ae83e32f6 100644
+--- a/core/java/android/content/pm/PackageItemInfo.java
++++ b/core/java/android/content/pm/PackageItemInfo.java
+@@ -46,6 +46,9 @@ import java.util.Comparator;
+  */
+ public class PackageItemInfo {
+     private static final float MAX_LABEL_SIZE_PX = 500f;
++    /** The maximum length of a safe label, in characters */
++    private static final int MAX_SAFE_LABEL_LENGTH = 50000;
++
+     /**
+      * Public name of this item. From the "android:name" attribute.
+      */
+@@ -173,7 +176,8 @@ public class PackageItemInfo {
+         // If the label contains new line characters it may push the UI
+         // down to hide a part of it. Labels shouldn't have new line
+         // characters, so just truncate at the first time one is seen.
+-        final int labelLength = labelStr.length();
++        final int labelLength = Math.min(labelStr.length(), MAX_SAFE_LABEL_LENGTH);
++        final StringBuffer sb = new StringBuffer(labelLength);
+         int offset = 0;
+         while (offset < labelLength) {
+             final int codePoint = labelStr.codePointAt(offset);
+@@ -185,14 +189,19 @@ public class PackageItemInfo {
+                 break;
+             }
+             // replace all non-break space to " " in order to be trimmed
++            final int charCount = Character.charCount(codePoint);
+             if (type == Character.SPACE_SEPARATOR) {
+-                labelStr = labelStr.substring(0, offset) + " " + labelStr.substring(offset +
+-                        Character.charCount(codePoint));
++                sb.append(' ');
++            } else {
++                sb.append(labelStr.charAt(offset));
++                if (charCount == 2) {
++                    sb.append(labelStr.charAt(offset + 1));
++                }
+             }
+-            offset += Character.charCount(codePoint);
++            offset += charCount;
+         }
+ 
+-        labelStr = labelStr.trim();
++        labelStr = sb.toString().trim();
+         if (labelStr.isEmpty()) {
+             return packageName;
+         }
 diff --git a/core/java/android/content/pm/RegisteredServicesCache.java b/core/java/android/content/pm/RegisteredServicesCache.java
 index a1103838280..aea843adbd4 100644
 --- a/core/java/android/content/pm/RegisteredServicesCache.java
@@ -1063,7 +1229,7 @@ index 674f809ef0f..70dfef574ca 100644
          }
          try {
 diff --git a/core/java/android/text/Layout.java b/core/java/android/text/Layout.java
-index 0bd5071b6ea..bc55ee798e2 100644
+index 0bd5071b6ea..3bc9390c581 100644
 --- a/core/java/android/text/Layout.java
 +++ b/core/java/android/text/Layout.java
 @@ -824,6 +824,32 @@ public abstract class Layout {
@@ -1099,8 +1265,50 @@ index 0bd5071b6ea..bc55ee798e2 100644
      private boolean primaryIsTrailingPrevious(int offset) {
          int line = getLineForOffset(offset);
          int lineStart = getLineStart(line);
-@@ -873,6 +899,95 @@ public abstract class Layout {
+@@ -873,6 +899,41 @@ public abstract class Layout {
          return levelBefore < levelAt;
+     }
+ 
++    /**
++     * Computes in linear time the results of calling
++     * #primaryIsTrailingPrevious for all offsets on a line.
++     * @param line The line giving the offsets we compute the information for
++     * @return The array of results, indexed from 0, where 0 corresponds to the line start offset
++     */
++    private boolean[] primaryIsTrailingPreviousAllLineOffsets(int line) {
++        int lineStart = getLineStart(line);
++        int lineEnd = getLineEnd(line);
++        int[] runs = getLineDirections(line).mDirections;
++
++        boolean[] trailing = new boolean[lineEnd - lineStart + 1];
++
++        byte[] level = new byte[lineEnd - lineStart + 1];
++        for (int i = 0; i < runs.length; i += 2) {
++            int start = lineStart + runs[i];
++            int limit = start + (runs[i + 1] & RUN_LENGTH_MASK);
++            if (limit > lineEnd) {
++                limit = lineEnd;
++            }
++            level[limit - lineStart - 1] =
++                    (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
++        }
++
++        for (int i = 0; i < runs.length; i += 2) {
++            int start = lineStart + runs[i];
++            byte currentLevel = (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
++            trailing[start - lineStart] = currentLevel > (start == lineStart
++                    ? (getParagraphDirection(line) == 1 ? 0 : 1)
++                    : level[start - lineStart - 1]);
++        }
++
++        return trailing;
++    }
++
+     /**
+      * Get the primary horizontal position for the specified text offset.
+      * This is the location where a new character would be inserted in
+@@ -952,6 +1013,60 @@ public abstract class Layout {
+         return getLineStartPos(line, left, right) + wid;
      }
  
 +    /**
@@ -1157,52 +1365,24 @@ index 0bd5071b6ea..bc55ee798e2 100644
 +        return horizontal;
 +    }
 +
-+    /**
-+     * Computes in linear time the results of calling
-+     * #primaryIsTrailingPrevious for all offsets on a line.
-+     * @param line The line giving the offsets we compute the information for
-+     * @return The array of results, indexed from 0, where 0 corresponds to the line start offset
-+     */
-+    private boolean[] primaryIsTrailingPreviousAllLineOffsets(int line) {
-+        int lineStart = getLineStart(line);
-+        int lineEnd = getLineEnd(line);
-+        int[] runs = getLineDirections(line).mDirections;
-+
-+        boolean[] trailing = new boolean[lineEnd - lineStart + 1];
-+
-+        byte[] level = new byte[lineEnd - lineStart + 1];
-+        for (int i = 0; i < runs.length; i += 2) {
-+            int start = lineStart + runs[i];
-+            int limit = start + (runs[i + 1] & RUN_LENGTH_MASK);
-+            if (limit > lineEnd) {
-+                limit = lineEnd;
-+            }
-+            level[limit - lineStart - 1] =
-+                    (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
-+        }
-+
-+        for (int i = 0; i < runs.length; i += 2) {
-+            int start = lineStart + runs[i];
-+            byte currentLevel = (byte) ((runs[i + 1] >>> RUN_LEVEL_SHIFT) & RUN_LEVEL_MASK);
-+            trailing[start - lineStart] = currentLevel > (start == lineStart
-+                    ? (getParagraphDirection(line) == 1 ? 0 : 1)
-+                    : level[start - lineStart - 1]);
-+        }
-+
-+        return trailing;
-+    }
-+
      /**
-      * Get the primary horizontal position for the specified text offset.
-      * This is the location where a new character would be inserted in
-@@ -1176,7 +1291,9 @@ public abstract class Layout {
+      * Get the leftmost position that should be exposed for horizontal
+      * scrolling on the specified line.
+@@ -1167,6 +1282,8 @@ public abstract class Layout {
+         // XXX: we don't care about tabs as we just use TextLine#getOffsetToLeftRightOf here.
+         tl.set(mPaint, mText, lineStartOffset, lineEndOffset, getParagraphDirection(line), dirs,
+                 false, null);
++        final HorizontalMeasurementProvider horizontal =
++                new HorizontalMeasurementProvider(line, primary);
+ 
+         final int max;
+         if (line == getLineCount() - 1) {
+@@ -1176,7 +1293,7 @@ public abstract class Layout {
                      !isRtlCharAt(lineEndOffset - 1)) + lineStartOffset;
          }
          int best = lineStartOffset;
 -        float bestdist = Math.abs(getHorizontal(best, primary) - horiz);
-+	final HorizontalMeasurementProvider horizontal =
-+              new HorizontalMeasurementProvider(line);
-+	float bestdist = Math.abs(horizontal.get(best) - horiz);
++        float bestdist = Math.abs(horizontal.get(lineStartOffset) - horiz);
  
          for (int i = 0; i < dirs.mDirections.length; i += 2) {
              int here = lineStartOffset + dirs.mDirections[i];
@@ -1245,7 +1425,7 @@ index 0bd5071b6ea..bc55ee798e2 100644
  
          if (dist <= bestdist) {
              bestdist = dist;
-@@ -1241,6 +1358,45 @@ public abstract class Layout {
+@@ -1241,6 +1358,47 @@ public abstract class Layout {
          return best;
      }
  
@@ -1259,12 +1439,14 @@ index 0bd5071b6ea..bc55ee798e2 100644
 +     */
 +    private class HorizontalMeasurementProvider {
 +        private final int mLine;
++        private final boolean mPrimary;
 +
 +        private float[] mHorizontals;
 +        private int mLineStartOffset;
 +
-+        HorizontalMeasurementProvider(final int line) {
++        HorizontalMeasurementProvider(final int line, final boolean primary) {
 +            mLine = line;
++            mPrimary = primary;
 +            init();
 +        }
 +
@@ -1274,14 +1456,14 @@ index 0bd5071b6ea..bc55ee798e2 100644
 +                return;
 +            }
 +
-+            mHorizontals = getLineHorizontals(mLine, false, true);
++            mHorizontals = getLineHorizontals(mLine, false, mPrimary);
 +            mLineStartOffset = getLineStart(mLine);
 +        }
 +
 +        float get(final int offset) {
 +            if (mHorizontals == null || offset < mLineStartOffset
 +                    || offset >= mLineStartOffset + mHorizontals.length) {
-+                return getPrimaryHorizontal(offset);
++                return getHorizontal(offset, mPrimary);
 +            } else {
 +                return mHorizontals[offset - mLineStartOffset];
 +            }
@@ -1394,6 +1576,82 @@ index 2a52961984f..79333563af1 100644
      /**
       * Draws a unidirectional (but possibly multi-styled) run of text.
       *
+diff --git a/core/java/android/text/util/Linkify.java b/core/java/android/text/util/Linkify.java
+index ca037a229b0..51ef650c000 100644
+--- a/core/java/android/text/util/Linkify.java
++++ b/core/java/android/text/util/Linkify.java
+@@ -23,6 +23,7 @@ import android.telephony.PhoneNumberUtils;
+ import android.text.method.LinkMovementMethod;
+ import android.text.method.MovementMethod;
+ import android.text.style.URLSpan;
++import android.util.Log;
+ import android.text.Spannable;
+ import android.text.SpannableString;
+ import android.text.Spanned;
+@@ -65,6 +66,9 @@ import libcore.util.EmptyArray;
+  */
+ 
+ public class Linkify {
++
++    private static final String LOG_TAG = "Linkify";
++
+     /**
+      *  Bit field indicating that web URLs should be matched in methods that
+      *  take an options mask
+@@ -222,6 +226,11 @@ public class Linkify {
+      *  @return True if at least one link is found and applied.
+      */
+     public static final boolean addLinks(@NonNull Spannable text, @LinkifyMask int mask) {
++        if (text != null && containsUnsupportedCharacters(text.toString())) {
++            android.util.EventLog.writeEvent(0x534e4554, "116321860", -1, "");
++            return false;
++        }
++
+         if (mask == 0) {
+             return false;
+         }
+@@ -267,6 +276,29 @@ public class Linkify {
+         return true;
+     }
+ 
++    /**
++     * Returns true if the specified text contains at least one unsupported character for applying
++     * links. Also logs the error.
++     *
++     * @param text the text to apply links to
++     * @hide
++     */
++    public static boolean containsUnsupportedCharacters(String text) {
++        if (text.contains("\u202C")) {
++            Log.e(LOG_TAG, "Unsupported character for applying links: u202C");
++            return true;
++        }
++        if (text.contains("\u202D")) {
++            Log.e(LOG_TAG, "Unsupported character for applying links: u202D");
++            return true;
++        }
++        if (text.contains("\u202E")) {
++            Log.e(LOG_TAG, "Unsupported character for applying links: u202E");
++            return true;
++        }
++        return false;
++    }
++
+     /**
+      *  Scans the text of the provided TextView and turns all occurrences of
+      *  the link types indicated in the mask into clickable links.  If matches
+@@ -437,6 +469,11 @@ public class Linkify {
+     public static final boolean addLinks(@NonNull Spannable spannable, @NonNull Pattern pattern,
+             @Nullable  String defaultScheme, @Nullable String[] schemes,
+             @Nullable MatchFilter matchFilter, @Nullable TransformFilter transformFilter) {
++        if (spannable != null && containsUnsupportedCharacters(spannable.toString())) {
++            android.util.EventLog.writeEvent(0x534e4554, "116321860", -1, "");
++            return false;
++        }
++
+         final String[] schemesCopy;
+         if (defaultScheme == null) defaultScheme = "";
+         if (schemes == null || schemes.length < 1) {
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
 index 395f73844b0..169f7e170dd 100644
 --- a/core/java/android/view/WindowManager.java
@@ -1604,6 +1862,19 @@ index d5b6def9742..df1ed7d392b 100644
              if (loader == null) {
                  loader = getClass().getClassLoader();
              }
+diff --git a/core/jni/android/graphics/Bitmap.cpp b/core/jni/android/graphics/Bitmap.cpp
+index 72755ce105c..3e6fe3f38a5 100755
+--- a/core/jni/android/graphics/Bitmap.cpp
++++ b/core/jni/android/graphics/Bitmap.cpp
+@@ -725,6 +725,8 @@ static jobject Bitmap_creator(JNIEnv* env, jobject, jintArray jColors,
+ 
+     Bitmap* nativeBitmap = GraphicsJNI::allocateJavaPixelRef(env, &bitmap, NULL);
+     if (!nativeBitmap) {
++        ALOGE("OOM allocating Bitmap with dimensions %i x %i", width, height);
++        doThrowOOME(env);
+         return NULL;
+     }
+ 
 diff --git a/core/jni/android/graphics/BitmapFactory.cpp b/core/jni/android/graphics/BitmapFactory.cpp
 index 4001283c4c6..0a143610ebd 100644
 --- a/core/jni/android/graphics/BitmapFactory.cpp
@@ -1719,6 +1990,88 @@ index 011884cb549..8403e80ae31 100644
      <!-- @SystemApi Allows an application to manage (create, destroy,
           Z-order) application tokens in the window manager.
           <p>Not for use by third-party applications.
+diff --git a/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png b/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png
+index af8e2512385..52af11d8f5a 100644
+Binary files a/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png and b/core/res/res/drawable-sw600dp-nodpi/default_wallpaper.png differ
+diff --git a/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png b/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png
+index cb00d82a826..e3e66721c86 100644
+Binary files a/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png and b/core/res/res/drawable-sw720dp-nodpi/default_wallpaper.png differ
+diff --git a/core/res/res/values-mcc302-mnc220/config.xml b/core/res/res/values-mcc302-mnc220/config.xml
+index 422f7c92648..e6ddadc37cc 100644
+--- a/core/res/res/values-mcc302-mnc220/config.xml
++++ b/core/res/res/values-mcc302-mnc220/config.xml
+@@ -50,7 +50,7 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ 
+ </resources>
+diff --git a/core/res/res/values-mcc302-mnc221/config.xml b/core/res/res/values-mcc302-mnc221/config.xml
+index 14442500757..0f01f537902 100644
+--- a/core/res/res/values-mcc302-mnc221/config.xml
++++ b/core/res/res/values-mcc302-mnc221/config.xml
+@@ -48,7 +48,7 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ 
+ </resources>
+diff --git a/core/res/res/values-mcc302-mnc370/config.xml b/core/res/res/values-mcc302-mnc370/config.xml
+index 05265c7fcd7..9231691db58 100644
+--- a/core/res/res/values-mcc302-mnc370/config.xml
++++ b/core/res/res/values-mcc302-mnc370/config.xml
+@@ -59,7 +59,7 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ 
+ </resources>
+diff --git a/core/res/res/values-mcc302-mnc610/config.xml b/core/res/res/values-mcc302-mnc610/config.xml
+index 0af2c39e786..b85da2bf047 100644
+--- a/core/res/res/values-mcc302-mnc610/config.xml
++++ b/core/res/res/values-mcc302-mnc610/config.xml
+@@ -43,6 +43,6 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ </resources>
+diff --git a/core/res/res/values-mcc302-mnc640/config.xml b/core/res/res/values-mcc302-mnc640/config.xml
+index e005bc00a27..0454c580442 100644
+--- a/core/res/res/values-mcc302-mnc640/config.xml
++++ b/core/res/res/values-mcc302-mnc640/config.xml
+@@ -39,6 +39,6 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ </resources>
+diff --git a/core/res/res/values-mcc302-mnc720/config.xml b/core/res/res/values-mcc302-mnc720/config.xml
+index 7a3540aa3bd..eef85e18e8d 100644
+--- a/core/res/res/values-mcc302-mnc720/config.xml
++++ b/core/res/res/values-mcc302-mnc720/config.xml
+@@ -61,7 +61,7 @@
+         <item>ERR_ESTIMATE=0</item>
+         <item>INTERMEDIATE_POS=0</item>
+         <item>GPS_LOCK=0</item>
+-        <item>SUPL_ES=0</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ 
+ </resources>
 diff --git a/core/res/res/values-mcc310-mnc490-fr/strings.xml b/core/res/res/values-mcc310-mnc490-fr/strings.xml
 deleted file mode 100644
 index 33e0c97b2fb..00000000000
@@ -1758,25 +2111,38 @@ index 33e0c97b2fb..00000000000
 -    <string name="wfcSpnFormat" msgid="1518868466785799436">"Appels Wi-Fi %s"</string>
 -</resources>
 diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
-index 7baed78a51b..a0fbdac7360 100644
+index 7baed78a51b..bf421043bc2 100644
 --- a/core/res/res/values/config.xml
 +++ b/core/res/res/values/config.xml
-@@ -2710,4 +2710,6 @@
+@@ -2325,6 +2325,7 @@
+         <item>NTP_SERVER=north-america.pool.ntp.org</item>
+         <item>SUPL_VER=0x20000</item>
+         <item>SUPL_MODE=1</item>
++        <item>SUPL_ES=1</item>
+     </string-array>
+ 
+     <!-- If there is no preload VM number in the sim card, carriers such as
+@@ -2710,4 +2711,10 @@
           is installed. -->
      <bool name="config_permissionReviewRequired">false</bool>
  
++    <!-- Older rotation sensors are not setting event.timestamp correctly. Setting to
++         true will use SystemClock.elapsedRealtimeNanos() to set timestamp. -->
++    <bool name="config_useSystemClockforRotationSensor">false</bool>
++
 +    <!-- Whether to enable HumanInteractionController by default -->
 +    <bool name="config_HICEnabledDefault">true</bool>
  </resources>
 diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
-index 08ac0436d63..9e6f3b8b83f 100644
+index 08ac0436d63..82a2ff12d5d 100644
 --- a/core/res/res/values/symbols.xml
 +++ b/core/res/res/values/symbols.xml
-@@ -2749,4 +2749,7 @@
+@@ -2749,4 +2749,8 @@
    <java-symbol type="bool" name="use_lock_pattern_drawable" />
    <java-symbol type="drawable" name="lockscreen_notselected" />
    <java-symbol type="drawable" name="lockscreen_selected" />
 +
++  <java-symbol type="bool" name="config_useSystemClockforRotationSensor" />
 +  <!-- Whether to enable HumanInteractionController by default -->
 +  <java-symbol type="bool" name="config_HICEnabledDefault" />
  </resources>
@@ -1831,8 +2197,31 @@ index 6fa28b1ccda..ea0347d67ad 100644
      }
  
      @SmallTest
+diff --git a/core/tests/coretests/src/android/widget/TextViewActivityTest.java b/core/tests/coretests/src/android/widget/TextViewActivityTest.java
+index 67ffd2b0ca3..381597670f8 100644
+--- a/core/tests/coretests/src/android/widget/TextViewActivityTest.java
++++ b/core/tests/coretests/src/android/widget/TextViewActivityTest.java
+@@ -699,4 +699,18 @@ public class TextViewActivityTest extends ActivityInstrumentationTestCase2<TextV
+         // hasTransientState should return false when selection is created by API.
+         assertFalse(textView.hasTransientState());
+     }
++/*
++    @SmallTest
++    public void testNoAssistItemForTextFieldWithUnsupportedCharacters() throws Throwable {
++        useSystemDefaultTextClassifier();
++        final String text = "\u202Emoc.diordna.com";
++        final TextView textView = mActivity.findViewById(R.id.textview);
++        mActivityRule.runOnUiThread(() -> textView.setText(text));
++        mInstrumentation.waitForIdleSync();
++
++        onView(withId(R.id.textview)).perform(longPressOnTextAtIndex(text.indexOf('.')));
++        sleepForFloatingToolbarPopup();
++        assertFloatingToolbarDoesNotContainItem(android.R.id.textAssist);
++    }
++*/
+ }
 diff --git a/libs/androidfw/ResourceTypes.cpp b/libs/androidfw/ResourceTypes.cpp
-index ceeb12bab20..d9efe2b6739 100644
+index ceeb12bab20..65588b2fafc 100644
 --- a/libs/androidfw/ResourceTypes.cpp
 +++ b/libs/androidfw/ResourceTypes.cpp
 @@ -457,6 +457,22 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
@@ -1867,7 +2256,22 @@ index ceeb12bab20..d9efe2b6739 100644
      mHeader = (const ResStringPool_header*)data;
  
      if (notDeviceEndian) {
-@@ -6391,8 +6409,16 @@ status_t ResTable::parsePackage(const ResTable_package* const pkg,
+@@ -807,7 +825,13 @@ const char* ResStringPool::string8At(size_t idx, size_t* outLen) const
+             *outLen = decodeLength(&str);
+             size_t encLen = decodeLength(&str);
+             if ((uint32_t)(str+encLen-strings) < mStringPoolSize) {
+-                return (const char*)str;
++                // Reject malformed (non null-terminated) strings
++                if (str[encLen] != 0x00) {
++                    ALOGW("Bad string block: string #%d is not null-terminated",
++                          (int)idx);
++                    return NULL;
++                }
++              return (const char*)str;
+             } else {
+                 ALOGW("Bad string block: string #%d extends to %d, past end at %d\n",
+                         (int)idx, (int)(str+encLen-strings), (int)mStringPoolSize);
+@@ -6391,8 +6415,16 @@ status_t ResTable::parsePackage(const ResTable_package* const pkg,
              }
  
          } else if (ctype == RES_TABLE_LIBRARY_TYPE) {
@@ -2115,6 +2519,120 @@ index 7217832bac6..feff102850f 100644
                      }
                  }
                  break;
+diff --git a/packages/DocumentsUI/tests/src/com/android/documentsui/SearchViewUiTest.java b/packages/DocumentsUI/tests/src/com/android/documentsui/SearchViewUiTest.java
+index a9451a6e379..b6190821c2d 100644
+--- a/packages/DocumentsUI/tests/src/com/android/documentsui/SearchViewUiTest.java
++++ b/packages/DocumentsUI/tests/src/com/android/documentsui/SearchViewUiTest.java
+@@ -72,6 +72,32 @@ public class SearchViewUiTest extends ActivityTest<FilesActivity> {
+         bots.main.assertSearchTextField(false, query);
+     }
+ 
++    public void testSearchDownloads() throws Exception {
++        initTestFiles();
++        bots.roots.openRoot(ROOT_0_ID);
++
++        bots.directory.copyFilesToClipboard(fileName1, fileName2);
++        device.waitForIdle();
++
++        bots.roots.openRoot("Downloads");
++        bots.directory.pasteFilesFromClipboard();
++
++        //TODO: linben Why do we need to click on Downloads again so this will work?
++        bots.roots.openRoot("Downloads");
++        device.waitForIdle();
++
++        String query = "file12";
++        bots.main.openSearchView();
++        bots.main.setSearchQuery(query);
++
++        device.pressEnter();
++
++        bots.directory.assertDocumentsCountOnList(true, 1);
++        bots.directory.assertDocumentsPresent(fileName2);
++
++        device.pressBack();
++    }
++
+     @Suppress
+     public void testSearchResultsFound_ClearsOnBack() throws Exception {
+         initTestFiles();
+@@ -151,4 +177,18 @@ public class SearchViewUiTest extends ActivityTest<FilesActivity> {
+         bots.main.assertSearchTextFiledAndIcon(false, false);
+     }
+ 
++    @Override
++    public void tearDown() throws Exception {
++        try {
++            // Proper clean up of #testSearchDownloads
++            bots.directory.clickDocument(fileName1 + ".txt");
++            bots.directory.clickDocument(fileName2);
++            device.waitForIdle();
++            bots.main.menuDelete().click();
++            bots.main.findDialogOkButton().click();
++        } catch (Exception e) {
++        } finally {
++            super.tearDown();
++        }
++    }
+ }
+diff --git a/packages/DocumentsUI/tests/src/com/android/documentsui/bots/DirectoryListBot.java b/packages/DocumentsUI/tests/src/com/android/documentsui/bots/DirectoryListBot.java
+index 7c1e2196f6d..e2aabc7c2ba 100644
+--- a/packages/DocumentsUI/tests/src/com/android/documentsui/bots/DirectoryListBot.java
++++ b/packages/DocumentsUI/tests/src/com/android/documentsui/bots/DirectoryListBot.java
+@@ -30,6 +30,7 @@ import android.support.test.uiautomator.UiObject2;
+ import android.support.test.uiautomator.UiObjectNotFoundException;
+ import android.support.test.uiautomator.UiSelector;
+ import android.support.test.uiautomator.Until;
++import android.view.KeyEvent;
+ import android.view.MotionEvent;
+ 
+ import junit.framework.Assert;
+@@ -129,6 +130,17 @@ public class DirectoryListBot extends BaseBot {
+         return doc;
+     }
+ 
++    public void copyFilesToClipboard(String...labels) throws UiObjectNotFoundException {
++        for (String label: labels) {
++            clickDocument(label);
++        }
++        mDevice.pressKeyCode(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON);
++    }
++
++    public void pasteFilesFromClipboard() {
++        mDevice.pressKeyCode(KeyEvent.KEYCODE_V, KeyEvent.META_CTRL_ON);
++    }
++
+     public UiObject2 getSnackbar(String message) {
+         return mDevice.wait(Until.findObject(By.text(message)), mTimeout);
+     }
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+index fec33a27086..d89219f1bdc 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/SettingsProvider.java
+@@ -511,6 +511,13 @@ public class SettingsProvider extends ContentProvider {
+ 
+     @Override
+     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
++        final int userId = getUserIdFromUri(uri, UserHandle.getCallingUserId());
++        if (userId != UserHandle.getCallingUserId()) {
++            getContext().enforceCallingPermission(Manifest.permission.INTERACT_ACROSS_USERS,
++                    "Access files from the settings of another user");
++        }
++        uri = ContentProvider.getUriWithoutUserId(uri);
++
+         final String cacheName;
+         if (Settings.System.RINGTONE_CACHE_URI.equals(uri)) {
+             cacheName = Settings.System.RINGTONE_CACHE;
+@@ -523,8 +530,7 @@ public class SettingsProvider extends ContentProvider {
+                     + "ringtone playback is available through android.media.Ringtone");
+         }
+ 
+-        final File cacheFile = new File(
+-                getRingtoneCacheDir(UserHandle.getCallingUserId()), cacheName);
++        final File cacheFile = new File(getRingtoneCacheDir(userId), cacheName);
+         return ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.parseMode(mode));
+     }
+ 
 diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
 index 3ee844cd8ef..9e03307fa31 100644
 --- a/packages/SystemUI/AndroidManifest.xml
@@ -2455,6 +2973,58 @@ index 70f2fdcfa8d..ba50161aae9 100644
      }
  
      @Override
+diff --git a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
+index f5447a29350..329dd9917a7 100644
+--- a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
++++ b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
+@@ -31,8 +31,12 @@ import android.os.ServiceManager;
+ import android.os.SystemProperties;
+ import android.util.Log;
+ import android.view.LayoutInflater;
++import android.view.MotionEvent;
+ import android.view.View;
++import android.view.Window;
++import android.view.WindowManager;
+ import android.widget.CheckBox;
++import android.widget.Toast;
+ 
+ import com.android.internal.app.AlertActivity;
+ import com.android.internal.app.AlertController;
+@@ -48,6 +52,10 @@ public class UsbDebuggingActivity extends AlertActivity
+ 
+     @Override
+     public void onCreate(Bundle icicle) {
++        Window window = getWindow();
++        window.addPrivateFlags(WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
++        window.setType(WindowManager.LayoutParams.TYPE_SYSTEM_DIALOG);
++
+         super.onCreate(icicle);
+ 
+         if (SystemProperties.getInt("service.adb.tcp.port", 0) == 0) {
+@@ -79,6 +87,23 @@ public class UsbDebuggingActivity extends AlertActivity
+         ap.mView = checkbox;
+ 
+         setupAlert();
++
++        // adding touch listener on affirmative button - checks if window is obscured
++        // if obscured, do not let user give permissions (could be tapjacking involved)
++        final View.OnTouchListener filterTouchListener = (View v, MotionEvent event) -> {
++            // Filter obscured touches by consuming them.
++            if (((event.getFlags() & MotionEvent.FLAG_WINDOW_IS_OBSCURED) != 0)
++                    || ((event.getFlags() & MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0)) {
++                if (event.getAction() == MotionEvent.ACTION_UP) {
++                    Toast.makeText(v.getContext(),
++                            R.string.touch_filtered_warning,
++                            Toast.LENGTH_SHORT).show();
++                }
++                return true;
++            }
++            return false;
++        };
++        mAlert.getButton(BUTTON_POSITIVE).setOnTouchListener(filterTouchListener);
+     }
+ 
+     private class UsbDisconnectedReceiver extends BroadcastReceiver {
 diff --git a/services/core/java/com/android/server/AppOpsService.java b/services/core/java/com/android/server/AppOpsService.java
 index 4caeba84b20..c95b9d52ad8 100644
 --- a/services/core/java/com/android/server/AppOpsService.java
@@ -2717,6 +3287,47 @@ index a7a79cd5b3e..a085b716bd8 100644
              long bid = Binder.clearCallingIdentity();
              try {
                  PackageManager pm = mContext.getPackageManager();
+diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
+index 91c4571ee49..7be177a1bc2 100644
+--- a/services/core/java/com/android/server/am/ActivityManagerService.java
++++ b/services/core/java/com/android/server/am/ActivityManagerService.java
+@@ -8112,13 +8112,26 @@ public final class ActivityManagerService extends ActivityManagerNative
+             }
+         }
+ 
++        // Figure out the value returned when access is allowed
++        final int allowedResult;
++        if ((modeFlags & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0) {
++            // If we're extending a persistable grant, then we need to return
++            // "targetUid" so that we always create a grant data structure to
++            // support take/release APIs
++            allowedResult = targetUid;
++        } else {
++            // Otherwise, we can return "-1" to indicate that no grant data
++            // structures need to be created
++            allowedResult = -1;
++        }
++
+         if (targetUid >= 0) {
+             // First...  does the target actually need this permission?
+             if (checkHoldingPermissionsLocked(pm, pi, grantUri, targetUid, modeFlags)) {
+                 // No need to grant the target this permission.
+                 if (DEBUG_URI_PERMISSION) Slog.v(TAG_URI_PERMISSION,
+                         "Target " + targetPkg + " already has full permission to " + grantUri);
+-                return -1;
++                return allowedResult;
+             }
+         } else {
+             // First...  there is no target package, so can anyone access it?
+@@ -8134,7 +8147,7 @@ public final class ActivityManagerService extends ActivityManagerNative
+                 }
+             }
+             if (allowed) {
+-                return -1;
++                return allowedResult;
+             }
+         }
+ 
 diff --git a/services/core/java/com/android/server/am/ActivityStackSupervisor.java b/services/core/java/com/android/server/am/ActivityStackSupervisor.java
 index c6ab9186456..8ba368b0b00 100644
 --- a/services/core/java/com/android/server/am/ActivityStackSupervisor.java
@@ -2934,6 +3545,45 @@ index 069ae739431..f804fa1cff3 100644
                      }
                  }
              }
+diff --git a/services/core/java/com/android/server/display/ColorFade.java b/services/core/java/com/android/server/display/ColorFade.java
+index a16fcd2fa11..7a5f5231869 100644
+--- a/services/core/java/com/android/server/display/ColorFade.java
++++ b/services/core/java/com/android/server/display/ColorFade.java
+@@ -36,6 +36,7 @@ import android.opengl.EGLDisplay;
+ import android.opengl.EGLSurface;
+ import android.opengl.GLES20;
+ import android.opengl.GLES11Ext;
++import android.os.SystemProperties;
+ import android.util.Slog;
+ import android.view.DisplayInfo;
+ import android.view.Surface.OutOfResourcesException;
+@@ -70,6 +71,9 @@ final class ColorFade {
+     // See code for details.
+     private static final int DEJANK_FRAMES = 3;
+ 
++    private static final boolean DESTROY_SURFACE_AFTER_DETACH =
++            SystemProperties.getBoolean("ro.egl.destroy_after_detach", false);
++
+     private final int mDisplayId;
+ 
+     // Set to true when the animation context has been fully prepared.
+@@ -331,10 +335,15 @@ final class ColorFade {
+                 destroyScreenshotTexture();
+                 destroyGLShaders();
+                 destroyGLBuffers();
+-                destroyEglSurface();
++                if (!DESTROY_SURFACE_AFTER_DETACH) {
++                    destroyEglSurface();
++                }
+             } finally {
+                 detachEglContext();
+             }
++            if (DESTROY_SURFACE_AFTER_DETACH) {
++                destroyEglSurface();
++            }
+             // This is being called with no active context so shouldn't be
+             // needed but is safer to not change for now.
+             GLES20.glFlush();
 diff --git a/services/core/java/com/android/server/input/InputManagerService.java b/services/core/java/com/android/server/input/InputManagerService.java
 index 719ce7618fd..df2c00be83d 100644
 --- a/services/core/java/com/android/server/input/InputManagerService.java
@@ -3129,6 +3779,38 @@ index 889c52afa37..872b03d2f09 100644
              case KeyEvent.KEYCODE_ENDCALL: {
                  result &= ~ACTION_PASS_TO_USER;
                  if (down) {
+diff --git a/services/core/java/com/android/server/policy/WindowOrientationListener.java b/services/core/java/com/android/server/policy/WindowOrientationListener.java
+index 8ef0acbd380..a884851d242 100644
+--- a/services/core/java/com/android/server/policy/WindowOrientationListener.java
++++ b/services/core/java/com/android/server/policy/WindowOrientationListener.java
+@@ -56,6 +56,7 @@ public abstract class WindowOrientationListener {
+     private boolean mEnabled;
+     private int mRate;
+     private String mSensorType;
++    private boolean mUseSystemClockforRotationSensor;
+     private Sensor mSensor;
+     private OrientationJudge mOrientationJudge;
+     private int mCurrentRotation = -1;
+@@ -90,6 +91,9 @@ public abstract class WindowOrientationListener {
+         mRate = rate;
+         mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_DEVICE_ORIENTATION);
+ 
++        mUseSystemClockforRotationSensor = context.getResources().getBoolean(
++                com.android.internal.R.bool.config_useSystemClockforRotationSensor);
++
+         if (mSensor != null) {
+             mOrientationJudge = new OrientationSensorJudge();
+         }
+@@ -592,7 +596,8 @@ public abstract class WindowOrientationListener {
+                 // Reset the orientation listener state if the samples are too far apart in time
+                 // or when we see values of (0, 0, 0) which indicates that we polled the
+                 // accelerometer too soon after turning it on and we don't have any data yet.
+-                final long now = event.timestamp;
++                final long now = mUseSystemClockforRotationSensor
++                        ? SystemClock.elapsedRealtimeNanos() : event.timestamp;
+                 final long then = mLastFilteredTimestampNanos;
+                 final float timeDeltaMS = (now - then) * 0.000001f;
+                 final boolean skipSample;
 diff --git a/services/core/java/com/android/server/wm/InputMonitor.java b/services/core/java/com/android/server/wm/InputMonitor.java
 index be9fb26bb28..d835e884615 100644
 --- a/services/core/java/com/android/server/wm/InputMonitor.java
@@ -3181,7 +3863,7 @@ index 08c0a4b0135..b5c4202dc10 100644
          StringBuilder sb = new StringBuilder();
          sb.append("Session{");
 diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
-index ca2610af3f6..2203ebbee94 100644
+index ca2610af3f6..be1d84f11ee 100644
 --- a/services/core/java/com/android/server/wm/WindowManagerService.java
 +++ b/services/core/java/com/android/server/wm/WindowManagerService.java
 @@ -16,6 +16,7 @@
@@ -3192,7 +3874,15 @@ index ca2610af3f6..2203ebbee94 100644
  import android.Manifest;
  import android.animation.ValueAnimator;
  import android.annotation.IntDef;
-@@ -490,6 +491,9 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -189,6 +190,7 @@ import static android.view.WindowManager.LayoutParams.INPUT_FEATURE_NO_INPUT_CHA
+ import static android.view.WindowManager.LayoutParams.LAST_APPLICATION_WINDOW;
+ import static android.view.WindowManager.LayoutParams.LAST_SUB_WINDOW;
+ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_COMPATIBLE_WINDOW;
++import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS;
+ import static android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+ import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION;
+ import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION_STARTING;
+@@ -490,6 +492,9 @@ public class WindowManagerService extends IWindowManager.Stub
       */
      final ArrayList<WindowState> mForceRemoves = new ArrayList<>();
  
@@ -3202,7 +3892,7 @@ index ca2610af3f6..2203ebbee94 100644
      /**
       * Windows that clients are waiting to have drawn.
       */
-@@ -2129,6 +2133,9 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2129,6 +2134,9 @@ public class WindowManagerService extends IWindowManager.Stub
                  }
              }
  
@@ -3212,7 +3902,7 @@ index ca2610af3f6..2203ebbee94 100644
              if (type == TYPE_APPLICATION_STARTING && token.appWindowToken != null) {
                  token.appWindowToken.startingWindow = win;
                  if (DEBUG_STARTING_WINDOW) Slog.v (TAG_WM, "addWindow: " + token.appWindowToken
-@@ -2576,6 +2583,7 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2576,6 +2584,7 @@ public class WindowManagerService extends IWindowManager.Stub
  
          mPendingRemove.remove(win);
          mResizingWindows.remove(win);
@@ -3220,7 +3910,7 @@ index ca2610af3f6..2203ebbee94 100644
          mWindowsChanged = true;
          if (DEBUG_WINDOW_MOVEMENT) Slog.v(TAG_WM, "Final remove of window: " + win);
  
-@@ -2893,6 +2901,11 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -2893,6 +2902,11 @@ public class WindowManagerService extends IWindowManager.Stub
                          | WindowManager.LayoutParams.SYSTEM_UI_VISIBILITY_CHANGED)) != 0) {
                      win.mLayoutNeeded = true;
                  }
@@ -3232,7 +3922,7 @@ index ca2610af3f6..2203ebbee94 100644
              }
  
              if (DEBUG_LAYOUT) Slog.v(TAG_WM, "Relayout " + win + ": viewVisibility=" + viewVisibility
-@@ -11771,4 +11784,35 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -11771,4 +11785,35 @@ public class WindowManagerService extends IWindowManager.Stub
              }
          }
      }

@@ -38,6 +38,33 @@ index 2c3436fc70..ae61944cbe 100644
          } else {
              mBaseIntent = new Intent(Intent.ACTION_MAIN, null);
              mBaseIntent.addCategory(Intent.CATEGORY_DEFAULT);
+diff --git a/src/com/android/settings/ChooseLockGeneric.java b/src/com/android/settings/ChooseLockGeneric.java
+index 1a70f541b4..88c65d7f97 100644
+--- a/src/com/android/settings/ChooseLockGeneric.java
++++ b/src/com/android/settings/ChooseLockGeneric.java
+@@ -140,6 +140,11 @@ public class ChooseLockGeneric extends SettingsActivity {
+         @Override
+         public void onCreate(Bundle savedInstanceState) {
+             super.onCreate(savedInstanceState);
++            final Activity activity = getActivity();
++            if (!Utils.isDeviceProvisioned(activity) && !canRunBeforeDeviceProvisioned()) {
++                activity.finish();
++                return;
++            }
+ 
+             String chooseLockAction = getActivity().getIntent().getAction();
+             mFingerprintManager =
+@@ -217,6 +222,10 @@ public class ChooseLockGeneric extends SettingsActivity {
+             addHeaderView();
+         }
+ 
++        protected boolean canRunBeforeDeviceProvisioned() {
++            return false;
++        }
++
+         protected void addHeaderView() {
+             if (mForFingerprint) {
+                 setHeaderView(R.layout.choose_lock_generic_fingerprint_header);
 diff --git a/src/com/android/settings/DeviceAdminAdd.java b/src/com/android/settings/DeviceAdminAdd.java
 index 9d4d895330..2f6afd790f 100644
 --- a/src/com/android/settings/DeviceAdminAdd.java
@@ -107,6 +134,37 @@ index 9d4d895330..2f6afd790f 100644
          try {
              ActivityManagerNative.getDefault().resumeAppSwitches();
          } catch (RemoteException e) {
+diff --git a/src/com/android/settings/SettingsActivity.java b/src/com/android/settings/SettingsActivity.java
+index db9c0906ef..76041f2d1b 100644
+--- a/src/com/android/settings/SettingsActivity.java
++++ b/src/com/android/settings/SettingsActivity.java
+@@ -625,8 +625,8 @@ public class SettingsActivity extends SettingsDrawerActivity
+             } else {
+                 // No UP affordance if we are displaying the main Dashboard
+                 mDisplayHomeAsUpEnabled = false;
+-                // Show Search affordance
+-                mDisplaySearch = true;
++                // Show Search affordance (if device is provisioned)
++                mDisplaySearch = Utils.isDeviceProvisioned(this);
+                 mInitialTitleResId = R.string.dashboard_title;
+ 
+                 // add argument to indicate which settings tab should be initially selected
+diff --git a/src/com/android/settings/SetupChooseLockGeneric.java b/src/com/android/settings/SetupChooseLockGeneric.java
+index 71679f30a8..21fad53b8f 100644
+--- a/src/com/android/settings/SetupChooseLockGeneric.java
++++ b/src/com/android/settings/SetupChooseLockGeneric.java
+@@ -138,6 +138,11 @@ public class SetupChooseLockGeneric extends ChooseLockGeneric {
+             return layout.onCreateRecyclerView(inflater, parent, savedInstanceState);
+         }
+ 
++        @Override
++        protected boolean canRunBeforeDeviceProvisioned() {
++            return true;
++        }
++
+         /***
+          * Disables preferences that are less secure than required quality and shows only secure
+          * screen lock options here.
 diff --git a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java b/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java
 index 196a4ab372..1f69768c0d 100644
 --- a/src/com/android/settings/accessibility/ToggleAccessibilityServicePreferenceFragment.java

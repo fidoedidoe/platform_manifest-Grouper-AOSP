@@ -1,5 +1,58 @@
+diff --git a/halimpl/pn54x/hal/phNxpNciHal_ext.c b/halimpl/pn54x/hal/phNxpNciHal_ext.c
+index 893f986..1806800 100644
+--- a/halimpl/pn54x/hal/phNxpNciHal_ext.c
++++ b/halimpl/pn54x/hal/phNxpNciHal_ext.c
+@@ -13,6 +13,7 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
++#include <log/log.h>
+ #include <phNxpNciHal_ext.h>
+ #include <phNxpNciHal.h>
+ #include <phTmlNfc.h>
+@@ -109,6 +110,16 @@ NFCSTATUS phNxpNciHal_process_ext_rsp (uint8_t *p_ntf, uint16_t *p_len)
+     NFCSTATUS status = NFCSTATUS_SUCCESS;
+     uint16_t rf_technology_length_param = 0;
+ 
++    if (p_ntf[0] == 0x61 && p_ntf[1] == 0x05 && *p_len < 14) {
++        if(*p_len <= 6) {
++            android_errorWriteLog(0x534e4554, "118152591");
++        }
++        NXPLOG_NCIHAL_E("RF_INTF_ACTIVATED_NTF length error!");
++        status = NFCSTATUS_FAILED;
++        return status;
++    }
++
++
+     if (p_ntf[0] == 0x61 &&
+         p_ntf[1] == 0x05 &&
+         p_ntf[4] == 0x03 &&
+diff --git a/src/nfa/dm/nfa_dm_api.c b/src/nfa/dm/nfa_dm_api.c
+index 89f667f..fb4bdf9 100644
+--- a/src/nfa/dm/nfa_dm_api.c
++++ b/src/nfa/dm/nfa_dm_api.c
+@@ -23,6 +23,7 @@
+  *
+  ******************************************************************************/
+ #include <string.h>
++#include <log/log.h>
+ #include "nfa_api.h"
+ #include "nfa_sys.h"
+ #include "nfa_dm_int.h"
+@@ -869,6 +870,11 @@ tNFA_STATUS NFA_SendRawFrame (UINT8  *p_raw_data,
+         return (NFA_STATUS_INVALID_PARAM);
+ 
+     size = BT_HDR_SIZE + NCI_MSG_OFFSET_SIZE + NCI_DATA_HDR_SIZE + data_len;
++    /* Check for integer overflow */
++    if (size < data_len) {
++        android_errorWriteLog(0x534e4554, "120664978");
++        return NFA_STATUS_INVALID_PARAM;
++    }
+     if ((p_msg = (BT_HDR *) GKI_getbuf (size)) != NULL)
+     {
+         p_msg->event  = NFA_DM_API_RAW_FRAME_EVT;
 diff --git a/src/nfc/llcp/llcp_dlc.c b/src/nfc/llcp/llcp_dlc.c
-index 95bcac5..30e1358 100644
+index 95bcac5..c8a300b 100644
 --- a/src/nfc/llcp/llcp_dlc.c
 +++ b/src/nfc/llcp/llcp_dlc.c
 @@ -26,6 +26,7 @@
@@ -26,8 +79,19 @@ index 95bcac5..30e1358 100644
          info_len = i_pdu_length - LLCP_PDU_HEADER_SIZE - LLCP_SEQUENCE_SIZE;
  
          if (info_len > p_dlcb->local_miu)
+@@ -1088,6 +1098,10 @@ static void llcp_dlc_proc_rr_rnr_pdu (UINT8 dsap, UINT8 ptype, UINT8 ssap, UINT1
+     {
+         error_flags = 0;
+ 
++        if (length == 0) {
++            android_errorWriteLog(0x534e4554, "116788646");
++            return;
++        }
+         rcv_seq = LLCP_GET_NR (*p_data);
+ 
+         if (length != LLCP_PDU_RR_SIZE - LLCP_PDU_HEADER_SIZE)
 diff --git a/src/nfc/llcp/llcp_link.c b/src/nfc/llcp/llcp_link.c
-index d70349c..9249539 100644
+index d70349c..5153b74 100644
 --- a/src/nfc/llcp/llcp_link.c
 +++ b/src/nfc/llcp/llcp_link.c
 @@ -23,6 +23,7 @@
@@ -84,6 +148,15 @@ index d70349c..9249539 100644
          LLCP_TRACE_ERROR0 ("llcp_link_proc_agf_pdu (): Received invalid AGF PDU");
          GKI_freebuf (p_agf);
          return;
+@@ -1180,7 +1188,7 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
+     agf_length = p_agf->len;
+     p = (UINT8 *) (p_agf + 1) + p_agf->offset;
+ 
+-    while (agf_length > 0)
++    while (agf_length > >= LLCP_PDU_HEADER_SIZE)
+     {
+         /* get length of PDU */
+         p_pdu_length = p;
 @@ -1207,7 +1215,8 @@ static void llcp_link_proc_agf_pdu (BT_HDR *p_agf)
              GKI_freebuf (p_agf);
              llcp_link_deactivate (LLCP_LINK_REMOTE_INITIATED);
@@ -94,6 +167,249 @@ index d70349c..9249539 100644
          else if (ptype == LLCP_PDU_SYMM_TYPE)
          {
              LLCP_TRACE_ERROR0 ("llcp_link_proc_agf_pdu (): SYMM PDU exchange shall not be in AGF");
+diff --git a/src/nfc/llcp/llcp_util.c b/src/nfc/llcp/llcp_util.c
+index 2f4420c..db2c25e 100644
+--- a/src/nfc/llcp/llcp_util.c
++++ b/src/nfc/llcp/llcp_util.c
+@@ -26,6 +26,7 @@
+ #include <string.h>
+ #include "gki.h"
+ #include "nfc_target.h"
++#include <log/log.h>
+ #include "bt_types.h"
+ #include "trace_api.h"
+ #include "llcp_int.h"
+@@ -45,21 +46,34 @@ BOOLEAN llcp_util_parse_link_params (UINT16 length, UINT8 *p_bytes)
+ {
+     UINT8 param_type, param_len, *p = p_bytes;
+ 
+-    while (length)
++    while (length >= 2)
+     {
+-        BE_STREAM_TO_UINT8 (param_type, p);
+-        length--;
+-
++        BE_STREAM_TO_UINT8(param_type, p);
++        BE_STREAM_TO_UINT8(param_len, p);
++        if (length < param_len + 2) {
++            android_errorWriteLog(0x534e4554, "114238578");
++            LOG(ERROR) << StringPrintf("Bad TLV's");
++            return false;
++        }
++        length -= param_len + 2;
+         switch (param_type)
+         {
+         case LLCP_VERSION_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_VERSION_LEN) {
++                android_errorWriteLog(0x534e4554, "114238578");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return false;
++            }
+             BE_STREAM_TO_UINT8 (llcp_cb.lcb.peer_version, p);
+             LLCP_TRACE_DEBUG1 ("Peer Version - 0x%02X", llcp_cb.lcb.peer_version);
+             break;
+ 
+         case LLCP_MIUX_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_MIUX_LEN) {
++                android_errorWriteLog(0x534e4554, "114238578");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return false;
++            }
+             BE_STREAM_TO_UINT16 (llcp_cb.lcb.peer_miu, p);
+             llcp_cb.lcb.peer_miu &= LLCP_MIUX_MASK;
+             llcp_cb.lcb.peer_miu += LLCP_DEFAULT_MIU;
+@@ -67,38 +81,41 @@ BOOLEAN llcp_util_parse_link_params (UINT16 length, UINT8 *p_bytes)
+             break;
+ 
+         case LLCP_WKS_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_WKS_LEN) {
++                android_errorWriteLog(0x534e4554, "114238578");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return false;
++            }
+             BE_STREAM_TO_UINT16 (llcp_cb.lcb.peer_wks, p);
+             LLCP_TRACE_DEBUG1 ("Peer WKS - 0x%04X", llcp_cb.lcb.peer_wks);
+             break;
+ 
+         case LLCP_LTO_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_LTO_LEN) {
++                android_errorWriteLog(0x534e4554, "114238578");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return false;
++            }
+             BE_STREAM_TO_UINT8 (llcp_cb.lcb.peer_lto, p);
+             llcp_cb.lcb.peer_lto *= LLCP_LTO_UNIT;  /* 10ms unit */
+             LLCP_TRACE_DEBUG1 ("Peer LTO - %d ms", llcp_cb.lcb.peer_lto);
+             break;
+ 
+         case LLCP_OPT_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_OPT_LEN) {
++                android_errorWriteLog(0x534e4554, "114238578");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return false;
++            }
+             BE_STREAM_TO_UINT8 (llcp_cb.lcb.peer_opt, p);
+             LLCP_TRACE_DEBUG1 ("Peer OPT - 0x%02X", llcp_cb.lcb.peer_opt);
+             break;
+ 
+         default:
+             LLCP_TRACE_ERROR1 ("llcp_util_parse_link_params (): Unexpected type 0x%x", param_type);
+-            BE_STREAM_TO_UINT8 (param_len, p);
+             p += param_len;
+             break;
+         }
+-
+-        if (length >= param_len + 1)
+-            length -= param_len + 1;
+-        else
+-        {
+-            LLCP_TRACE_ERROR0 ("llcp_util_parse_link_params (): Bad LTV's");
+-            return (FALSE);
+-        }
+     }
+     return (TRUE);
+ }
+@@ -498,15 +515,26 @@ tLLCP_STATUS llcp_util_parse_connect (UINT8  *p_bytes, UINT16 length, tLLCP_CONN
+     p_params->sn[0] = 0;
+     p_params->sn[1] = 0;
+ 
+-    while (length)
++    while (length >= 2)
+     {
+-        BE_STREAM_TO_UINT8 (param_type, p);
+-        length--;
++        BE_STREAM_TO_UINT8(param_type, p);
++        BE_STREAM_TO_UINT8(param_len, p);
++        /* check remaining lengh */
++        if (length < param_len + 2) {
++            android_errorWriteLog(0x534e4554, "111660010");
++            LOG(ERROR) << StringPrintf("Bad TLV's");
++            return LLCP_STATUS_FAIL;
++        }
++        length -= param_len + 2;
+ 
+         switch (param_type)
+         {
+         case LLCP_MIUX_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_MIUX_LEN) {
++                android_errorWriteLog(0x534e4554, "111660010");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return LLCP_STATUS_FAIL;
++            }
+             BE_STREAM_TO_UINT16 (p_params->miu, p);
+             p_params->miu &= LLCP_MIUX_MASK;
+             p_params->miu += LLCP_DEFAULT_MIU;
+@@ -515,7 +543,11 @@ tLLCP_STATUS llcp_util_parse_connect (UINT8  *p_bytes, UINT16 length, tLLCP_CONN
+             break;
+ 
+         case LLCP_RW_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_RW_LEN) {
++                android_errorWriteLog(0x534e4554, "111660010");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return LLCP_STATUS_FAIL;
++            }
+             BE_STREAM_TO_UINT8 (p_params->rw, p);
+             p_params->rw &= 0x0F;
+ 
+@@ -523,8 +555,6 @@ tLLCP_STATUS llcp_util_parse_connect (UINT8  *p_bytes, UINT16 length, tLLCP_CONN
+             break;
+ 
+         case LLCP_SN_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
+-
+             if (param_len == 0)
+             {
+                 /* indicate that SN type is included without SN */
+@@ -547,21 +577,9 @@ tLLCP_STATUS llcp_util_parse_connect (UINT8  *p_bytes, UINT16 length, tLLCP_CONN
+ 
+         default:
+             LLCP_TRACE_ERROR1 ("llcp_util_parse_connect (): Unexpected type 0x%x", param_type);
+-            BE_STREAM_TO_UINT8 (param_len, p);
+             p += param_len;
+             break;
+         }
+-
+-        /* check remaining lengh */
+-        if (length >= param_len + 1)
+-        {
+-            length -= param_len + 1;
+-        }
+-        else
+-        {
+-            LLCP_TRACE_ERROR0 ("llcp_util_parse_connect (): Bad LTV's");
+-            return LLCP_STATUS_FAIL;
+-        }
+     }
+     return LLCP_STATUS_SUCCESS;
+ }
+@@ -641,15 +659,25 @@ tLLCP_STATUS llcp_util_parse_cc (UINT8 *p_bytes, UINT16 length, UINT16 *p_miu, U
+     *p_miu = LLCP_DEFAULT_MIU;
+     *p_rw  = LLCP_DEFAULT_RW;
+ 
+-    while (length)
++    while (length >= 2)
+     {
+         BE_STREAM_TO_UINT8 (param_type, p);
+-        length--;
++        BE_STREAM_TO_UINT8(param_len, p);
++        if (length < param_len + 2) {
++            android_errorWriteLog(0x534e4554, "114237888");
++            LOG(ERROR) << StringPrintf("Bad TLV's");
++            return LLCP_STATUS_FAIL;
++        }
++        length -= param_len + 2;
+ 
+         switch (param_type)
+         {
+         case LLCP_MIUX_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_MIUX_LEN) {
++                android_errorWriteLog(0x534e4554, "114237888");
++                LOG(ERROR) << StringPrintf("Bad TLV's");
++                return LLCP_STATUS_FAIL;
++            }
+             BE_STREAM_TO_UINT16 ((*p_miu), p);
+             (*p_miu) &= LLCP_MIUX_MASK;
+             (*p_miu) += LLCP_DEFAULT_MIU;
+@@ -658,7 +686,11 @@ tLLCP_STATUS llcp_util_parse_cc (UINT8 *p_bytes, UINT16 length, UINT16 *p_miu, U
+             break;
+ 
+         case LLCP_RW_TYPE:
+-            BE_STREAM_TO_UINT8 (param_len, p);
++            if (param_len != LLCP_RW_LEN) {
++               android_errorWriteLog(0x534e4554, "114237888");
++               LOG(ERROR) << StringPrintf("Bad TLV's");
++               return LLCP_STATUS_FAIL;
++            }
+             BE_STREAM_TO_UINT8 ((*p_rw), p);
+             (*p_rw) &= 0x0F;
+ 
+@@ -667,18 +699,9 @@ tLLCP_STATUS llcp_util_parse_cc (UINT8 *p_bytes, UINT16 length, UINT16 *p_miu, U
+ 
+         default:
+             LLCP_TRACE_ERROR1 ("llcp_util_parse_cc (): Unexpected type 0x%x", param_type);
+-            BE_STREAM_TO_UINT8 (param_len, p);
+             p += param_len;
+             break;
+         }
+-
+-        if (length >= param_len + 1)
+-            length -= param_len + 1;
+-        else
+-        {
+-            LLCP_TRACE_ERROR0 ("llcp_util_parse_cc (): Bad LTV's");
+-            return LLCP_STATUS_FAIL;
+-        }
+     }
+     return LLCP_STATUS_SUCCESS;
+ }
 diff --git a/src/nfc/nfc/nfc_ncif.c b/src/nfc/nfc/nfc_ncif.c
 index 2e2c14f..739bae2 100644
 --- a/src/nfc/nfc/nfc_ncif.c
@@ -159,8 +475,96 @@ index 2e2c14f..739bae2 100644
                  pn                 += tl;
              }
              (*nfc_cb.p_resp_cback) (NFC_GET_ROUTING_REVT, (tNFC_RESPONSE *) &evt_data);
+diff --git a/src/nfc/tags/ce_t4t.c b/src/nfc/tags/ce_t4t.c
+index b812cff..84e55db 100644
+--- a/src/nfc/tags/ce_t4t.c
++++ b/src/nfc/tags/ce_t4t.c
+@@ -23,6 +23,7 @@
+  *  mode.
+  *
+  ******************************************************************************/
++#include <log/log.h>
+ #include <string.h>
+ #include "nfc_target.h"
+ #include "bt_types.h"
+@@ -431,6 +432,14 @@ static void ce_t4t_process_select_app_cmd (UINT8 *p_cmd, BT_HDR *p_c_apdu)
+     /* Lc Byte */
+     BE_STREAM_TO_UINT8 (data_len, p_cmd);
+ 
++    /*CLS+INS+P1+P2+Lc+Data*/
++    if (data_len > (p_c_apdu->len - T4T_CMD_MAX_HDR_SIZE)) {
++        LOG(ERROR) << StringPrintf("Wrong length in ce_t4t_process_select_app_cmd");
++        android_errorWriteLog(0x534e4554, "115635871");
++        ce_t4t_send_status(T4T_RSP_WRONG_LENGTH);
++        GKI_freebuf(p_c_apdu);
++        return;
++    }
+ #if (CE_TEST_INCLUDED == TRUE)
+     if (mapping_aid_test_enabled)
+     {
+@@ -600,6 +609,7 @@ static void ce_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
+     BT_HDR  *p_c_apdu;
+     UINT8   *p_cmd;
+     UINT8    cla, instruct, select_type = 0, length;
++    UINT8    cla = 0, instruct = 0, select_type = 0, length = 0;
+     UINT16   offset, max_file_size;
+     tCE_DATA ce_data;
+ 
+@@ -622,6 +632,13 @@ static void ce_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
+     CE_TRACE_DEBUG1 ("ce_t4t_data_cback (): conn_id = 0x%02X", conn_id);
+ 
+     p_cmd = (UINT8 *) (p_c_apdu + 1) + p_c_apdu->offset;
++    if (p_c_apdu->len == 0) {
++        LOG(ERROR) << StringPrintf("Wrong length in ce_t4t_data_cback");
++        android_errorWriteLog(0x534e4554, "115635871");
++        ce_t4t_send_status(T4T_RSP_WRONG_LENGTH);
++        if (p_c_apdu) GKI_freebuf(p_c_apdu);
++            return;
++    }
+ 
+     /* Class Byte */
+     BE_STREAM_TO_UINT8 (cla, p_cmd);
+@@ -636,18 +653,26 @@ static void ce_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
+         return;
+     }
+ 
+-    /* Instruction Byte */
+-    BE_STREAM_TO_UINT8 (instruct, p_cmd);
+-
+-    if ((cla == T4T_CMD_CLASS) && (instruct == T4T_CMD_INS_SELECT))
+-    {
+-        /* P1 Byte */
+-        BE_STREAM_TO_UINT8 (select_type, p_cmd);
+-
+-        if (select_type == T4T_CMD_P1_SELECT_BY_NAME)
+-        {
+-            ce_t4t_process_select_app_cmd (p_cmd, p_c_apdu);
+-            return;
++    /*CLA+INS+P1+P2 = 4 bytes*/
++    if (p_c_apdu->len >= T4T_CMD_MIN_HDR_SIZE) {
++        /* Instruction Byte */
++        BE_STREAM_TO_UINT8(instruct, p_cmd);
++        if ((cla == T4T_CMD_CLASS) && (instruct == T4T_CMD_INS_SELECT)) {
++            /* P1 Byte */
++            BE_STREAM_TO_UINT8(select_type, p_cmd);
++            if (select_type == T4T_CMD_P1_SELECT_BY_NAME) {
++                /*CLA+INS+P1+P2+Lc = 5 bytes*/
++                if (p_c_apdu->len >= T4T_CMD_MAX_HDR_SIZE) {
++                    ce_t4t_process_select_app_cmd(p_cmd, p_c_apdu);
++                    return;
++                } else {
++                    LOG(ERROR) << StringPrintf("Wrong length in select app cmd");
++                    android_errorWriteLog(0x534e4554, "115635871");
++                    ce_t4t_send_status(T4T_RSP_NOT_FOUND);
++                    if (p_c_apdu) GKI_freebuf(p_c_apdu);
++                        return;
++                }
++            }
+         }
+     }
+ 
 diff --git a/src/nfc/tags/rw_t2t_ndef.c b/src/nfc/tags/rw_t2t_ndef.c
-index 3304a90..42a558e 100644
+index 3304a90..37dd8e4 100644
 --- a/src/nfc/tags/rw_t2t_ndef.c
 +++ b/src/nfc/tags/rw_t2t_ndef.c
 @@ -23,6 +23,7 @@
@@ -171,7 +575,21 @@ index 3304a90..42a558e 100644
  #include <string.h>
  #include "nfc_target.h"
  
-@@ -664,6 +665,10 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
+@@ -646,7 +647,12 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
+                 break;
+ 
+             case TAG_LOCK_CTRL_TLV:
+-                p_t2t->bytes_count--;
++                if (p_t2t->bytes_count > 0) {
++                    p_t2t->bytes_count--;
++                } else {
++                    LOG(ERROR) << StringPrintf("Underflow p_t2t->bytes_count!");
++                    android_errorWriteLog(0x534e4554, "120506143");
++                }
+                 if (  (tlvtype == TAG_LOCK_CTRL_TLV)
+                     ||(tlvtype == TAG_NDEF_TLV)  )
+                 {
+@@ -664,6 +670,10 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
  
                          /* Extract lockbytes info addressed by this Lock TLV */
                          xx = 0;
@@ -182,3 +600,118 @@ index 3304a90..42a558e 100644
                          while (xx < count)
                          {
                              p_t2t->lockbyte[p_t2t->num_lockbytes].tlv_index     = p_t2t->num_lock_tlvs;
+@@ -689,7 +699,12 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
+                 break;
+ 
+             case TAG_MEM_CTRL_TLV:
+-                p_t2t->bytes_count--;
++                if (p_t2t->bytes_count > 0) {
++                    p_t2t->bytes_count--;
++                } else {
++                    LOG(ERROR) << StringPrintf("bytes_count underflow!");
++                    android_errorWriteLog(0x534e4554, "120506143");
++                }
+                 if (  (tlvtype == TAG_MEM_CTRL_TLV)
+                     ||(tlvtype == TAG_NDEF_TLV)  )
+                 {
+@@ -724,7 +739,12 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
+                 break;
+ 
+             case TAG_PROPRIETARY_TLV:
+-                p_t2t->bytes_count--;
++                if (p_t2t->bytes_count > 0) {
++                    p_t2t->bytes_count--;
++                } else {
++                    LOG(ERROR) << StringPrintf("bytes_count underflow!");
++                    android_errorWriteLog(0x534e4554, "120506143");
++                }
+                 if (tlvtype == TAG_PROPRIETARY_TLV)
+                 {
+                     found = TRUE;
+diff --git a/src/nfc/tags/rw_t3t.c b/src/nfc/tags/rw_t3t.c
+index f8ec361..70cb2e3 100644
+--- a/src/nfc/tags/rw_t3t.c
++++ b/src/nfc/tags/rw_t3t.c
+@@ -1285,6 +1285,10 @@ void rw_t3t_act_handle_ndef_detect_rsp (tRW_T3T_CB *p_cb, BT_HDR *p_msg_rsp)
+              ||(memcmp (p_cb->peer_nfcid2, &p_t3t_rsp[T3T_MSG_RSP_OFFSET_IDM], NCI_NFCID2_LEN) != 0)  )   /* verify response IDm */
+     {
+         evt_data.status = NFC_STATUS_FAILED;
++    } else if (p_msg_rsp->len <
++               (T3T_MSG_RSP_OFFSET_CHECK_DATA + T3T_MSG_BLOCKSIZE)) {
++        evt_data.status = NFC_STATUS_FAILED;
++        android_errorWriteLog(0x534e4554, "120428041");
+     }
+     else
+     {
+@@ -1399,7 +1403,7 @@ void rw_t3t_act_handle_check_rsp (tRW_T3T_CB *p_cb, BT_HDR *p_msg_rsp)
+         nfc_status = NFC_STATUS_FAILED;
+         GKI_freebuf (p_msg_rsp);
+     }
+-    else
++    else if (p_msg_rsp->len >= T3T_MSG_RSP_OFFSET_CHECK_DATA) {
+     {
+         /* Copy incoming data into buffer */
+         p_msg_rsp->offset += T3T_MSG_RSP_OFFSET_CHECK_DATA;     /* Skip over t3t header */
+@@ -1407,6 +1411,10 @@ void rw_t3t_act_handle_check_rsp (tRW_T3T_CB *p_cb, BT_HDR *p_msg_rsp)
+         evt_data.status = NFC_STATUS_OK;
+         evt_data.p_data = p_msg_rsp;
+         (*(rw_cb.p_cback)) (RW_T3T_CHECK_EVT, (tRW_DATA *) &evt_data);
++    } else {
++        android_errorWriteLog(0x534e4554, "120503926");
++        nfc_status = NFC_STATUS_FAILED;
++        GKI_freebuf(p_msg_rsp);
+     }
+ 
+ 
+@@ -1667,8 +1675,12 @@ static void rw_t3t_handle_get_sc_poll_rsp (tRW_T3T_CB *p_cb, UINT8 nci_status, U
+             {
+                 RW_TRACE_DEBUG1 ("FeliCa Lite tag detected (system code %04X)", sc);
+                 /* Store system code */
+-                p_cb->system_codes[p_cb->num_system_codes++] = sc;
+-
++                if (p_cb->num_system_codes < T3T_MAX_SYSTEM_CODES) {
++                    p_cb->system_codes[p_cb->num_system_codes++] = sc;
++                } else {
++                    LOG(ERROR) << StringPrintf("Exceed T3T_MAX_SYSTEM_CODES!");
++                    android_errorWriteLog(0x534e4554, "120499324");
++                }
+                 /* Poll for NDEF system code */
+                 if ((status = (tNFC_STATUS) nci_snd_t3t_polling (T3T_SYSTEM_CODE_NDEF, 0, 0)) == NCI_STATUS_OK)
+                 {
+@@ -1956,6 +1968,10 @@ void rw_t3t_act_handle_fmt_rsp (tRW_T3T_CB *p_cb, BT_HDR *p_msg_rsp)
+                  ||(memcmp (p_cb->peer_nfcid2, &p_t3t_rsp[T3T_MSG_RSP_OFFSET_IDM], NCI_NFCID2_LEN) != 0)  )   /* verify response IDm */
+         {
+             evt_data.status = NFC_STATUS_FAILED;
++	} else if (p_msg_rsp->len <
++                   (T3T_MSG_RSP_OFFSET_CHECK_DATA + T3T_MSG_BLOCKSIZE)) {
++            evt_data.status = NFC_STATUS_FAILED;
++            android_errorWriteLog(0x534e4554, "120506143");
+         }
+         else
+         {
+@@ -2168,19 +2184,17 @@ void rw_t3t_act_handle_sro_rsp (tRW_T3T_CB *p_cb, BT_HDR *p_msg_rsp)
+                  ||(memcmp (p_cb->peer_nfcid2, &p_t3t_rsp[T3T_MSG_RSP_OFFSET_IDM], NCI_NFCID2_LEN) != 0)  )   /* verify response IDm */
+         {
+             evt_data.status = NFC_STATUS_FAILED;
++	} else if (p_msg_rsp->len <
++                   (T3T_MSG_RSP_OFFSET_CHECK_DATA + T3T_MSG_BLOCKSIZE)) {
++            evt_data.status = NFC_STATUS_FAILED;
++            android_errorWriteLog(0x534e4554, "120506143");
+         }
+         else
+         {
+             /* Check if memory configuration (MC) block to see if SYS_OP=1 (NDEF enabled) */
+             p_mc = &p_t3t_rsp[T3T_MSG_RSP_OFFSET_CHECK_DATA];  /* Point to MC data of CHECK response */
+-
+-            if (p_mc[T3T_MSG_FELICALITE_MC_OFFSET_SYS_OP] != 0x01)
+-            {
+-                /* Tag is not currently enabled for NDEF */
+-                evt_data.status = NFC_STATUS_FAILED;
+-            }
+-            else
+-            {
++            evt_data.status = NFC_STATUS_FAILED;
++            if (p_mc[T3T_MSG_FELICALITE_MC_OFFSET_SYS_OP] == 0x01) {
+                 /* Set MC_SP field with MC[0] = 0x00 & MC[1] = 0xC0 (Hardlock) to change access permission from RW to RO */
+                 p_mc[T3T_MSG_FELICALITE_MC_OFFSET_MC_SP]     = 0x00;
+                 /* Not changing the access permission of Subtraction Register and MC[0:1] */
