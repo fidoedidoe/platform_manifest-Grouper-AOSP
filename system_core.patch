@@ -580,6 +580,108 @@ index cd26d058a..bfc5f4d4e 100644
      saddr = packet.ip.saddr;
      daddr = packet.ip.daddr;
      nread = ntohs(packet.ip.tot_len);
+diff --git a/libsuspend/autosuspend_autosleep.c b/libsuspend/autosuspend_autosleep.c
+index 7262cc7e8..2160ba655 100644
+--- a/libsuspend/autosuspend_autosleep.c
++++ b/libsuspend/autosuspend_autosleep.c
+@@ -17,6 +17,7 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <stddef.h>
++#include <stdbool.h>
+ #include <string.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+diff --git a/libsuspend/autosuspend_earlysuspend.c b/libsuspend/autosuspend_earlysuspend.c
+index 3793a699e..1bb09371f 100644
+--- a/libsuspend/autosuspend_earlysuspend.c
++++ b/libsuspend/autosuspend_earlysuspend.c
+@@ -14,18 +14,19 @@
+  * limitations under the License.
+  */
+ 
++#define LOG_TAG "libsuspend"
++
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <pthread.h>
+ #include <stdbool.h>
+ #include <stddef.h>
+ #include <string.h>
+-#include <sys/types.h>
+ #include <sys/stat.h>
++#include <sys/types.h>
+ #include <unistd.h>
+ 
+-#define LOG_TAG "libsuspend"
+-#include <cutils/log.h>
++#include <log/log.h>
+ 
+ #include "autosuspend_ops.h"
+ 
+@@ -36,6 +37,7 @@
+ static int sPowerStatefd;
+ static const char *pwr_state_mem = "mem";
+ static const char *pwr_state_on = "on";
++static void (*wakeup_func)(bool success) = NULL;
+ static pthread_t earlysuspend_thread;
+ static pthread_mutex_t earlysuspend_mutex = PTHREAD_MUTEX_INITIALIZER;
+ static pthread_cond_t earlysuspend_cond = PTHREAD_COND_INITIALIZER;
+@@ -107,6 +109,10 @@ static int autosuspend_earlysuspend_enable(void)
+         goto err;
+     }
+ 
++    if (wakeup_func != NULL) {
++        (*wakeup_func)(true);
++    }
++
+     if (wait_for_earlysuspend) {
+         pthread_mutex_lock(&earlysuspend_mutex);
+         while (earlysuspend_state != EARLYSUSPEND_MEM) {
+@@ -153,9 +159,27 @@ err:
+     return ret;
+ }
+ 
++static int autosuspend_force_suspend(int timeout_ms) {
++    ALOGV("force_suspend called with timeout: %d\n", timeout_ms);
++
++    int ret = write(sPowerStatefd, pwr_state_mem, strlen(pwr_state_mem));
++
++    return ret < 0 ? ret : 0;
++}
++
++static void autosuspend_set_wakeup_callback(void (*func)(bool success)) {
++    if (wakeup_func != NULL) {
++        ALOGE("duplicate wakeup callback applied, keeping original\n");
++        return;
++    }
++    wakeup_func = func;
++}
++
+ struct autosuspend_ops autosuspend_earlysuspend_ops = {
+         .enable = autosuspend_earlysuspend_enable,
+         .disable = autosuspend_earlysuspend_disable,
++        .force_suspend = autosuspend_force_suspend,
++        .set_wakeup_callback = autosuspend_set_wakeup_callback,
+ };
+ 
+ void start_earlysuspend_thread(void)
+diff --git a/libsuspend/autosuspend_ops.h b/libsuspend/autosuspend_ops.h
+index 698e25be8..51b0bd5de 100644
+--- a/libsuspend/autosuspend_ops.h
++++ b/libsuspend/autosuspend_ops.h
+@@ -20,9 +20,10 @@
+ struct autosuspend_ops {
+     int (*enable)(void);
+     int (*disable)(void);
++    int (*force_suspend)(int timeout_ms);
++    void (*set_wakeup_callback)(void (*func)(bool success));
+ };
+ 
+-struct autosuspend_ops *autosuspend_autosleep_init(void);
+ struct autosuspend_ops *autosuspend_earlysuspend_init(void);
+ struct autosuspend_ops *autosuspend_wakeup_count_init(void);
+ 
 diff --git a/libutils/String16.cpp b/libutils/String16.cpp
 index 65396caca..32e026bac 100644
 --- a/libutils/String16.cpp
@@ -839,7 +941,7 @@ index 6aee1bbdf..b8db6a4d3 100644
    ::testing::InitGoogleTest(&argc, argv);
  
 diff --git a/rootdir/init.rc b/rootdir/init.rc
-index 7dc9e5509..35ea5811e 100644
+index 7dc9e5509..0fe1cb7fa 100644
 --- a/rootdir/init.rc
 +++ b/rootdir/init.rc
 @@ -136,6 +136,9 @@ on init
@@ -852,13 +954,8 @@ index 7dc9e5509..35ea5811e 100644
      # Create cgroup mount points for process groups
      mkdir /dev/cpuctl
      mount cgroup none /dev/cpuctl cpu
-@@ -656,6 +659,6 @@ on property:ro.debuggable=1
-     chmod 0773 /data/misc/trace
-     start console
- 
--service flash_recovery /system/bin/install-recovery.sh
--    class main
--    oneshot
-+#service flash_recovery /system/bin/install-recovery.sh
-+#    class main
-+#    oneshot
+@@ -659,3 +662,4 @@ on property:ro.debuggable=1
+ service flash_recovery /system/bin/install-recovery.sh
+     class main
+     oneshot
++    disabled

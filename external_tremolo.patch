@@ -1,5 +1,5 @@
 diff --git a/Tremolo/codebook.c b/Tremolo/codebook.c
-index 4d0dd91..467640d 100644
+index 4d0dd91..a06302d 100644
 --- a/Tremolo/codebook.c
 +++ b/Tremolo/codebook.c
 @@ -59,7 +59,7 @@ int _ilog(unsigned int v){
@@ -300,7 +300,34 @@ index 4d0dd91..467640d 100644
        }
      }
    }
-@@ -436,23 +436,23 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
+@@ -376,14 +376,21 @@ long _book_maptype1_quantvals(codebook *b){
+     long acc=1;
+     long acc1=1;
+     int i;
+-    for(i=0;i<b->dim;i++){
+-      acc*=vals;
+-      acc1*=vals+1;
++    for (i = 0; i < b->dim; i++) {
++      if (acc > b->entries / vals) {
++          break;
++      }
++      acc *= vals;
++      if (acc1 > LONG_MAX / (vals + 1)) {
++        acc1 = LONG_MAX;
++      } else {
++        acc1 *= (vals + 1);
++      }
+     }
+-    if(acc<=b->entries && acc1>b->entries){
++    if (i >= b->dim && acc <= b->entries && acc1 > b->entries) {
+       return(vals);
+     }else{
+-      if(acc>b->entries){
++      if (i < b->dim || acc > b->entries) {
+         vals--;
+       }else{
+         vals++;
+@@ -436,23 +443,23 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
        /* yes, unused entries */
  
        for(i=0;i<s->entries;i++){
@@ -336,7 +363,7 @@ index 4d0dd91..467640d 100644
        }
      }
  
-@@ -467,12 +467,12 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
+@@ -467,12 +474,12 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
        if (!lengthlist) goto _eofout;
  
        for(i=0;i<s->entries;){
@@ -355,7 +382,7 @@ index 4d0dd91..467640d 100644
        }
      }
      break;
-@@ -524,55 +524,55 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
+@@ -524,55 +531,55 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
  
  
        if(total1<=4 && total1<=total2){
@@ -458,7 +485,7 @@ index 4d0dd91..467640d 100644
  
        }
      }
-@@ -604,11 +604,11 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
+@@ -604,11 +611,11 @@ int vorbis_book_unpack(oggpack_buffer *opb,codebook *s){
        s->q_val=_ogg_malloc(s->q_pack*s->used_entries);
  
        if(s->q_bits<=8){
@@ -474,7 +501,7 @@ index 4d0dd91..467640d 100644
        }
      }
      break;
-@@ -646,7 +646,7 @@ ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -646,7 +653,7 @@ ogg_uint32_t decode_packed_entry_number(codebook *book,
                                          oggpack_buffer *b);
  #else
  static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
@@ -483,7 +510,7 @@ index 4d0dd91..467640d 100644
    ogg_uint32_t chase=0;
    int  read=book->dec_maxlength;
    long lok = oggpack_look(b,read),i;
-@@ -669,8 +669,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -669,8 +676,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
        unsigned char *t=(unsigned char *)book->dec_table;
  
        for(i=0;i<read;i++){
@@ -494,7 +521,7 @@ index 4d0dd91..467640d 100644
        }
        chase&=0x7fUL;
        break;
-@@ -681,13 +681,13 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -681,13 +688,13 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
        /* 8/16 - Used by infile2 */
        unsigned char *t=(unsigned char *)book->dec_table;
        for(i=0;i<read;i++){
@@ -515,7 +542,7 @@ index 4d0dd91..467640d 100644
        }
        //chase&=0x7fffUL;
        chase&=~0x8000UL;
-@@ -698,8 +698,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -698,8 +705,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
        /* book->dec_nodeb==2, book->dec_leafw==1 */
        /* 16/16 - Used */
        for(i=0;i<read;i++){
@@ -526,7 +553,7 @@ index 4d0dd91..467640d 100644
        }
        //chase&=0x7fffUL;
        chase&=~0x8000UL;
-@@ -711,13 +711,13 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -711,13 +718,13 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
        /* 16/32 - Used by infile2 */
        ogg_uint16_t *t=(ogg_uint16_t *)book->dec_table;
        for(i=0;i<read;i++){
@@ -547,7 +574,7 @@ index 4d0dd91..467640d 100644
        }
        //chase&=0x7fffffffUL;
        chase&=~0x80000000UL;
-@@ -727,8 +727,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
+@@ -727,8 +734,8 @@ static inline ogg_uint32_t decode_packed_entry_number(codebook *book,
      {
        //Output("32/32");
        for(i=0;i<read;i++){
@@ -558,7 +585,7 @@ index 4d0dd91..467640d 100644
        }
        //chase&=0x7fffffffUL;
        chase&=~0x80000000UL;
-@@ -777,9 +777,9 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
+@@ -777,9 +784,9 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
      int mask=(1<<s->q_pack)-1;
      for(i=0;i<s->dim;i++){
        if(s->q_bits<=8)
@@ -570,7 +597,7 @@ index 4d0dd91..467640d 100644
        entry>>=s->q_pack;
      }
      break;
-@@ -790,10 +790,10 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
+@@ -790,10 +797,10 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
  
      if(s->q_bits<=8){
        for(i=0;i<s->dim;i++)
@@ -583,7 +610,7 @@ index 4d0dd91..467640d 100644
      }
      break;
    }
-@@ -823,7 +823,7 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
+@@ -823,7 +830,7 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
  
      if(s->q_seq)
        for(i=1;i<s->dim;i++)
@@ -592,7 +619,7 @@ index 4d0dd91..467640d 100644
    }
  
    return 0;
-@@ -832,7 +832,7 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
+@@ -832,7 +839,7 @@ static int decode_map(codebook *s, oggpack_buffer *b, ogg_int32_t *v, int point)
  
  /* returns 0 on OK or -1 on eof *************************************/
  long vorbis_book_decodevs_add(codebook *book,ogg_int32_t *a,
@@ -601,7 +628,7 @@ index 4d0dd91..467640d 100644
    if(book->used_entries>0){
      int step=n/book->dim;
      ogg_int32_t *v = book->dec_buf;//(ogg_int32_t *)alloca(sizeof(*v)*book->dim);
-@@ -842,14 +842,14 @@ long vorbis_book_decodevs_add(codebook *book,ogg_int32_t *a,
+@@ -842,14 +849,14 @@ long vorbis_book_decodevs_add(codebook *book,ogg_int32_t *a,
      for (j=0;j<step;j++){
        if(decode_map(book,b,v,point))return -1;
        for(i=0,o=j;i<book->dim;i++,o+=step)
@@ -618,7 +645,7 @@ index 4d0dd91..467640d 100644
    if(book->used_entries>0){
      ogg_int32_t *v = book->dec_buf;//(ogg_int32_t *)alloca(sizeof(*v)*book->dim);
      int i,j;
-@@ -857,15 +857,15 @@ long vorbis_book_decodev_add(codebook *book,ogg_int32_t *a,
+@@ -857,15 +864,15 @@ long vorbis_book_decodev_add(codebook *book,ogg_int32_t *a,
      if (!v) return -1;
      for(i=0;i<n;){
        if(decode_map(book,b,v,point))return -1;
@@ -637,7 +664,7 @@ index 4d0dd91..467640d 100644
    if(book->used_entries>0){
      ogg_int32_t *v = book->dec_buf;//(ogg_int32_t *)alloca(sizeof(*v)*book->dim);
      int i,j;
-@@ -873,15 +873,15 @@ long vorbis_book_decodev_set(codebook *book,ogg_int32_t *a,
+@@ -873,15 +880,15 @@ long vorbis_book_decodev_set(codebook *book,ogg_int32_t *a,
      if (!v) return -1;
      for(i=0;i<n;){
        if(decode_map(book,b,v,point))return -1;
@@ -657,7 +684,7 @@ index 4d0dd91..467640d 100644
      }
    }
  
-@@ -890,12 +890,12 @@ long vorbis_book_decodev_set(codebook *book,ogg_int32_t *a,
+@@ -890,12 +897,12 @@ long vorbis_book_decodev_set(codebook *book,ogg_int32_t *a,
  
  #ifndef ONLY_C
  long vorbis_book_decodevv_add(codebook *book,ogg_int32_t **a,
@@ -674,7 +701,7 @@ index 4d0dd91..467640d 100644
    if(book->used_entries>0){
  
      ogg_int32_t *v = book->dec_buf;//(ogg_int32_t *)alloca(sizeof(*v)*book->dim);
-@@ -905,12 +905,12 @@ long vorbis_book_decodevv_add(codebook *book,ogg_int32_t **a,
+@@ -905,12 +912,12 @@ long vorbis_book_decodevv_add(codebook *book,ogg_int32_t **a,
      if (!v) return -1;
      for(i=offset;i<offset+n;){
        if(decode_map(book,b,v,point))return -1;

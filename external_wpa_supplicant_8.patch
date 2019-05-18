@@ -3643,7 +3643,7 @@ index 1b3d8a91..46f29240 100644
  	case EVENT_TDLS:
  		wpa_supplicant_event_tdls(wpa_s, data);
 diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
-index f77d51ae..7dc1909d 100644
+index f77d51ae..63a87aff 100644
 --- a/wpa_supplicant/wnm_sta.c
 +++ b/wpa_supplicant/wnm_sta.c
 @@ -259,7 +259,7 @@ static void ieee802_11_rx_wnmsleep_resp(struct wpa_supplicant *wpa_s,
@@ -3664,6 +3664,17 @@ index f77d51ae..7dc1909d 100644
  	if (wnmsleep_ie->status == WNM_STATUS_SLEEP_ACCEPT ||
  	    wnmsleep_ie->status == WNM_STATUS_SLEEP_EXIT_ACCEPT_GTK_UPDATE) {
  		wpa_printf(MSG_DEBUG, "Successfully recv WNM-Sleep Response "
+@@ -370,6 +372,10 @@ static void wnm_parse_neighbor_report_elem(struct neighbor_report *rep,
+ 		rep->preference_present = 1;
+ 		break;
+ 	case WNM_NEIGHBOR_BSS_TERMINATION_DURATION:
++		if (elen < 10) {
++			wpa_printf(MSG_DEBUG, "WNM: Too short bss_term_tsf");
++			break;
++		}
+ 		rep->bss_term_tsf = WPA_GET_LE64(pos);
+ 		rep->bss_term_dur = WPA_GET_LE16(pos + 8);
+ 		rep->bss_term_present = 1;
 diff --git a/wpa_supplicant/wpa_cli.c b/wpa_supplicant/wpa_cli.c
 index 36a7a4eb..ac1a36fb 100644
 --- a/wpa_supplicant/wpa_cli.c
