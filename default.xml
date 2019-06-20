@@ -419,7 +419,7 @@
   <project path="packages/apps/Terminal" name="platform/packages/apps/Terminal" groups="pdk-fs" />
   <project path="packages/apps/Test/connectivity" name="platform/packages/apps/Test/connectivity" />
   <project path="packages/apps/TvSettings" name="platform/packages/apps/TvSettings" groups="generic_fs" />
-  <project path="packages/apps/UnifiedEmail" name="platform/packages/apps/UnifiedEmail" remote="ads" revision="ads-7.1.2" groups="pdk-fs" />
+  <project path="packages/apps/UnifiedEmail" name="packages_apps_unifiedemail" remote="ads" revision="ads-7.1.2" groups="pdk-fs" />
   <project path="packages/apps/WallpaperPicker" name="platform/packages/apps/WallpaperPicker" groups="pdk-fs" />
   <project path="packages/experimental" name="platform/packages/experimental" />
   <project path="packages/inputmethods/LatinIME" name="platform/packages/inputmethods/LatinIME" groups="pdk-fs" />
